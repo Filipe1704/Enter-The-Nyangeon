@@ -9,10 +9,19 @@ var is_pick: bool = false
 @export var pyroxenes_num: int = 1
 
 func _ready():
+	# 联机纯视觉副本（coop 广播的 remote_visual）：不参与任何玩法（不广播、不自动拾取、不给青辉石）。
+	if has_meta("remote_visual"):
+		is_pick = true
+		timer.stop()
+		timer.autostart = false
+		set_process(false)
+		return
 	# 联机：把掉落广播给其它端（纯视觉；拾取增益已由 on_pyroxenes_gain 共享）
 	ExtensionHooks.notify(ExtensionHooks.on_pickup_spawned, [self])
 
 func _on_body_entered(body: Node2D) -> void:
+	if has_meta("remote_visual"):
+		return
 	if is_pick == true:
 		return
 	if body == null or not is_instance_valid(body):
@@ -32,6 +41,8 @@ func add_text(text: int):
 	ins.start("+" + str(text))
 
 func add_pyroxenes():
+	if has_meta("remote_visual"):
+		return
 	if is_pick == true:
 		return
 	
@@ -48,7 +59,8 @@ func add_pyroxenes():
 		PlayerData.player_pyroxenes += pyroxenes_num
 		add_text(pyroxenes_num)
 	GameEvents.emit_pyroxenes_pick_up()
-	ExtensionHooks.notify(ExtensionHooks.on_pyroxenes_gain, [pyroxenes_num])
+	# 附带 self：mod 据此取跨端一致的 net_effect_id 做「同一颗只结算一次」去重
+	ExtensionHooks.notify(ExtensionHooks.on_pyroxenes_gain, [pyroxenes_num, self])
 	animation_player.play("pick_up")
 	SoundManager.play_sfx("CoinSounds")
 	await animation_player.animation_finished

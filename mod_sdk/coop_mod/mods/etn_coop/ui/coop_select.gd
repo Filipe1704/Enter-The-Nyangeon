@@ -27,9 +27,10 @@ func _ready() -> void:
 	GameEvents.society_card_selected.connect(_on_society_selected)
 	GameEvents.player_card_id.connect(_on_player_card_id)
 	GameEvents.support_card_select.connect(_on_support_card_select)
-	# 默认不带支援（首项「空」）
+	# 默认不带支援（首项「空」）；同步 get_card 使 now_support/ex_cost 与 game_support 一致
 	if SupportData.null_support != null:
 		SupportData.game_support = SupportData.null_support
+		SupportData.get_card(SupportData.null_support)
 	_report_local_support()
 	_build_supports()
 	_build_societies()

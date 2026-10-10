@@ -23,6 +23,9 @@ var rage_time: int = 0
 
 var time_mult: float = 1
 var is_game_mode_1: bool = false
+# boss 回合「等待拾取青辉石结束本回合」标志：仅 boss_round_start 置真，本回合 round_end 清假。
+# 防止非 boss 回合收到杂散 pyroxenes_pick_up（如联机视觉副本）而误触发 end_boss_round 跳关。
+var boss_round_pending_end: bool = false
 # 联机客机首轮本地倒计时（对齐联机版）：host 广播 round_end 驱动，客机只本地计时显示
 var client_round_countdown_started: bool = false
 
@@ -60,6 +63,7 @@ func _ready():
 	GameEvents.boss_round_end.connect(rage_mode_end)
 	GameEvents.pyroxenes_pick_up.connect(end_boss_round)
 	GameEvents.game_over.connect(game_over_stop)
+	GameEvents.round_end.connect(_clear_boss_round_pending_end)
 	GameEvents.ui_visible.connect(game_ui_visible)
 	GameEvents.fever_time_start.connect(play_fever_anim)
 	GameEvents.first_round_add.connect(_on_first_round_add)
@@ -89,6 +93,7 @@ func _physics_process(_delta):
 
 func boss_round():
 	is_boss_round = true
+	boss_round_pending_end = true
 	round_time = 60 * time_mult + 29
 	round_timer.wait_time = 90
 	timer.start()
@@ -129,6 +134,7 @@ func _start_client_round_countdown() -> void:
 
 func game_over_stop(_player_dead: bool):
 	SoundManager.game_end = true
+	boss_round_pending_end = false
 	timer.stop()
 	global_timer.stop()
 	round_timer.stop()
@@ -176,7 +182,16 @@ func rage_mode_end():
 	rage_mode = false
 	timer.stop()
 
+# 本回合 round_end 已发生：清零 boss 结束标志，避免泄漏到后续（非 boss）回合。
+func _clear_boss_round_pending_end():
+	boss_round_pending_end = false
+
 func end_boss_round():
+	# 仅 boss 回合（boss_round_start 后、本回合 round_end 前）的拾取有效；
+	# 非 boss 回合的杂散 pyroxenes_pick_up（如联机视觉副本）一律忽略，防止跳关。
+	if not boss_round_pending_end:
+		return
+	boss_round_pending_end = false
 	await get_tree().create_timer(3.5).timeout
 	if not _round_end_emit_blocked():
 		GameEvents.emit_round_end()

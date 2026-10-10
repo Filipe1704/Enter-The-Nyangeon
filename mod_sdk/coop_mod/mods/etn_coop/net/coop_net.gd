@@ -27,8 +27,8 @@ const LOBBY_SCENE: String = "res://scenes/main/test_room.tscn"
 const DEFAULT_BATTLE_SCENE: String = "res://scenes/main/main.tscn"
 const MENU_SCENE: String = "res://scenes/main/menu_screen.tscn"
 # 协议/版本握手：不一致直接拒绝。RPC 契约变更时必须递增 PROTOCOL_VERSION。
-const PROTOCOL_VERSION: int = 2
-const MOD_VERSION: String = "0.1.6"
+const PROTOCOL_VERSION: int = 3
+const MOD_VERSION: String = "0.1.9"
 const HELLO_TIMEOUT_MSEC: int = 5000
 # 客机：发出 _client_hello 后等待 _hello_accept 的上限；超时视为握手失败（旧房主/版本不匹配）
 const HELLO_ACCEPT_TIMEOUT_MSEC: int = 6000
@@ -594,6 +594,7 @@ const TEAM_STATS_INTERVAL: float = 1.0
 var team_stats: Dictionary = {}   # pid -> {kills, damage, coins}
 var _team_stats_timer: float = 0.0
 var _applying_shared_coin: bool = false  # 共享金币应用中：抑制 player_coins_get 的个人归属
+var _credited_pyroxenes: Dictionary = {}  # 已结算青辉石的 share key（net_effect_id/_coop_effect_id），回合/复位清空
 # 聊天室：本次联机房间的全部消息（按加入顺序），回菜单/重开即清空
 const CHAT_LOG_MAX: int = 200
 const CHAT_TEXT_MAX: int = 120
@@ -2378,6 +2379,7 @@ func _leave_session_local() -> void:
 func _on_round_start() -> void:
 	round_upgrade_ready_peers.clear()
 	_round_upgrade_hold = false
+	_credited_pyroxenes.clear()
 	_clear_round_visuals()
 
 
@@ -2396,11 +2398,11 @@ func _clear_round_visuals() -> void:
 		for c in root.get_children():
 			if c != null and is_instance_valid(c) and c.has_meta("remote_visual"):
 				c.queue_free()
-	# 客机本体 item_clear 被 gate 跳过：补清 CoinRoot 下的远端 medkit 镜像
+	# 客机本体 item_clear 被 gate 跳过：补清 CoinRoot 下的远端 medkit/青辉石等视觉副本
 	var coin_root := get_tree().get_first_node_in_group("CoinRoot")
 	if coin_root != null:
 		for c in coin_root.get_children():
-			if c != null and is_instance_valid(c) and (c.has_meta("remote_medkit") or c.has_meta("coop_medkit_net_id")):
+			if c != null and is_instance_valid(c) and (c.has_meta("remote_medkit") or c.has_meta("coop_medkit_net_id") or c.has_meta("remote_visual")):
 				c.queue_free()
 	medkit_by_net_id.clear()
 	_medkit_consumed.clear()
@@ -3639,39 +3641,66 @@ func _remote_player_reload(peer_id: int, animation_name: String, speed_scale: fl
 
 
 # ---------------- pyroxenes 共享 ----------------
+# 保险（B1）：同一颗青辉石网络内只结算一次。用其跨端一致的视觉 id 作 key
+# （host 真实 p_box 的 net_effect_id / 客机视觉副本的 _coop_effect_id），
+# 防止任何「多副本自动拾取」类回归把青辉石叠加到 clamp 上限（9999）。
 
-func _on_pyroxenes_gain(amount: int) -> void:
+func _pyroxenes_share_key(node: Node) -> String:
+	if node == null or not is_instance_valid(node):
+		return ""
+	if node.has_meta("net_effect_id"):
+		return str(node.get_meta("net_effect_id"))
+	if node.has_meta("_coop_effect_id"):
+		return str(node.get_meta("_coop_effect_id"))
+	return ""
+
+
+func _on_pyroxenes_gain(amount: int, node: Node = null) -> void:
 	if not is_lan_game or amount <= 0:
 		return
+	var key: String = _pyroxenes_share_key(node)
+	if key != "":
+		if _credited_pyroxenes.has(key):
+			return
+		_credited_pyroxenes[key] = true
 	if multiplayer.is_server():
 		for peer in multiplayer.get_peers():
-			rpc_id(peer, "_apply_shared_pyroxenes_remote", amount)
+			rpc_id(peer, "_apply_shared_pyroxenes_remote", amount, key)
 	else:
-		rpc_id(1, "_server_shared_pyroxenes_gain", amount)
+		rpc_id(1, "_server_shared_pyroxenes_gain", amount, key)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _server_shared_pyroxenes_gain(amount: int) -> void:
+func _server_shared_pyroxenes_gain(amount: int, key: String = "") -> void:
 	if not multiplayer.is_server():
 		return
 	if not _server_sender_ok():
 		return
+	# 同一颗青辉石已结算（host 真实拾取或更早来源）→ 丢弃重复来源
+	if key != "" and _credited_pyroxenes.has(key):
+		return
 	var sender: int = multiplayer.get_remote_sender_id()
 	if not _rate_allow(sender, "pyrox", 5):
 		return
+	if key != "":
+		_credited_pyroxenes[key] = true
 	var safe_amount: int = clampi(amount, 1, MAX_NET_STAT)
-	_apply_shared_pyroxenes_local(safe_amount)
+	_apply_shared_pyroxenes_local(safe_amount, key)
 	for peer in multiplayer.get_peers():
 		if int(peer) != sender:
-			rpc_id(peer, "_apply_shared_pyroxenes_remote", safe_amount)
+			rpc_id(peer, "_apply_shared_pyroxenes_remote", safe_amount, key)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _apply_shared_pyroxenes_remote(amount: int) -> void:
-	_apply_shared_pyroxenes_local(amount)
+func _apply_shared_pyroxenes_remote(amount: int, key: String = "") -> void:
+	_apply_shared_pyroxenes_local(amount, key)
 
 
-func _apply_shared_pyroxenes_local(amount: int) -> void:
+func _apply_shared_pyroxenes_local(amount: int, key: String = "") -> void:
+	if key != "":
+		if _credited_pyroxenes.has(key):
+			return
+		_credited_pyroxenes[key] = true
 	PlayerData.player_pyroxenes += amount
 	# 非拾取端补发拾取事件（boss 回合结束依赖 pyroxenes_pick_up）
 	GameEvents.emit_pyroxenes_pick_up()
@@ -4177,6 +4206,7 @@ func _remote_visual_node(scene_path: String, pos: Vector2, rot: float, sc: Vecto
 func _reset_player_sync() -> void:
 	battle_active = false
 	_state_timer = 0.0
+	_credited_pyroxenes.clear()
 	player_scene_by_peer.clear()
 	scene_ready_peers.clear()
 	for p in player_by_peer_id.values():
@@ -4325,6 +4355,21 @@ func _on_first_round_add() -> void:
 	_report_local_name()
 	_schedule_respawn_remotes()
 	_refresh_medkit_mods.call_deferred()
+	# 支援 EX 费用归一化：本体 get_card 的 has_card 分支可能不置 ex_cost（依赖 now_lv>0），
+	# 会让 ex_cost 停在 0 → EX 开局即用且可无限连放。此处延迟到 game_add_support 之后再兜底。
+	_normalize_support_cost.call_deferred()
+
+
+# 修正本机支援 EX 费用：优先按本体语义 get_card(game_support) 同步，再兜底直接写 ex_cost。
+# 仅在 LAN 下由 _on_first_round_add 调用；单机走本体菜单 get_card 路径，不属于本 mod 职责。
+func _normalize_support_cost() -> void:
+	var card = SupportData.game_support
+	if card == null or str(card.support_id) == "null":
+		return
+	SupportData.get_card(card)
+	if SupportData.ex_cost <= 0:
+		SupportData.ex_cost = int(card.ex_cost)
+	SupportData.now_cost = 0
 
 
 # 场景进入后延迟补生远端镜像：本体 test_room.reset_data → reset_clear_unit 会 queue_free

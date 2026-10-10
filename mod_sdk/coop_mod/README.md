@@ -1,6 +1,6 @@
 # ETN Coop Mod（骨架）
 
-> 当前版本 **0.1.6**（以 `mods/etn_coop/mod.json` 为准）；最低支持本体 **v0.5.1.2-test 及以上**（版本比较忽略 `-test` 等后缀）。
+> 当前版本 **0.1.8**（以 `mods/etn_coop/mod.json` 为准）；最低支持本体 **v0.5.1.2-test 及以上**（版本比较忽略 `-test` 等后缀）。自 0.1.8 起 `mod.json` 设 `replace_files:true`，随 mod 覆盖分发两个本体脚本（`ui/round_timer.gd`、`scenes/item/pyroxenes.gd`）——因本体暂不单独发版。
 
 联机以 **mod 形式注入**，本体零改动（仅通过 `ExtensionHooks` 挂接）。当前进度：**传输层 + 玩家/敌人/召唤物同步 + 敌人伤害权威 + 子弹与爆炸/特效广播 + 金币共享 + 倒地救援/团队流程 + 场景切换广播 + 主菜单 COOP 按钮（置于 QUIT 之上）+ 联机覆盖层（option 菜单式布局，页签复用 `option_button.tscn` 绿色高亮，4 语）+ 开房后自动进准备房（测试房作为准备房）+ 开始球/选人/就绪/房主难度流程 + 玩家 ID 常驻顶部 + LAN 全员选定握手 + 出生点居中 + 测试场菜单 get_player 修复 + 玩家 ID 输入/持久化 + 头顶名牌同步 + 房间聊天室（右侧小窗，回车/手机按钮 + 升级页按钮）**。
 
@@ -35,19 +35,27 @@ mod_sdk/coop_mod/mods/etn_coop/
 
 ## 构建 / 安装
 
-`mod_sdk/build_coop_mod.ps1` 直接用 Godot `PCKPacker` 打包（无需工程副本/导出预设；打包器为 `mod_sdk/pack_mod.gd`，位于 `.gdignore` 目录，**不会进任何导出包**）。
+`mod_sdk/build_coop_mod.ps1` 有两种打包路径，按 `mod.json` 的 `replace_files` 自动选择：
+
+- **`replace_files:false`**：用 Godot `PCKPacker`（`mod_sdk/pack_mod.gd`）直接打包为 `res://mods/<id>/**`，无依赖（体积小）。
+- **`replace_files:true`（当前）**：走覆盖型导出预设 **`ModPackReplace`**（`godot --export-pack`），pck 内含 `res://mods/<id>/**` 与 `mod.json.replace_paths` 指定的本体文件，用于覆盖本体。**先决条件**：`setup_mod_project.ps1 -Replace` 注入过 `ModPackReplace` 预设（会写 `export_presets.cfg`，**需关闭编辑器**）。
 
 ```powershell
-# 仅打包：生成 mod_sdk/coop_mod/build/etn_coop.zip
-.\mod_sdk\build_coop_mod.ps1
+# 一次性：注入 ModPack / ModPackReplace 预设（需关编辑器；project.godot 的 convert_text_resources_to_binary=false 已满足）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\setup_mod_project.ps1 -Project "H:\Enter The Nyangeon" -Replace
+
+# 打包：生成 mod_sdk/coop_mod/build/etn_coop.zip（及 etn_coop_<version>.zip）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 
 # 打包 + 安装到 user://mods/etn_coop（重启游戏生效）
-.\mod_sdk\build_coop_mod.ps1 -Install
+powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1 -Install
 ```
 
 安装位置：`%APPDATA%\Godot\app_userdata\Enter The Nyangeon\mods\etn_coop\`（`mod.json` + `etn_coop.pck`）。
 
-> 也可用官方流程：`setup_mod_project.ps1` + `build_mod.ps1`（需工程副本 + `ModPack` 导出预设 + 编辑器关闭）。本脚本是免副本的替代。
+> ⚠️ **覆盖构建的体积/行为**：`ModPackReplace` 预设用 `export_filter="resources"`（选中资源 **+ 其依赖**），因此 pck 会连带 mod 场景引用的本体依赖（实测 ~20MB / 789 文件）；`replace_files:true` 会把这些本体依赖一并覆盖（与本体基本同源，功能无碍但体积大）。想瘦身需拆两 pck（内容正常打包 + 覆盖 pck 由 entry `load_resource_pack(path,true)` 挂载），当前未做。
+>
+> ⚠️ **本体脚本不可用 raw `.gd` 覆盖**：本体 `.gd` 在导出包里编成 `res://x.gdc` + `res://x.gd.remap`；`pack_mod.gd` 的纯文本 `.gd` 覆盖会被 remap 重定向回本体 `.gdc`，必须经导出预设产出同格式。
 
 ## 运行 / 自测
 
@@ -359,7 +367,7 @@ mod_sdk/coop_mod/mods/etn_coop/
 - **召唤**：炮台装弹动画走 `on_summoned_action("reload")`；扫地机补 `get/apply_network_visual_rotation`。
 - **敌人部件**：镜像生成后激活 `body_part`。
 - **Boss**：`goliath`/`erosion_tower_group` 镜像端跳过相机/暂停演出（避免镜像本地 pause），只播动画。
-- **掉落**：`pyroxenes` 生成广播纯视觉副本（`CoinRoot` 纳入广播组）。
+- **掉落**：`pyroxenes` 生成广播纯视觉副本（`CoinRoot` 纳入广播组）。**副本必须彻底 inert（2026-10-10）**：其 10s autostart Timer 若保留会自动 `add_pyroxenes` → `on_pyroxenes_gain` → host 补发 `pyroxenes_pick_up` → 误触发非 boss 回合的 `end_boss_round`（联机无尽第 15 关 boss 后不断跳关）。`spawn_visual_effect` 在 `add_child` **前**打 `remote_visual`（否则副本 `_ready` 回环再广播）并对 `res://scenes/item/` 拾取类禁 Timer；本体 `pyroxenes.gd` 对 `remote_visual` 早退；`_clear_round_visuals` 回合边界清 `CoinRoot` 下 `remote_visual`。
 - **已知未做**：SceneProp（未放置）。
 
 ## 医疗箱（medical_kit）同步：host 权威 + 支援效果聚合

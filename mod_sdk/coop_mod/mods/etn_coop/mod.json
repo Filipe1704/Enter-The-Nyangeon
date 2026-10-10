@@ -1,10 +1,12 @@
 {
   "id": "etn_coop",
   "name": "ETN Coop (skeleton)",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "author": "荻某人、SH",
   "description": "由荻某人的ETN联机版移植，SH移植并添加部分内容。",
   "api_version": 1,
   "game_version": "v0.5.1.2-test",
-  "entry": "res://mods/etn_coop/entry/coop_entry.gd"
+  "entry": "res://mods/etn_coop/entry/coop_entry.gd",
+  "replace_files": true,
+  "replace_paths": ["res://ui/round_timer.gd", "res://scenes/item/pyroxenes.gd"]
 }

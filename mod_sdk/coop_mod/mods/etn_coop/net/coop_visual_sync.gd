@@ -183,12 +183,16 @@ func spawn_visual_effect(tree: SceneTree, scene_path: String, position: Vector2,
 	var effect: Node = _acquire_effect(scene_path)
 	if effect == null:
 		effect = scene.instantiate()
+	# 先打 remote_visual 标记再入树：场景根脚本的 _ready（如 pyroxenes 的 on_pickup_spawned）
+	# 会在 add_child 时执行，若标记晚于入树会回环再广播（并制造带 Timer 的重复副本）。
+	effect.set_meta("remote_visual", true)
+	if scene_path.begins_with("res://scenes/item/"):
+		_make_pickup_visual_inert(effect)
 	if effect.get_parent() == null:
 		root.add_child(effect)
 	elif effect.get_parent() != root:
 		effect.get_parent().remove_child(effect)
 		root.add_child(effect)
-	effect.set_meta("remote_visual", true)
 	if effect_id != "":
 		var old_eid: String = str(effect.get_meta("_coop_effect_id", ""))
 		if old_eid != "" and _by_effect_id.get(old_eid) == effect:
@@ -342,3 +346,15 @@ func _disable_damage(bullet: Node) -> void:
 			n.disabled = true
 		for c in n.get_children():
 			stack.append(c)
+
+
+# 拾取物视觉副本彻底 inert：停掉其内部 Timer（如 pyroxenes 的 10s 自动拾取）。
+# 否则远程视觉副本会自动 add_pyroxenes → on_pyroxenes_gain → host 补发 pyroxenes_pick_up
+# → 触发 boss 回合结束判定，导致非 boss 回合被误判结束（联机无尽跳关）。
+func _make_pickup_visual_inert(effect: Node) -> void:
+	for t in effect.find_children("*", "Timer", true, false):
+		var tm := t as Timer
+		if tm != null:
+			tm.stop()
+			tm.autostart = false
+			tm.process_mode = Node.PROCESS_MODE_DISABLED
