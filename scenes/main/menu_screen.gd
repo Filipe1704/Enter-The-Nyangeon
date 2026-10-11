@@ -206,9 +206,25 @@ func button_open():
 	for i in buttons:
 		i.mouse_filter = Control.MOUSE_FILTER_STOP
 		i.focus_mode = Control.FOCUS_ALL
+	var focusable := _link_menu_button_focus()
 	shop_menu.button_open.emit()
-	if not buttons.is_empty():
-		buttons[0].grab_focus()
+	if not focusable.is_empty():
+		focusable[0].grab_focus()
+
+func _link_menu_button_focus() -> Array[Control]:
+	var buttons: Array[Control] = []
+	for child in menu_button_box.get_children():
+		if child is not Control or not child.is_visible_in_tree() or child.is_queued_for_deletion():
+			continue
+		if child.focus_mode == Control.FOCUS_NONE or (child is BaseButton and child.disabled):
+			continue
+		buttons.append(child)
+	for index in buttons.size():
+		var button := buttons[index]
+		# MOD 可插入或重排入口，不能沿用共用场景中写死的 TestRoom/Option 邻居。
+		button.focus_neighbor_top = button.get_path_to(buttons[maxi(index - 1, 0)])
+		button.focus_neighbor_bottom = button.get_path_to(buttons[mini(index + 1, buttons.size() - 1)])
+	return buttons
 
 func button_close():
 	var buttons: Array = menu_button_box.get_children()

@@ -19,6 +19,12 @@
 
 ---
 
+## 2026-10-11 — 主菜单焦点问题范围澄清
+- Correction / 修正: 前轮主菜单专项只覆盖鼠标与键盘交接，未检查 MOD 菜单上下路径 → 用户补充安装 MOD 后 QUIT 下键跳回 OPTION；已复现并按可见菜单顺序统一重建所有入口的上下邻居，首尾停留（来源：user）。
+- Correction / 修正: 主界面焦点问题尚需区分悬停选中不一致或弹窗返回丢焦点 → 用户明确为「多项同时高亮，Enter 确认项与鼠标指向不一致」；本轮围绕文字菜单按钮统一鼠标、键盘及触摸预览焦点（来源：user）。
+- Files / 涉及文件: `script/menu_button.gd`、`scenes/main/menu_screen.gd`、`tests/test_ui_ux_regressions.gd`、`tests/run_ui_ux_checks.py`。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §2、`docs/CONVENTIONS.md` §5、`docs/LEARNINGS.md` 同主题条目。
+
 ## 2026-10-11 — 选角连续左右导航的修正
 - Correction / 修正: 录像反馈尚需区分键盘无响应或双卡预览 → 用户明确为「同时展开两张角色卡，选中状态混乱」；已让鼠标移动与键盘导航共享角色焦点，静止指针不维持另一张预览，专项 30 项及完整 UI 回归 227 项通过（来源：user）
 - Correction / 修正: 稳定显示后的剩余问题尚未复现 → 用户再次复现的日志明确显示焦点误入形态按钮并随面板隐藏丢失；已用动画中左右折返复现失败，改为显式左右邻居并保护形态按钮焦点，修复后该回归通过（来源：user）

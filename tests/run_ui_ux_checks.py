@@ -17,8 +17,11 @@ def main():
     parser.add_argument("--godot", required=True, help="Godot 4.7 可执行文件路径")
     parser.add_argument("--screenshots", action="store_true", help="使用渲染窗口输出场景截图到 .godot/ui_ux_checks")
     parser.add_argument("--character-focus-only", action="store_true", help="只检查选角连续左右导航与确认")
+    parser.add_argument("--main-menu-focus-only", action="store_true", help="只检查主菜单焦点交接与 MOD 菜单顺序（需 --screenshots）")
     parser.add_argument("--installed-mods", action="store_true", help="复制本机已安装 MOD 到隔离目录后检查")
     args = parser.parse_args()
+    if args.main_menu_focus_only and not args.screenshots:
+        parser.error("--main-menu-focus-only 需要 --screenshots，以验证真实鼠标命中")
     repo = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="etn-ui-ux-") as directory:
         temporary = Path(directory)
@@ -68,6 +71,8 @@ def main():
             game_args.append("--ui-ux-screenshots")
         if args.character_focus_only:
             game_args.append("--ui-ux-character-focus-only")
+        if args.main_menu_focus_only:
+            game_args.append("--ui-ux-main-menu-focus-only")
         if game_args:
             command += ["--", *game_args]
         result = subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=90)

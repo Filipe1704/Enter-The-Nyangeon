@@ -1998,3 +1998,18 @@
 - 用户确认 / User confirmation: 用户随后明确录像主要问题为「同时展开两张角色卡，选中状态混乱」，本条修复对应此问题。带本机 MOD 副本的选角专项 30 项通过，无 MOD 的完整渲染 UI 回归 227 项通过。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-11
+
+### [UI] 主菜单悬停动画与键盘焦点必须共用同一个选中项
+- Evidence / 证据: 用户 2026-10-11 明确主界面问题为「多项同时高亮，Enter 确认项与鼠标指向不一致」；`script/menu_button.gd:_ready/menu_button_press/mouse_exitedd_anim`；`tests/test_ui_ux_regressions.gd:_check_main_menu_focus`。
+- Notes / 说明: 主菜单按钮原先将 `mouse_entered/mouse_exited` 与 `focus_entered/focus_exited` 同时绑定到高亮动画，但悬停并不转移焦点。真实渲染场景复现：键盘聚焦开始游戏，鼠标移到测试房后两项高亮，Enter 仍确认开始游戏；11 项专项中 6 项失败。修复改为真实鼠标位移通过 GUI 事件接管焦点，动画只由焦点变化驱动，修复后 11 项全通过。不要仅把高亮条件改为「焦点或悬停」，也不要逐帧按静止鼠标位置抢回焦点；触摸预览同样先聚焦，失焦后清理两次点按标记，延迟回调需再检查焦点和菜单是否禁用。
+- Validation / 验证: 独立用户目录完整渲染 UI 回归 104 项通过；复制本机已安装 MOD 后主菜单专项 11 项通过。
+- Coverage / 覆盖边界: 上述 11 项仅覆盖鼠标与键盘焦点交接，不覆盖 MOD 注入后的上下邻居；后续用户补充 QUIT 下键跳回 OPTION，另见下条。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] MOD 插入菜单后，所有入口都必须重建上下焦点邻居
+- Evidence / 证据: 用户 2026-10-11 反馈安装 MOD 后选中 QUIT 按下键跳到 OPTION；`ui/menu_button.tscn:101,102`；`scenes/main/menu_screen.tscn` 的 Quit 实例；`mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:_populate_menu_buttons`；`scenes/main/menu_screen.gd:_link_menu_button_focus`；`tests/test_ui_ux_regressions.gd:_check_main_menu_order`。
+- Notes / 说明: 共用菜单按钮场景写死上邻居为 TestRoom、下邻居为 Option；Quit 实例未覆盖这些属性。COOP 插入 Quit 上方后只设置自身上下邻居，不能修正 Quit 继承的目标。修复在菜单启用时按可见子节点顺序统一设置所有按钮的上下邻居，首尾指向自身，跳过待删除、不可聚焦及禁用的原生按钮。带本机 MOD 副本的专项修复前 27 项中 10 项失败，修复后 27 项全通过，覆盖真实 COOP 及额外入口插入、隐藏和重排。连续按键测试必须检查每一步的焦点，不能只检查最后一次；错误循环可能最终回到起点而被误判为通过。
+- Validation / 验证: 无 MOD 的完整渲染 UI 回归 120 项通过；带本机 MOD 副本的主菜单专项 27 项通过。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11

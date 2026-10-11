@@ -46,6 +46,12 @@ func _run() -> void:
 		push_error("请通过 run_ui_ux_checks.py 在独立用户目录运行")
 		quit(2)
 		return
+	if "--ui-ux-main-menu-focus-only" in OS.get_cmdline_user_args():
+		await _check_main_menu_focus()
+		await _check_main_menu_order()
+		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	if "--ui-ux-character-focus-only" in OS.get_cmdline_user_args():
 		await _check_character_focus()
 		await _check_character_focus_pointer()
@@ -67,11 +73,127 @@ func _run() -> void:
 	await _check_settings()
 	await _check_hud()
 	await _check_navigation()
+	await _check_main_menu_focus()
+	await _check_main_menu_order()
 	await _check_character_focus()
 	await _check_character_focus_pointer()
 	await _check_character_preview_input()
 	print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 	quit(1 if failures else 0)
+
+func _main_menu_highlights(menu: Node) -> Array:
+	var highlighted: Array = []
+	for button in menu.menu_button_box.get_children():
+		if button.get_node("Node2D/ColorRect").size.x > 4:
+			highlighted.append(button)
+	return highlighted
+
+func _move_main_menu_pointer(position: Vector2, relative: Vector2 = Vector2.ONE) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = position
+	motion.relative = relative
+	# 零位移检查只注入该事件，避免 warp 额外产生系统鼠标位移干扰结论。
+	if relative != Vector2.ZERO:
+		root.warp_mouse(position)
+	root.push_input(motion, true)
+	await create_timer(0.12).timeout
+
+func _check_main_menu_focus() -> void:
+	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		return
+	var menu = load("res://scenes/main/menu_screen.tscn").instantiate()
+	root.add_child(menu)
+	await create_timer(0.8).timeout
+	await _move_main_menu_pointer(Vector2(630, 350))
+	var buttons: Array = menu.menu_button_box.get_children()
+	# 保留真实场景与信号路径，用无副作用的按钮 id 记录确认项，避免进入战斗或退出测试。
+	for index in buttons.size():
+		buttons[index].button_id = "ui_focus_%d" % index
+	var confirmed: Array[String] = []
+	var record := func(id: String): confirmed.append(id)
+	var events := root.get_node("GameEvents")
+	events.menu_button.connect(record)
+	buttons[0].grab_focus()
+	await create_timer(0.12).timeout
+	_check(_main_menu_highlights(menu) == [buttons[0]], "主菜单初始仅键盘焦点项高亮")
+	var target: Vector2 = buttons[1].get_global_rect().get_center()
+	await _move_main_menu_pointer(target)
+	_check(root.gui_get_focus_owner() == buttons[1], "真实鼠标移动到主菜单另一项时同步键盘焦点")
+	_check(_main_menu_highlights(menu) == [buttons[1]], "鼠标接管后主菜单只高亮一项")
+	_tap_key(KEY_ENTER)
+	_check(confirmed == ["ui_focus_1"], "Enter 仅确认鼠标刚选中的主菜单项一次")
+	buttons[1].grab_focus()
+	_tap_key(KEY_DOWN)
+	await create_timer(0.12).timeout
+	_check(root.gui_get_focus_owner() == buttons[2] and _main_menu_highlights(menu) == [buttons[2]], "主菜单键盘切换后静止鼠标不保留第二项高亮")
+	await _move_main_menu_pointer(target, Vector2.ZERO)
+	_check(root.gui_get_focus_owner() == buttons[2], "主菜单零位移鼠标事件不抢回键盘焦点")
+	await _move_main_menu_pointer(target + Vector2(1, 0))
+	_check(root.gui_get_focus_owner() == buttons[1] and _main_menu_highlights(menu) == [buttons[1]], "指针未离开按钮时重新移动也能接管键盘选择")
+	await _move_main_menu_pointer(Vector2(630, 350))
+	_check(root.gui_get_focus_owner() == buttons[1] and _main_menu_highlights(menu) == [buttons[1]], "鼠标离开主菜单按钮后保留唯一键盘选择")
+	menu.button_close()
+	await _move_main_menu_pointer(buttons[0].get_global_rect().get_center())
+	_check(not buttons.has(root.gui_get_focus_owner()) and _main_menu_highlights(menu).is_empty(), "主菜单禁用期间鼠标不会夺取焦点或重新高亮")
+	menu.button_open()
+	var before := confirmed.size()
+	buttons[1].menu_button_press(_touch(0, true, Vector2(20, 10)))
+	await create_timer(0.12).timeout
+	_check(confirmed.size() == before and root.gui_get_focus_owner() == buttons[1] and _main_menu_highlights(menu) == [buttons[1]], "主菜单触摸首次点按仅预览且共用唯一焦点")
+	buttons[1].menu_button_press(_touch(0, true, Vector2(20, 10)))
+	_check(confirmed.size() == before + 1 and confirmed.back() == "ui_focus_1", "主菜单触摸第二次点按只确认当前项一次")
+	events.menu_button.disconnect(record)
+	menu.free()
+
+func _check_main_menu_vertical_path(menu: Node, label: String) -> void:
+	menu.button_open()
+	await create_timer(0.12).timeout
+	var buttons: Array[Control] = []
+	for child in menu.menu_button_box.get_children():
+		if child is Control and child.is_visible_in_tree() and not child.is_queued_for_deletion():
+			buttons.append(child)
+	var forward := true
+	for index in buttons.size() - 1:
+		buttons[index].grab_focus()
+		_tap_key(KEY_DOWN)
+		forward = forward and root.gui_get_focus_owner() == buttons[index + 1]
+	_check(forward, label + "：下键按可见菜单顺序导航")
+	var backward := true
+	for index in range(1, buttons.size()):
+		buttons[index].grab_focus()
+		_tap_key(KEY_UP)
+		backward = backward and root.gui_get_focus_owner() == buttons[index - 1]
+	_check(backward, label + "：上键按可见菜单顺序导航")
+	buttons[0].grab_focus()
+	_tap_key(KEY_UP)
+	_check(root.gui_get_focus_owner() == buttons[0], label + "：首项上键停留在首项")
+	buttons.back().grab_focus()
+	var stayed_at_end := true
+	for repeat in 3:
+		_tap_key(KEY_DOWN)
+		stayed_at_end = stayed_at_end and root.gui_get_focus_owner() == buttons.back()
+	_check(stayed_at_end, label + "：QUIT 每次下键都停留在末项，不跳回 OPTION")
+
+func _check_main_menu_order() -> void:
+	var menu = load("res://scenes/main/menu_screen.tscn").instantiate()
+	root.add_child(menu)
+	await create_timer(0.8).timeout
+	if "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		await _move_main_menu_pointer(Vector2(630, 350))
+	await _check_main_menu_vertical_path(menu, "当前已加载的主菜单")
+	# 模拟更多 MOD 在 QUIT 前插入共用场景；该场景继承了旧的固定邻居。
+	var quit_button: Control = menu.menu_button_box.get_children().filter(func(child): return child.button_id == "game_quit")[0]
+	var injected = load("res://ui/menu_button.tscn").instantiate()
+	injected.button_id = "ui_order_test"
+	menu.menu_button_box.add_child(injected)
+	menu.menu_button_box.move_child(injected, quit_button.get_index())
+	await _check_main_menu_vertical_path(menu, "新增 MOD 入口后")
+	injected.hide()
+	await _check_main_menu_vertical_path(menu, "隐藏 MOD 入口后")
+	injected.show()
+	menu.menu_button_box.move_child(injected, 1)
+	await _check_main_menu_vertical_path(menu, "重排 MOD 入口后")
+	menu.free()
 
 func _check_keyboard() -> void:
 	var button = load("res://ui/menu_button.tscn").instantiate()
