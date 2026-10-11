@@ -10,6 +10,9 @@ var look_at: float
 var num: float
 
 var on_touch: bool = false
+var _touch_index: int = -1
+var _touch_start: Vector2
+var _touch_dragged: bool = false
 
 # 稀有度配色统一取自 AbilityUpgrade.RARITY_COLORS
 var color_group: Array = AbilityUpgrade.RARITY_COLORS
@@ -20,8 +23,8 @@ var color_group: Array = AbilityUpgrade.RARITY_COLORS
 @onready var node_2d_2 = $Node2D2
 @onready var card_color = %CardColor
 @onready var SSR = $Node2D3/CardColor/TextureRect
-@onready var forward = $VBoxContainer/Forward
-@onready var negative = $VBoxContainer/Negative
+@onready var forward = $ContentScroll/VBoxContainer/Forward
+@onready var negative = $ContentScroll/VBoxContainer/Negative
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
 func _ready():
@@ -30,20 +33,18 @@ func _ready():
 	mouse_exited.connect(on_mouse_exited)
 	GameEvents.player_card_touch.connect(touch_out)
 
-func _auto_text():
-	if name_label.size.x > 124:
-		var now_font = name_label.get("theme_override_font_sizes/font_size")
-		if now_font > 1:
-			now_font -= 1
-			name_label.set("theme_override_font_sizes/font_size", now_font)
-	
-	if self.size.y > 253:
-		var new_font = description_label.get("theme_override_font_sizes/font_size")
-		if new_font > 1:
-			new_font -= 1
-			description_label.set("theme_override_font_sizes/font_size", new_font)
-			forward.set("theme_override_font_sizes/font_size", new_font)
-			negative.set("theme_override_font_sizes/font_size", new_font)
+func _input(event: InputEvent) -> void:
+	# 滚动容器可能消费拖动事件，提前观察，防止拖走再返回被当作确认。
+	if event is InputEventScreenDrag and event.index == _touch_index:
+		var local_position: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
+		if _touch_start.distance_to(local_position) > 10.0:
+			_touch_dragged = true
+	elif event is InputEventScreenTouch and not event.pressed and event.index == _touch_index:
+		_clear_touch.call_deferred(event.index)
+
+func _clear_touch(index: int) -> void:
+	if _touch_index == index:
+		_touch_index = -1
 
 func _process(_delta):
 	if on_select == true:
@@ -58,7 +59,6 @@ func _process(_delta):
 			rotation = 0
 			node_2d_2.rotation = 0
 	
-	_auto_text()
 
 func play_card_in(delay: float = 0):
 	modulate = Color.TRANSPARENT
@@ -79,8 +79,19 @@ func set_ability_upgrade(upgrade:AbilityUpgrade):
 	negative.text = upgrade.id+ "_negative"
 
 func on_gui_input(event: InputEvent):
-	if event as InputEventScreenTouch and event.pressed:
-		button_pressed()
+	if event is InputEventScreenTouch:
+		if event.pressed and _touch_index == -1:
+			_touch_index = event.index
+			_touch_start = event.position
+			_touch_dragged = false
+		elif not event.pressed and event.index == _touch_index:
+			var tapped: bool = not event.canceled and not _touch_dragged
+			tapped = tapped and _touch_start.distance_to(event.position) <= 10.0
+			tapped = tapped and Rect2(Vector2.ZERO, size).has_point(event.position)
+			_touch_index = -1
+			if tapped:
+				button_pressed()
+		return
 	
 	if event.is_action_pressed("shoot") and can_select == true and on_select == true:
 		SoundManager.play_sfx("ButtonSounds")

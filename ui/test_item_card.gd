@@ -17,6 +17,10 @@ var num: int = 0
 var touch_index: int = -1
 var touch_start_position: Vector2 = Vector2.ZERO
 const TAP_MAX_DISTANCE: float = 14.0
+var _mouse_pressed := false
+var _mouse_dragged := false
+var _mouse_start_position := Vector2.ZERO
+var _mouse_sequence: int = 0
 
 func _ready():
 	GameEvents.player_card_touch.connect(touch_out)
@@ -25,11 +29,40 @@ func _ready():
 	GameEvents.test_room_reset.connect(open_button)
 	mouse_entered.connect(show_text)
 	mouse_exited.connect(hide_text)
+	visibility_changed.connect(func():
+		if not is_visible_in_tree():
+			_clear_mouse_press()
+	)
+
+func _clear_mouse_press() -> void:
+	_mouse_sequence += 1
+	_mouse_pressed = false
+	_mouse_dragged = false
+
+func _clear_mouse_press_if_current(sequence: int) -> void:
+	if sequence == _mouse_sequence:
+		_clear_mouse_press()
+
+func _input(event: InputEvent) -> void:
+	if not _mouse_pressed:
+		return
+	# 先于 ScrollBox/GUI 消费事件观察视口位移；滚动后卡片本地坐标会改变。
+	if event is InputEventMouseMotion:
+		_mouse_dragged = _mouse_dragged or event.position.distance_to(_mouse_start_position) > TAP_MAX_DISTANCE
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		_mouse_dragged = _mouse_dragged or event.canceled or event.position.distance_to(_mouse_start_position) > TAP_MAX_DISTANCE
+		# GUI 若未收到释放（例如在列表外松手），也不能残留待确认状态。
+		_clear_mouse_press_if_current.call_deferred(_mouse_sequence)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_clear_mouse_press()
 
 func open_button():
 	button.mouse_filter = Control.MOUSE_FILTER_PASS
 
 func close_button():
+	_clear_mouse_press()
 	button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _physics_process(_delta: float) -> void:
@@ -96,6 +129,9 @@ func _on_button_pressed():
 		add_card()
 
 func _on_button_gui_input(event: InputEvent) -> void:
+	if button.disabled or button.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		_clear_mouse_press()
+		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
 			# 同一张卡同一时刻只跟踪一根手指
@@ -116,5 +152,15 @@ func _on_button_gui_input(event: InputEvent) -> void:
 			else:
 				_on_button_pressed()
 	elif event is InputEventMouseButton:
-		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			_on_button_pressed()
+		if event.button_index != MOUSE_BUTTON_LEFT or event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
+		if event.pressed:
+			_mouse_sequence += 1
+			_mouse_pressed = true
+			_mouse_dragged = false
+			_mouse_start_position = button.get_global_transform_with_canvas() * event.position
+		else:
+			var activate: bool = _mouse_pressed and not _mouse_dragged and not event.canceled and Rect2(Vector2.ZERO, button.size).has_point(event.position)
+			_clear_mouse_press()
+			if activate:
+				_on_button_pressed()

@@ -1979,3 +1979,117 @@
 - Notes / 说明: **现象**（user）：手机走流量时连不上中继，WS 握手耗很久。**根因**：联机版参考实现的 WS 连接/握手**完全没有超时**（一直等 `WebSocketPeer` 自己失败），我们 mod 在「中继加入健壮性」里自加了 `CONNECT_TIMEOUT_MSEC=10000`（移动流量慢握手常在完成前就被 10s 掐断）、`JOIN_HANDSHAKE_TIMEOUT_MSEC=15000`、`HELLO_ACCEPT_TIMEOUT_MSEC=6000`、`HELLO_TIMEOUT_MSEC=5000`。**修法（仅改 mod）**：全部放宽到 **30s**（`HELLO_TIMEOUT_MSEC` 房主踢未握手须 ≥ 客机 `HELLO_ACCEPT_TIMEOUT_MSEC`）；并修一处缺口——`_join_handshake_started_msec` 原先只在收到 `join_prepared` 时才起算，导致「WS 已 open 但 `room_created`/`join_prepared` 迟迟不来」**无超时永久卡 CONNECTING**，现改为**发送建/入房控制帧时即起算**、`room_created`/`join_admitted` 清除。**通用教训**：① 给「跨网 + 移动流量」的握手加超时宁可放宽（对称于无超时的参考实现），过紧会把慢网络用户直接挡在门外；② 超时计时器要覆盖**每一段等待**（发帧→首个回复、回复→准入），否则存在永久挂起的空窗；③ 排查「联机连不上/卡住」先与联机版参考实现比对常量，mod 与本体/参考的行为差异常是新引入的坑。两份 mod 副本同步；运行时用打包 pck，需重建后生效。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-11
+
+### [UI] 返回难度选择必须撤销待启动计时器，隐藏页面不会取消入场
+- Evidence / 证据: `ui/level_select.gd:27`、`ui/level_button.gd:79,94,96`、`ui/level_button.tscn:284`。
+- Notes / 说明: 当前返回仅发送 `level_select_out` 并播放 `RESET`，难度按钮已启动的 0.5 秒 Timer 没有停止，超时也没有检查取消状态。源码推导存在“返回后仍进入战斗”的路径，尚待实机复现；修复时需同时取消计时器、复位选择状态并守卫超时回调。静态 UI/UX 检查详见 `docs/UI_UX_REVIEW.md`。
+- SUPERSEDED: 2026-10-10 已由实际场景回归复现并修复；返回调用 `cancel_selection()`，计时器和触屏延迟回调一并失效，超时再校验页面状态；重新进入可选择。当前规则已上提 `ARCHITECTURE.md` 的菜单章节。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 记分板筛选的触屏点按阈值不对称，向上拖动会通过点击判断
+- Evidence / 证据: `ui/menu_box_button.gd:84-95`、`ui/menu_box_character.tscn:9`、`ui/menu_box_gamemode.tscn:10`。
+- Notes / 说明: 释放时使用 `offset <= 10`，负向大位移同样成立；还缺少横向距离、手指索引和取消状态检查。源码算式已复核，真实触屏事件路由尚待验证；应采用二维距离阈值与单指跟踪，避免滚动误选。
+- SUPERSEDED: 2026-10-10 已改为二维距离、同指跟踪与取消/目标区域检查（`ui/menu_box_button.gd:86`）；`_input` 提前观察滚动消费的拖动和释放，延迟清理手指状态。合成事件已覆盖四方向、拖回原点、多指与取消，Android 真机事件路由仍待测。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 装备负百分比预览先取整会丢失书包的减伤收益
+- Evidence / 证据: `ui/ability_shop_item_card.gd:217,285`、`resources/equip/bag.tres:28`。
+- Notes / 说明: 第三属性负值预览使用 `int(value) * 100`，书包实际条目 `-0.05` 因而表达为 `0%`，累计属性却采用 `int(value * 100)`。应统一属性格式化口径，先缩放再按明确精度取整；该结论来自资源及算式复核，未执行游戏内升级。
+- SUPERSEDED: 2026-10-10 预览改为 `roundi(value * 100)`（`ui/ability_shop_item_card.gd:217`），实际书包资源的场景回归确认 `-5%`；未改其他属性格式化入口。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 动画 method track 的焦点设置需要等待延迟调用完成
+- Evidence / 证据: `ui/level_select.gd:49`、`ui/option.tscn:78`、`tests/test_ui_ux_regressions.gd`。
+- Notes / 说明: 难度页动画 method track 会启用按钮焦点；`animation_finished` 后再等一个 `process_frame` 才抢焦点，避免 deferred method 尚未执行时控件仍为 `FOCUS_NONE`。测试应等待动画完成而非固定 0.3 秒，渲染首帧较慢时固定计时可能早于动画完成。设置通过递归焦点开关隔离缩放隐藏的子页，见 `ARCHITECTURE.md`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 社团清卡信号也会在退出选角时发出，不能视为继续填卡的许可
+- Evidence / 证据: `scenes/main/menu_screen.gd:society_card_filter`、`scenes/main/menu_screen.gd:change_player_card`、`tests/test_ui_ux_regressions.gd:_check_navigation`。
+- Notes / 说明: 社团切换等待 `player_card_clear_done` 后逐张填充角色，但 Esc 返回也会调用 `change_player_card()` 发同一信号。因此清卡后要核验选角仍打开；填充方法内部有逐卡 Timer，返回可能发生在填充途中，完成后仍需再次核验并清理。社团上下导航在 `_input` 阶段消费事件，否则原生 GUI 焦点导航可能先吃掉方向键；难度页必须排除，避免切换背景社团。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 角色焦点预览会打断入场动画，丢失恢复输入的关键帧
+- Evidence / 证据: 用户 2026-10-11 反馈选角页连续左右键后无法确认；`ui/society_card.gd:populate_player_cards`（逐卡等待 0.07 秒）；`ui/player_card_anim.tres:398,416`（`add_card` 长 0.1 秒，末帧将 mouse_filter 设为 STOP）；`ui/player_card.gd:97,196,202`；`tests/test_ui_ux_regressions.gd:_check_character_focus`。
+- Notes / 说明: 上一轮单次左右焦点检查不足以覆盖连续导航。社团刚填完时快速三次右键可以聚焦仍在入场的末张卡；原 `focus_entered → select_card` 打断 `add_card`，使 mouse_filter 永久停在 IGNORE，焦点仍存在但 `add_player` 拒绝 Enter。最小复现修复前稳定失败；仅提前完成末张卡入场动画即可通过。修复以 `_entering/_switching` 保护不可打断动画，完成后再应用预览；恢复输入同时服从 `_input_open`，不重新启用难度页后的背景卡。新增连续/重复方向键、分支期间切换焦点及 Enter 确认检查。
+- SUPERSEDED: 2026-10-11 用户复测仍可触发，明确发生在角色完全显示后，且 Esc 可以正常返回。上述入场窗口问题及修复仍有测试证据，但不能视为已解决用户报告的全部症状；稳定显示后的问题继续调查。已使用渲染窗口验证鼠标位置、键盘输入状态，并复制本机 etn_coop MOD 到隔离目录，尚未复现该剩余问题；需以真实运行的焦点/输入记录定位。
+- SUPERSEDED: 2026-10-11 后续真实日志及折返回归已复现剩余问题，见下条；入场保护继续保留，用于独立的入场输入锁问题。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 稳定显示后的连续左右导航失效：等待真实运行记录定位
+- Evidence / 证据: 用户 2026-10-11 复测反馈「角色已完全显示后，连续按左右键」「Esc 可以正常返回」；当时 `scenes/main/menu_screen.gd:_trace_character_input` 的临时 `[DEBUG-nav2]` 记录；本机 `user://logs/ETN_debug.log`。
+- Notes / 说明: 调查时，入场动画修复不足以覆盖此症状。实际渲染窗口、四张卡片上的真实鼠标位置、`Input.parse_input_event` 方向键输入和本机 etn_coop 包副本的组合检查通过，但没有复现用户剩余问题，因此等待真实焦点/输入/动画日志。
+- SUPERSEDED: 2026-10-11 用户再次复现后的日志已定位：爱丽丝 → 柚子 → 动画中右返，焦点误入分支按钮并随面板隐藏而丢失；见下条。临时诊断代码已移除，本条从待确认区移入正文保留调查历史。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-11
+
+### [UI] 角色卡尺寸动画期间必须显式指定左右焦点邻居
+- Evidence / 证据: 用户 2026-10-11 反馈「角色已完全显示后，连续按左右键」「Esc 可以正常返回」并再次复现；真实 `user://logs/ETN_debug.log` 出现角色卡 → `BranchButton` → null；`scenes/main/menu_screen.gd:_link_player_card_focus`；`ui/player_card.gd:_has_card_focus/_on_card_focus_exited/switch_branch`；`ui/player_card_anim.tres:1020`；`tests/test_ui_ux_regressions.gd:_check_character_focus`。
+- Notes / 说明: 爱丽丝预览展开后，左移柚子并在 0.1 秒退场动画中右返，卡片宽度变化会使原生几何搜索选中仍可见的分支按钮；随后文本面板隐藏释放焦点，方向键与 Enter 均失效，Esc 仍走菜单返回逻辑。修复前折返检查失败，修复后通过。社团填卡后统一设置角色卡的左右邻居，边界指向自身，避免动画影响目标；本体分支按钮沿用同一左右路径。Tab 仍能进入分支按钮，卡片把子按钮焦点视为自身预览焦点；切换分支的 RESET 隐藏面板前先将焦点交回角色卡，避免另一条丢焦点路径。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 鼠标悬停与键盘焦点各自驱动预览，会同时展开两张角色卡
+- Evidence / 证据: 用户提供录像 `C:/Users/gytxtx/Videos/2026-10-11 14-19-13.mp4`，约 31–42 秒可见绿子/柚子等角色同时展开；`ui/player_card.gd:_input/_apply_hover/_on_card_anim_finished`；`tests/test_ui_ux_regressions.gd:_check_character_preview_input`。
+- Notes / 说明: 原预览条件为「拥有焦点或鼠标落在矩形内」，两种输入可分别激活不同角色。真实渲染测试复现绿子和柚子同时展开而键盘焦点在柚子，该路径 Enter 仍可确认；录像未显示按键事件，不能仅凭双预览认定仍然丢失输入。修复让真实鼠标位移进入角色卡时转移焦点，预览及分支动画恢复仅依据所属角色焦点，零位移事件不抢回键盘焦点。新增检查在修复前失败、修复后通过，涵盖鼠标接管、静止指针、零位移事件和 Enter 确认。触屏原有两次点按流程保留。
+- 用户确认 / User confirmation: 用户随后明确录像主要问题为「同时展开两张角色卡，选中状态混乱」，本条修复对应此问题。带本机 MOD 副本的选角专项 30 项通过，无 MOD 的完整渲染 UI 回归 227 项通过。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 主菜单悬停动画与键盘焦点必须共用同一个选中项
+- Evidence / 证据: 用户 2026-10-11 明确主界面问题为「多项同时高亮，Enter 确认项与鼠标指向不一致」；`script/menu_button.gd:_ready/menu_button_press/mouse_exitedd_anim`；`tests/test_ui_ux_regressions.gd:_check_main_menu_focus`。
+- Notes / 说明: 主菜单按钮原先将 `mouse_entered/mouse_exited` 与 `focus_entered/focus_exited` 同时绑定到高亮动画，但悬停并不转移焦点。真实渲染场景复现：键盘聚焦开始游戏，鼠标移到测试房后两项高亮，Enter 仍确认开始游戏；11 项专项中 6 项失败。修复改为真实鼠标位移通过 GUI 事件接管焦点，动画只由焦点变化驱动，修复后 11 项全通过。不要仅把高亮条件改为「焦点或悬停」，也不要逐帧按静止鼠标位置抢回焦点；触摸预览同样先聚焦，失焦后清理两次点按标记，延迟回调需再检查焦点和菜单是否禁用。
+- Validation / 验证: 独立用户目录完整渲染 UI 回归 104 项通过；复制本机已安装 MOD 后主菜单专项 11 项通过。
+- Coverage / 覆盖边界: 上述 11 项仅覆盖鼠标与键盘焦点交接，不覆盖 MOD 注入后的上下邻居；后续用户补充 QUIT 下键跳回 OPTION，另见下条。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] MOD 插入菜单后，所有入口都必须重建上下焦点邻居
+- Evidence / 证据: 用户 2026-10-11 反馈安装 MOD 后选中 QUIT 按下键跳到 OPTION；`ui/menu_button.tscn:101,102`；`scenes/main/menu_screen.tscn` 的 Quit 实例；`mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:_populate_menu_buttons`；`scenes/main/menu_screen.gd:_link_menu_button_focus`；`tests/test_ui_ux_regressions.gd:_check_main_menu_order`。
+- Notes / 说明: 共用菜单按钮场景写死上邻居为 TestRoom、下邻居为 Option；Quit 实例未覆盖这些属性。COOP 插入 Quit 上方后只设置自身上下邻居，不能修正 Quit 继承的目标。修复在菜单启用时按可见子节点顺序统一设置所有按钮的上下邻居，首尾指向自身，跳过待删除、不可聚焦及禁用的原生按钮。带本机 MOD 副本的专项修复前 27 项中 10 项失败，修复后 27 项全通过，覆盖真实 COOP 及额外入口插入、隐藏和重排。连续按键测试必须检查每一步的焦点，不能只检查最后一次；错误循环可能最终回到起点而被误判为通过。
+- Validation / 验证: 无 MOD 的完整渲染 UI 回归 120 项通过；带本机 MOD 副本的主菜单专项 27 项通过。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 测试房道具卡必须在鼠标释放后区分点击与列表拖动
+- Evidence / 证据: 用户 2026-10-11 反馈鼠标拖动测试房道具列表会选中按到的道具；`ui/test_item_card.gd:_on_button_gui_input/_input`；`script/ScrollBox.gd:set_scrollbox_gui_input`；`tests/test_ui_ux_regressions.gd:_check_test_item_mouse`。
+- Notes / 说明: 道具卡原先在左键按下时调用 `_on_button_pressed()`，而事件通过 PASS 冒泡给 ScrollBox 启动滚动，因此同一手势既发放道具又滚动。真实卡片与真实 ScrollBox 的最小渲染回归已复现：列表滚动成功，但按下即发放道具且消耗次数。修复把业务动作延后到有效释放；使用视口坐标记录整个手势的最大位移，避免滚动造成卡片本地坐标漂移，也避免拖出再拖回被当作点击。释放的延迟清理必须校验按压序号，否则同帧下一次按下可能被前一次清理取消。专项覆盖正常点击、拖动滚动、拖回、小抖动、列表外释放、无对应按下、禁用、连续点击及触屏两次点按，14 项通过，带本机 MOD 副本同样 14 项通过。
+- Validation / 验证: 无 MOD 的完整渲染 UI 回归 134 项通过；日志仍有既有 `godot_ai` 缺失及退出资源清理告警。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] ScrollBox 把滚轮当拖动起点会让列表在未按鼠标时跟随指针
+- Evidence / 证据: 用户 2026-10-11 反馈角色列表在不拖动时也随鼠标移动；`script/ScrollBox.gd:set_scrollbox_gui_input/_input/_end_drag`；`ui/character_test_menu.tscn:13`；`tests/test_ui_ux_regressions.gd:_check_scroll_mouse_state`。
+- Notes / 说明: 原脚本对任意 `InputEventMouseButton.pressed` 设置 `isDrag=true`，滚轮没有对应释放事件，导致随后无按键的鼠标移动仍滚动列表；右键也会错误启动。最小真实 GUI 回归 6 项中 3 项失败。修复限定左键启动及移动掩码，提前观察释放并在隐藏/失焦时清理，同时按 index 保持触屏手势归属。扩展后的无 MOD 专项 14 项通过。前轮道具卡点击回归未覆盖共用滚动脚本的滚轮状态，不能用其通过来推断所有列表手势都正常。
+- Compatibility / 兼容边界: 本机 `etn_coop 0.1.9` 的 `replace_files=true`，其 `res://script/ScrollBox.gd.remap` 指向包内旧 `ScrollBox.gdc`；带该包专项 14 项中 7 项仍失败。本地源码修复不会自动更新已编译 MOD；当前仓库 SDK 为 0.1.6，不能直接重建替换为该旧版本。尚未改动本机安装包。
+- Validation / 验证: 无 MOD 完整 UI 回归首次 148 项中一项系统鼠标位置检查失败；未改动相关代码的复跑 148 项全部通过。日志仍有既有 `godot_ai` 缺失及退出资源清理告警。已询问是否同时修补本机 MOD，答复到达前保留安装包。
+- 用户确认 / User confirmation: 用户随后明确选择“项目源码修复，保留本机 MOD 包”；本次以源码修复为范围，不修补、重建或替换本机 MOD，带旧包仍受上述覆盖限制。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 难度页辅助焦点与开关动画需要独立的页面输入门控
+- Evidence / 证据: `ui/level_select.gd:_input/_lock_selection/_set_auxiliary_enabled`；`ui/support_ui/support_select_ui.gd:open_list/close_list`；`ui/gamemode_type.gd:add_game_mode/erase_game_mode/set_interactive`；`tests/test_ui_ux_regressions.gd:_check_level_keyboard_regions`。
+- Notes / 说明: 支援展开后聚焦已选项目必须等待动画及容器布局完成，并核验展开序号，否则 Tab 或 Esc 离开后旧回调会抢回焦点。模式切换中焦点变化不能打断填色动画，冲突模式引发的新切换需用序号淘汰旧恢复回调；完成后恢复鼠标输入仍须服从页面门控，避免难度确认或返回后重新启用。`AnimationPlayer.play("RESET")` 的离散 visible 轨道不会在调用当帧立即应用，测试收起和返回应等待动画完成，不能仅等一次 `process_frame`。模式互斥按资源配置执行：闪击与无尽可共存，二者均与 `hujiu` 冲突。
+- Validation / 验证: 独立用户目录完整渲染 UI 回归 182 项通过；最终带本机 MOD 副本的难度页渲染专项 33 项通过，无 MOD 及带 MOD 的无窗口专项各 28 项通过。本机 MOD 包保持原样。日志仍含既有 `godot_ai/runtime/game_helper.gd` 缺失及退出资源清理告警。
+- Coverage / 覆盖边界: 上述检查未逐帧观察入场按钮亮度；用户随后反馈选择角色后所有难度按钮闪动，新增过程检查已复现，修复见下一条。
+- Source / 来源: test
+- Date / 日期: 2026-10-11
+
+### [UI] 难度初始化不能复用从高亮首帧开始的失焦动画
+- Evidence / 证据: 用户 2026-10-11 反馈选择角色后所有难度按钮闪一遍；`ui/level_select.tscn:417-429`；`ui/level_button.gd:open_mouse/cancel_selection`；`ui/level_button.tscn:125-164`；`tests/test_ui_ux_regressions.gd:_observe_level_entry/_check_level_entry_visuals/_check_character_focus`。
+- Notes / 说明: 入场动画在 0.2 秒通过 `player_selected` 对全部难度按钮调用 `open_mouse`，复用 `cancel_selection` 撤销旧选择。原取消播放的 `mouse_out` 在首帧强制写入完全高亮的遮罩、纹理和宽度，再用 0.1 秒退回默认，导致非焦点按钮也集体闪亮。无窗口过程检查在修复前稳定捕捉到三个非默认按钮变亮，最终焦点仍正确，说明只检查入场完成状态会漏报。修复以 `RESET` + `advance(0)` 同步复位外观，继续保留计时器停止和选择序号失效。回归采样持续到页面真正启用焦点再等待动画稳定，避免渲染首帧或着色器编译较慢时固定等待时长提前结束检查。
+- Validation / 验证: 无 MOD 完整渲染回归 187 项通过，包含真实选角确认后逐帧采样；带本机 MOD 副本的难度专项渲染 37 项、无窗口 32 项通过。本机 MOD 包未修改。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-11
+
+### [UI] 支援主卡的焦点描边不能放在圆角裁剪内部或列表下方
+- Evidence / 证据: 用户截图 `codex-clipboard-744b0aae-3f29-485b-beb4-ac0feb89a4c2.png`；`ui/support_ui/support_select_ui.tscn` 的 `main_card.clip_children=1` 及其兄弟 `MarginContainer`；`ui/level_select.gd:_create_focus_outline`；`tests/test_ui_ux_regressions.gd:_check_support_focus_frame`。
+- Notes / 说明: 原 ReferenceRect 作为主卡子节点绘制直角框，圆角遮罩裁掉四角，后绘制的兄弟列表还遮住了侧边。前轮截图验证的是列表项目焦点，没有覆盖主卡持有焦点时展开列表的外框。修复为独立圆角 Panel 描边，置于主卡和列表上方并忽略鼠标输入，随主卡矩形变化同步尺寸；其他卡片保留矩形焦点框。实际渲染像素检查覆盖四个圆角和两侧，原实现失败、修复后通过，同时检查展开与收起状态。支援键盘展开测试等待实际动画和布局完成，避免截图读回耗时导致固定 0.2 秒检查提前结束。
+- Validation / 验证: 无 MOD 渲染专项 39 项通过；最终带本机 MOD 副本的难度页渲染专项 41 项通过，包含新增的收起状态检查。本机 MOD 包保持原样。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-11

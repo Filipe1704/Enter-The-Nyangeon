@@ -214,7 +214,7 @@ func item_text_get():
 					else:
 						equip_text.text = text_2 + "+" + str( int(equip_card.value_3[t_num + 1]) ) + tr(equip_card.value_3_name)
 			elif equip_card.value_3[t_num + 1] < 0:
-				equip_text.text = text_2 + str( int(equip_card.value_3[t_num + 1]) * 100 ) + "%" + tr(equip_card.value_3_name)
+				equip_text.text = text_2 + str( roundi(equip_card.value_3[t_num + 1] * 100) ) + "%" + tr(equip_card.value_3_name)
 		
 	else:
 		equip_text.text = "已到达升级上限"

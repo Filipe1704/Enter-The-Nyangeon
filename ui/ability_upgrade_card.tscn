@@ -8,6 +8,8 @@
 [ext_resource type="Texture2D" uid="uid://bhdhwepn34dkf" path="res://sprites/update_item/banana_magazine.png" id="5_lvncg"]
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="6_8vorw"]
 [ext_resource type="Texture2D" uid="uid://m54grm4ymrn8" path="res://ui/line_point.png" id="6_tcgnu"]
+[ext_resource type="Script" path="res://script/auto_text.gd" id="7_fit"]
+[ext_resource type="Script" path="res://script/ScrollBox.gd" id="8_scroll"]
 
 [sub_resource type="Animation" id="Animation_we04k"]
 length = 0.001
@@ -559,11 +561,18 @@ joint_mode = 2
 begin_cap_mode = 2
 end_cap_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=77274953]
-clip_contents = true
+[node name="ContentScroll" type="ScrollContainer" parent="."]
 layout_mode = 2
+mouse_filter = 1
+horizontal_scroll_mode = 0
+script = ExtResource("8_scroll")
 
-[node name="NameLabel" type="Label" parent="VBoxContainer" unique_id=446571153]
+[node name="VBoxContainer" type="VBoxContainer" parent="ContentScroll" unique_id=77274953]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 1
+
+[node name="NameLabel" type="Label" parent="ContentScroll/VBoxContainer" unique_id=446571153]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
@@ -577,19 +586,25 @@ theme_override_constants/shadow_outline_size = 2
 theme_override_font_sizes/font_size = 16
 text = "物品名称"
 horizontal_alignment = 1
+autowrap_mode = 3
+script = ExtResource("7_fit")
+base_font_size = 16
+base_size_x = 124.0
+base_size_y = 44.0
+min_font_size = 12
 
-[node name="TextureRect" type="TextureRect" parent="VBoxContainer" unique_id=624165246]
+[node name="TextureRect" type="TextureRect" parent="ContentScroll/VBoxContainer" unique_id=624165246]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 70)
 layout_mode = 2
 texture = ExtResource("5_lvncg")
 stretch_mode = 5
 
-[node name="Label" type="Label" parent="VBoxContainer" unique_id=516377096]
+[node name="Label" type="Label" parent="ContentScroll/VBoxContainer" unique_id=516377096]
 layout_mode = 2
 theme_override_font_sizes/font_size = 5
 
-[node name="DescriptionLabel" type="Label" parent="VBoxContainer" unique_id=318136364]
+[node name="DescriptionLabel" type="Label" parent="ContentScroll/VBoxContainer" unique_id=318136364]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -609,7 +624,7 @@ text = "芭娜娜！
 "
 autowrap_mode = 1
 
-[node name="Forward" type="Label" parent="VBoxContainer" unique_id=1739548298]
+[node name="Forward" type="Label" parent="ContentScroll/VBoxContainer" unique_id=1739548298]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.690196, 0.929412, 0.278431, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -622,7 +637,7 @@ theme_override_font_sizes/font_size = 10
 text = "+99999999属性"
 autowrap_mode = 1
 
-[node name="Negative" type="Label" parent="VBoxContainer" unique_id=2115278099]
+[node name="Negative" type="Label" parent="ContentScroll/VBoxContainer" unique_id=2115278099]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.895585, 0.219214, 0.299834, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)

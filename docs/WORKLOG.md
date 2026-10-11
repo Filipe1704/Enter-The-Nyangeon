@@ -19,6 +19,40 @@
 
 ---
 
+## 2026-10-11 — 支援主卡焦点边框修正
+- Correction / 修正: 前轮焦点框视觉验证仅覆盖列表项目 → 用户截图指出主卡展开时圆角断边、侧边被列表遮住；已按主卡持有焦点的真实展开状态复现并补充像素检查（来源：user）。
+- Files / 涉及文件: `ui/level_select.gd`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: 主卡描边改为独立上层圆角 Panel，随展开和收起同步矩形，避开主卡裁剪和兄弟列表遮挡；带本机 MOD 副本的渲染专项 41 项通过。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「难度页辅助区域键盘控制」、`docs/LEARNINGS.md` 对应焦点描边条目。
+
+## 2026-10-11 — 难度页键盘控制与入场闪动修复
+- Correction / 修正: 前轮难度页回归仅验证入场完成后的焦点及操作 → 用户指出选择角色后所有难度按钮会闪一遍；过程采样复现 HARD、EXTREME、INSANE 短暂高亮，不能用最终焦点正确推断入场动画正常（来源：user）。
+- Files / 涉及文件: `ui/level_select.gd`、`ui/level_button.gd`、`ui/gamemode_type.gd`、`ui/support_ui/support_select_ui.gd`、`ui/support_ui/support_shop_card.gd`、`tests/run_ui_ux_checks.py`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: Tab / Shift+Tab 切换支援、难度、模式、返回区域；支援上下浏览并确认，模式左右选择和 Enter / Space 开关，返回按钮确认后恢复角色焦点。追加独立焦点边框，防止展开及开关动画的旧回调抢焦点或重启输入。初始化复用的取消逻辑改为立即应用 `RESET`，避免从高亮首帧播放 `mouse_out`；补充首次进入、返回后再进入及真实选角确认流程的亮度检查。
+- Verified / 验证: 完整渲染 UI 回归 187 项通过，带本机 MOD 副本的难度专项渲染 37 项、无窗口 32 项通过；本机 MOD 包不变。日志仍有既有插件缺失及退出资源清理告警。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「难度页辅助区域键盘控制」「难度启动取消」、`docs/CONVENTIONS.md`「输入动作」、`docs/LEARNINGS.md` 对应两条 UI 经验。
+
+## 2026-10-11 — 列表滚动问题范围补充
+- Correction / 修正: 本机 MOD 旧编译脚本是否也要修补尚未确定 → 用户明确仅修复项目源码、保留本机 MOD 包；本次未重建或替换安装包（来源：user）。
+- Correction / 修正: 前轮道具卡回归仅检查点击与拖动时的道具发放 → 用户补充角色列表未拖动时也跟随鼠标；共用 ScrollBox 将滚轮按下误当拖动起点，已复现并补充滚轮、释放清理及触点归属回归（来源：user）。
+- Files / 涉及文件: `script/ScrollBox.gd`、`tests/run_ui_ux_checks.py`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: 无 MOD 滚动专项 14 项通过，完整渲染 UI 回归复跑 148 项通过；本机 MOD 0.1.9 内的旧编译脚本覆盖修复，兼容边界另见经验库。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「共用纵向列表拖动」、`docs/LEARNINGS.md`「ScrollBox 把滚轮当拖动起点会让列表在未按鼠标时跟随指针」。
+
+## 2026-10-11 — 主菜单焦点问题范围澄清
+- Correction / 修正: 前轮主菜单专项只覆盖鼠标与键盘交接，未检查 MOD 菜单上下路径 → 用户补充安装 MOD 后 QUIT 下键跳回 OPTION；已复现并按可见菜单顺序统一重建所有入口的上下邻居，首尾停留（来源：user）。
+- Correction / 修正: 主界面焦点问题尚需区分悬停选中不一致或弹窗返回丢焦点 → 用户明确为「多项同时高亮，Enter 确认项与鼠标指向不一致」；本轮围绕文字菜单按钮统一鼠标、键盘及触摸预览焦点（来源：user）。
+- Files / 涉及文件: `script/menu_button.gd`、`scenes/main/menu_screen.gd`、`tests/test_ui_ux_regressions.gd`、`tests/run_ui_ux_checks.py`。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §2、`docs/CONVENTIONS.md` §5、`docs/LEARNINGS.md` 同主题条目。
+
+## 2026-10-11 — 选角连续左右导航的修正
+- Correction / 修正: 录像反馈尚需区分键盘无响应或双卡预览 → 用户明确为「同时展开两张角色卡，选中状态混乱」；已让鼠标移动与键盘导航共享角色焦点，静止指针不维持另一张预览，专项 30 项及完整 UI 回归 227 项通过（来源：user）
+- Correction / 修正: 稳定显示后的剩余问题尚未复现 → 用户再次复现的日志明确显示焦点误入形态按钮并随面板隐藏丢失；已用动画中左右折返复现失败，改为显式左右邻居并保护形态按钮焦点，修复后该回归通过（来源：user）
+- Correction / 修正: 入场动画保护及 204 项检查通过即可认定问题完全修复 → 用户复测仍存在：角色完全显示后连续左右键会失去选择响应，但 Esc 可返回；前轮结论仅覆盖入场窗口，剩余问题仍在调查（来源：user）
+- Correction / 修正: 单次左右焦点检查通过即可说明角色键盘导航正常 → 用户反馈连续左右键会导致角色不可确认；已复现为焦点预览打断末张卡入场动画，补充动画保护与连续导航回归（来源：user）
+- Files / 涉及文件: `scenes/main/menu_screen.gd`、`ui/player_card.gd`、`tests/test_ui_ux_regressions.gd`、`tests/run_ui_ux_checks.py`。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §2、`docs/LEARNINGS.md` 同主题条目。
+
 ## 2026-09-25 — Establish project knowledge base / 建立项目知识库
 - Files / 涉及文件: `AGENTS.md`, `docs/PROJECT_MAP.md`, `docs/ARCHITECTURE.md`, `docs/SYSTEMS.md`, `docs/CONVENTIONS.md`, `docs/LEARNINGS.md`, `docs/WORKLOG.md`
 - Summary / 改动摘要: 新增 `docs/` 知识库（项目地图 / 运行时架构 / 核心系统 / 约定 / 经验库 / 改动记录），并在 `AGENTS.md` 增加知识库维护约定。

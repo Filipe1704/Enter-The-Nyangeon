@@ -32,6 +32,22 @@ func _ready():
 	resolutions_block.mouse_filter = (
 		Control.MOUSE_FILTER_STOP if OS.has_feature("mobile") else Control.MOUSE_FILTER_IGNORE
 	)
+	for toggle in [full_screen, shake, v_sync]:
+		toggle.focus_mode = Control.FOCUS_ALL
+		var label: Label = toggle.get_parent().get_node("Label")
+		label.mouse_filter = Control.MOUSE_FILTER_STOP
+	full_screen.focus_entered.connect(mouse_on_full_screen)
+	full_screen.focus_exited.connect(mouse_out_full_screen)
+	shake.focus_entered.connect(mouse_on_shake)
+	shake.focus_exited.connect(mouse_out_shake)
+	v_sync.focus_entered.connect(mouse_on_vs)
+	v_sync.focus_exited.connect(mouse_out_vs)
+	full_screen.get_parent().get_node("Label").gui_input.connect(mouse_selected_full_screen)
+	shake.get_parent().get_node("Label").gui_input.connect(mouse_selected_shake)
+	v_sync.get_parent().get_node("Label").gui_input.connect(mouse_selected_vs)
+	if OS.has_feature("mobile"):
+		full_screen.get_parent().get_parent().hide()
+		v_sync.get_parent().hide()
 
 func menu_show():
 	super()
@@ -77,7 +93,8 @@ func mouse_selected_full_screen(event: InputEvent):
 			full_screen.get_node("AnimationPlayer").play("full_out")
 			Game.save_config()
 
-	if event.is_action_pressed("shoot"):
+	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		full_screen.accept_event()
 		SoundManager.play_sfx("ButtonSounds")
 		if Game.on_full_screen == false:
 			Game.on_full_screen = true
@@ -115,7 +132,8 @@ func mouse_selected_shake(event: InputEvent):
 			shake.get_node("AnimationPlayer").play("full_out")
 			Game.save_config()
 
-	if event.is_action_pressed("shoot"):
+	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		shake.accept_event()
 		SoundManager.play_sfx("ButtonSounds")
 		if Game.shake_screen == false:
 			Game.shake_screen = true
@@ -159,7 +177,8 @@ func mouse_selected_vs(event: InputEvent):
 			v_sync.get_node("AnimationPlayer").play("full_out")
 			Game.save_config()
 
-	if event.is_action_pressed("shoot"):
+	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		v_sync.accept_event()
 		SoundManager.play_sfx("ButtonSounds")
 		if Game.vsync_mode == false:
 			Game.vsync_mode = true

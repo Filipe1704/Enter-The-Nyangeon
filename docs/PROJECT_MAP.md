@@ -33,7 +33,7 @@
 | `addons/` | `godot-rapier2d`（物理）、`godot_ai`（编辑器 MCP 插件，非游戏运行时）。 |
 | `android/` | Android 导出构建文件。 |
 | `mod_sdk/` | **Mod 开发套件**（含 `.gdignore`，不进本体包）：包契约、示例模组、`build_mod.ps1`。详见 `mod_sdk/README.md`、`CONVENTIONS.md` §10。 |
-| `tests/` | MCP 测试套件（`test_*.gd`，`extends McpTestSuite`）；由编辑器内的 `test_run` 工具发现并运行（`addons/godot_ai`）。 |
+| `tests/` | MCP 测试套件（`test_*.gd`，`extends McpTestSuite`），由编辑器内 `test_run` 运行（`addons/godot_ai`）；另有独立 UI 回归入口 `run_ui_ux_checks.py` + `test_ui_ux_regressions.gd`，不依赖插件，隔离用户目录运行，`--screenshots` 可输出局部场景渲染。 |
 | `docs/` | **本知识库**（本项目新增）。 |
 
 ## 3. Scene ↔ script pairing rule / 场景与脚本配对规则
