@@ -20,6 +20,7 @@ extends CanvasLayer
 @onready var life_value: Label = %Life_value
 
 signal is_hurt()
+var _hurt_tween: Tween
 
 func _ready():
 	stats.hp_changed.connect(update_hp )
@@ -119,20 +120,21 @@ func hurt_anim():
 	
 	
 	
-	var tween = get_tree().create_tween().set_parallel(true)
-	hp_bar.material.set_shader_parameter("flash_opacity", 1)
-	tween.tween_property($MarginContainer/HpValue, "position", Vector2(0,0), 0.025).from(Vector2(randf_range(-10,10), randf_range(-12,12)))
-	tween.tween_property($TextureRect, "position", Vector2(0,-5), 0.025).from(Vector2(randf_range(-10,10), randf_range(-17,7)))
-	tween.chain()
-	tween.tween_property($MarginContainer/HpValue, "position", Vector2(0,0), 0.025).from(Vector2(randf_range(-10,10), randf_range(-12,12)))
-	tween.tween_property($TextureRect, "position", Vector2(0,-5), 0.025).from(Vector2(randf_range(-10,10), randf_range(-17,7)))
-	tween.chain()
-	tween.tween_property($MarginContainer/HpValue, "position", Vector2(0,0), 0.025).from(Vector2(randf_range(-10,10), randf_range(-12,12)))
-	tween.tween_property($TextureRect, "position", Vector2(0,-5), 0.025).from(Vector2(randf_range(-10,10), randf_range(-17,7)))
-	tween.chain()
-	tween.tween_property($MarginContainer/HpValue, "position", Vector2(0,0), 0.025).from(Vector2(randf_range(-10,10), randf_range(-12,12)))
-	tween.tween_property($TextureRect, "position", Vector2(0,-5), 0.025).from(Vector2(randf_range(-10,10), randf_range(-17,7)))
-	await tween.finished
+	if _hurt_tween != null and _hurt_tween.is_valid():
+		_hurt_tween.kill()
+	$MarginContainer/HpValue.position = Vector2.ZERO
+	$TextureRect.position = Vector2(0, -5)
+	hp_bar.material.set_shader_parameter("flash_opacity", 1 if PoolManager.hit_flash_allowed(self) else 0)
+	_hurt_tween = create_tween().set_parallel(true)
+	if Game.shake_screen:
+		for step in 4:
+			if step > 0:
+				_hurt_tween.chain()
+			_hurt_tween.tween_property($MarginContainer/HpValue, "position", Vector2.ZERO, 0.025).from(Vector2(randf_range(-10,10), randf_range(-12,12)))
+			_hurt_tween.tween_property($TextureRect, "position", Vector2(0,-5), 0.025).from(Vector2(randf_range(-10,10), randf_range(-17,7)))
+	else:
+		_hurt_tween.tween_interval(0.1)
+	await _hurt_tween.finished
 	hp_bar.material.set_shader_parameter("flash_opacity", 0)
 	$Timer.start()
 

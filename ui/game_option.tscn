@@ -318,6 +318,7 @@ option_id = "option_game"
 libraries/ = SubResource("AnimationLibrary_y35uc")
 
 [node name="Scroll" type="ScrollContainer" parent="." unique_id=796350807]
+follow_focus = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -329,7 +330,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
 horizontal_scroll_mode = 0
-vertical_scroll_mode = 3
+vertical_scroll_mode = 1
 script = ExtResource("1_gaaxb")
 
 [node name="Content" type="VBoxContainer" parent="Scroll" unique_id=1755129325]
@@ -808,6 +809,13 @@ custom_minimum_size = Vector2(200, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+value_label_path = NodePath("../Value")
+
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowMaster"]
+custom_minimum_size = Vector2(48, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 2
 
 [node name="RowSFX" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=1457527729]
 layout_mode = 2
@@ -840,6 +848,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 bus = &"SFX"
+value_label_path = NodePath("../Value")
+
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowSFX"]
+custom_minimum_size = Vector2(48, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 2
 
 [node name="RowBGM" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=256167151]
 layout_mode = 2
@@ -872,6 +887,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 bus = &"BGM"
+value_label_path = NodePath("../Value")
+
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowBGM"]
+custom_minimum_size = Vector2(48, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 2
 
 [node name="RowVOICE" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=1428377212]
 layout_mode = 2
@@ -904,6 +926,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 bus = &"VOICE"
+value_label_path = NodePath("../Value")
+
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowVOICE"]
+custom_minimum_size = Vector2(48, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 2
 
 [node name="MobileNotice" parent="." instance=ExtResource("8_mnotice")]
 unique_name_in_owner = true

@@ -1937,3 +1937,30 @@
 - Notes / 说明: `addons/godot_ai/` 不入库，但项目配置仍启用其插件并注册 `_mcp_game_helper`；`tests/` 的 `@tool` 测试脚本还继承插件提供的 `McpTestSuite`。本地缺少插件时，不能宣称克隆后即可无报错启动；需在关闭编辑器时同时移除缺失 helper 的 autoload 配置与插件启用路径，并在本地 `tests/` 下添加空 `.gdignore` 避免扫描依赖插件基类的脚本（配置插件运行测试前删除）。辅助插件不属于游戏逻辑，MCP 测试套件仍依赖它。本次仅核对静态配置，未验证清理后的完整游戏启动；README 已提供本地处理步骤，未修改仓库运行配置。
 - Source / 来源: code
 - Date / 日期: 2026-10-10
+
+### [UI] 返回难度选择必须撤销待启动计时器，隐藏页面不会取消入场
+- Evidence / 证据: `ui/level_select.gd:27`、`ui/level_button.gd:79,94,96`、`ui/level_button.tscn:284`。
+- Notes / 说明: 当前返回仅发送 `level_select_out` 并播放 `RESET`，难度按钮已启动的 0.5 秒 Timer 没有停止，超时也没有检查取消状态。源码推导存在“返回后仍进入战斗”的路径，尚待实机复现；修复时需同时取消计时器、复位选择状态并守卫超时回调。静态 UI/UX 检查详见 `docs/UI_UX_REVIEW.md`。
+- SUPERSEDED: 2026-10-10 已由实际场景回归复现并修复；返回调用 `cancel_selection()`，计时器和触屏延迟回调一并失效，超时再校验页面状态；重新进入可选择。当前规则已上提 `ARCHITECTURE.md` 的菜单章节。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 记分板筛选的触屏点按阈值不对称，向上拖动会通过点击判断
+- Evidence / 证据: `ui/menu_box_button.gd:84-95`、`ui/menu_box_character.tscn:9`、`ui/menu_box_gamemode.tscn:10`。
+- Notes / 说明: 释放时使用 `offset <= 10`，负向大位移同样成立；还缺少横向距离、手指索引和取消状态检查。源码算式已复核，真实触屏事件路由尚待验证；应采用二维距离阈值与单指跟踪，避免滚动误选。
+- SUPERSEDED: 2026-10-10 已改为二维距离、同指跟踪与取消/目标区域检查（`ui/menu_box_button.gd:86`）；`_input` 提前观察滚动消费的拖动和释放，延迟清理手指状态。合成事件已覆盖四方向、拖回原点、多指与取消，Android 真机事件路由仍待测。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 装备负百分比预览先取整会丢失书包的减伤收益
+- Evidence / 证据: `ui/ability_shop_item_card.gd:217,285`、`resources/equip/bag.tres:28`。
+- Notes / 说明: 第三属性负值预览使用 `int(value) * 100`，书包实际条目 `-0.05` 因而表达为 `0%`，累计属性却采用 `int(value * 100)`。应统一属性格式化口径，先缩放再按明确精度取整；该结论来自资源及算式复核，未执行游戏内升级。
+- SUPERSEDED: 2026-10-10 预览改为 `roundi(value * 100)`（`ui/ability_shop_item_card.gd:217`），实际书包资源的场景回归确认 `-5%`；未改其他属性格式化入口。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10
+
+### [UI] 动画 method track 的焦点设置需要等待延迟调用完成
+- Evidence / 证据: `ui/level_select.gd:49`、`ui/option.tscn:78`、`tests/test_ui_ux_regressions.gd`。
+- Notes / 说明: 难度页动画 method track 会启用按钮焦点；`animation_finished` 后再等一个 `process_frame` 才抢焦点，避免 deferred method 尚未执行时控件仍为 `FOCUS_NONE`。测试应等待动画完成而非固定 0.3 秒，渲染首帧较慢时固定计时可能早于动画完成。设置通过递归焦点开关隔离缩放隐藏的子页，见 `ARCHITECTURE.md`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-10

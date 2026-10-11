@@ -13,11 +13,14 @@ extends PanelContainer
 var on_selected: bool = false
 
 var on_touch: bool = false
+var _selection_id: int = 0
 
 func _ready():
 	mouse_entered.connect(mouse_in)
 	mouse_exited.connect(mouse_out)
 	gui_input.connect(level_selected)
+	focus_entered.connect(mouse_in)
+	focus_exited.connect(mouse_out)
 	
 	level_select.level_is_selected.connect(close_mouse)
 	level_select.player_selected.connect(open_mouse)
@@ -32,10 +35,22 @@ func get_level():
 	level_name.set("theme_override_colors/font_color", level.level_name_color)
 
 func open_mouse():
+	cancel_selection()
 	mouse_filter = 0
+	focus_mode = Control.FOCUS_ALL
 
 func close_mouse():
 	mouse_filter = 2
+	focus_mode = Control.FOCUS_NONE
+
+func cancel_selection() -> void:
+	_selection_id += 1
+	timer.stop()
+	on_selected = false
+	on_touch = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	focus_mode = Control.FOCUS_NONE
+	animation_player.play("mouse_out")
 
 func mouse_in():
 	if on_selected == false:
@@ -55,11 +70,15 @@ func touch_out():
 
 
 func level_selected(event: InputEvent):
-	
+	if on_selected or mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		return
 	if event as InputEventScreenTouch and event.pressed:
 		if on_selected == false and on_touch == false:
+			var selection_id := _selection_id
 			GameEvents.emit_player_card_touch()
 			await get_tree().create_timer(0.1).timeout
+			if selection_id != _selection_id:
+				return
 			on_touch = true
 			SoundManager.play_sfx("ButtonSounds2")
 			animation_player.play("mouse_in")
@@ -78,7 +97,8 @@ func level_selected(event: InputEvent):
 			
 			timer.start()
 	
-	if on_selected == false and event.is_action_pressed("shoot"):
+	if on_selected == false and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		accept_event()
 		SoundManager.play_sfx("ButtonSounds")
 		on_selected = true
 		level_select.level_is_selected.emit()
@@ -94,6 +114,9 @@ func level_selected(event: InputEvent):
 		timer.start()
 
 func _on_timer_timeout() -> void:
+	if not on_selected or not level_select.visible:
+		return
+	level_select.transition_started = true
 	SoundManager.bgm_fade_out()
 	Transition.play_left_start()
 	await Transition.left_end_start

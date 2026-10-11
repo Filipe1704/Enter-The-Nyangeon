@@ -33,6 +33,7 @@ var quit_on_touch: bool = false
 var society_card_group: Array[Node] = []
 var _default_society: Node = null
 var _society_gids: Array = []
+var _player_focus: Control
 
 func _ready():
 	SoundManager.cut_finish.connect(bgm_loop_play)
@@ -127,11 +128,14 @@ func _sync_societies() -> void:
 
 
 func on_level_select():
+	_player_focus = get_viewport().gui_get_focus_owner()
 	on_select_level = true
 
 func out_level_select():
 	await get_tree().create_timer(0.1).timeout
 	on_select_level = false
+	if is_instance_valid(_player_focus) and _player_focus.is_visible_in_tree():
+		_player_focus.grab_focus()
 
 func _unhandled_input(event:InputEvent ) -> void:
 	if on_select_anim == true:
@@ -169,12 +173,16 @@ func button_open():
 	var buttons: Array = menu_button_box.get_children()
 	for i in buttons:
 		i.mouse_filter = Control.MOUSE_FILTER_STOP
+		i.focus_mode = Control.FOCUS_ALL
 	shop_menu.button_open.emit()
+	if not buttons.is_empty():
+		buttons[0].grab_focus()
 
 func button_close():
 	var buttons: Array = menu_button_box.get_children()
 	for i in buttons:
 		i.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		i.focus_mode = Control.FOCUS_NONE
 	shop_menu.button_close.emit()
 
 func bgm_loop_play():
@@ -220,6 +228,8 @@ func society_card_filter(society_card: Node):
 	await player_card_clear_done
 	if society_card.has_method("populate_player_cards"):
 		await society_card.populate_player_cards(player_card_box)
+	if not on_select_level and player_card_box.get_child_count() > 0:
+		player_card_box.get_child(0).grab_focus()
 
 func change_player_card():
 	var cards = player_card_box.get_children()

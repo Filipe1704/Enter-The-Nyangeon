@@ -8,8 +8,10 @@ extends PanelContainer
 @onready var button_name_label: Label = $button_name
 @onready var sprite_2d: Sprite2D = $ColorRect/Sprite2D
 
-var isDrag: bool = false
-var start_pos: float = 0
+const TAP_DISTANCE: float = 10.0
+var _touch_index: int = -1
+var _touch_start: Vector2
+var _touch_dragged: bool = false
 var player_card: PlayerCard
 
 
@@ -81,19 +83,38 @@ func is_null_pressed():
 	is_selected = false
 	color_rect.color = Color(0.141,0.141,0.141)
 
+func _input(event: InputEvent) -> void:
+	# 滚动容器可能消费拖动和释放，仍需更新本次手势状态。
+	if event is InputEventScreenDrag and event.index == _touch_index:
+		var local_position: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
+		if _touch_start.distance_to(local_position) > TAP_DISTANCE:
+			_touch_dragged = true
+	elif event is InputEventScreenTouch and not event.pressed and event.index == _touch_index:
+		_clear_touch.call_deferred(event.index)
+
+func _clear_touch(index: int) -> void:
+	if _touch_index == index:
+		_touch_index = -1
+
 func button_pressed(event: InputEvent):
-	
-	if event as InputEventScreenTouch and event.pressed:
-		isDrag = true
-		start_pos = event.position.y
-	
-	if event as InputEventScreenTouch and !event.pressed:
-		isDrag = false
-		var offset = event.position.y - start_pos
-		if offset <= 10:
-			is_pressed()
-		start_pos = 0
-	
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			if _touch_index == -1:
+				_touch_index = event.index
+				_touch_start = event.position
+				_touch_dragged = false
+		elif event.index == _touch_index:
+			var tapped: bool = not event.canceled and not _touch_dragged
+			tapped = tapped and _touch_start.distance_to(event.position) <= TAP_DISTANCE
+			tapped = tapped and Rect2(Vector2.ZERO, size).has_point(event.position)
+			_touch_index = -1
+			if tapped:
+				is_pressed()
+		return
+	if event is InputEventScreenDrag:
+		if event.index == _touch_index and _touch_start.distance_to(event.position) > TAP_DISTANCE:
+			_touch_dragged = true
+		return
 	if event.is_action_pressed("shoot"):
 		is_pressed()
 

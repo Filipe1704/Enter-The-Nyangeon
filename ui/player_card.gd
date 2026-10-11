@@ -28,6 +28,9 @@ var _switching: bool = false
 var _touch_mode: bool = false
 
 func _ready():
+	focus_mode = Control.FOCUS_ALL
+	focus_entered.connect(select_player_card)
+	focus_exited.connect(select_out_player_card)
 	card_anim.play("add_card")
 	card_anim.animation_finished.connect(_on_card_anim_finished)
 	gui_input.connect(add_player)
@@ -77,7 +80,7 @@ func _process(_delta):
 # 轮询避免事件式的 1 帧延迟与快移漏判；按钮区域也算热区，移过去即可触发并显示按钮。
 func _apply_hover():
 	var m := get_global_mouse_position()
-	var over := get_global_rect().has_point(m)
+	var over := has_focus() or get_global_rect().has_point(m)
 	if not over and branch_button != null and is_instance_valid(branch_button):
 		over = branch_button.get_global_rect().has_point(m)
 	if over == _hovered:
@@ -167,6 +170,7 @@ func _exit_tree() -> void:
 
 func mouse_open():
 	mouse_filter = 0
+	focus_mode = Control.FOCUS_ALL
 	if on_select == true:
 		card_anim.play("select_out")
 		on_select = false
@@ -174,6 +178,7 @@ func mouse_open():
 
 func mouse_close():
 	mouse_filter = 2
+	focus_mode = Control.FOCUS_NONE
 
 func select_player_card():
 	SoundManager.play_sfx("ButtonSounds2")
@@ -199,6 +204,8 @@ func play_voice():
 		SoundManager.play_voice(player_card.voice_name, "SelectVoice2")
 
 func add_player(event: InputEvent):
+	if _switching or mouse_filter == Control.MOUSE_FILTER_IGNORE or event.is_echo():
+		return
 	
 	if event as InputEventScreenTouch and event.pressed:
 		if on_touch == false:
@@ -221,7 +228,8 @@ func add_player(event: InputEvent):
 				GameEvents.emit_level_select_in()
 	
 	
-	if event.is_action_pressed("shoot"):
+	if event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept"):
+		accept_event()
 		SoundManager.play_sfx("ButtonSounds")
 		if player != "":
 			play_voice()
