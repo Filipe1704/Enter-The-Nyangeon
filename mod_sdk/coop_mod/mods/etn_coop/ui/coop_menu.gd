@@ -23,6 +23,17 @@ var _room_keys: Array = []
 var _browsing: bool = false
 # 覆盖层内所有可交互控件；新增按钮/输入/开关必须登记此处（_set_buttons_enabled 只恢复名单内的 mouse_filter）。
 var _interactive_controls: Array[Control] = []
+# 中继服务器列表：主面板按钮 + 子菜单（触摸可拖拽滚动）+ 二次确认
+var _server_list_button: Button = null
+var _server_submenu: Control = null
+var _server_submenu_scroll: ScrollContainer = null
+var _relay_saved_list: VBoxContainer = null
+var _submenu_name_input: LineEdit = null
+var _submenu_addr_input: LineEdit = null
+var _submenu_save_button: Button = null
+var _submenu_close_button: Button = null
+var _saved_confirm: ConfirmationDialog = null
+var _pending_delete_addr: String = ""
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _ip_input: LineEdit = %IpInput
@@ -39,7 +50,6 @@ var _interactive_controls: Array[Control] = []
 @onready var _relay_room_input: LineEdit = %RelayRoomInput
 @onready var _relay_create_button: Button = %RelayCreateButton
 @onready var _relay_join_button: Button = %RelayJoinButton
-@onready var _saki_server_button: Button = %SakiServerButton
 @onready var _relay_room_code_label: Label = %RelayRoomCodeLabel
 @onready var _status_label: Label = %StatusLabel
 @onready var _local_ip_label: Label = %LocalIpLabel
@@ -68,7 +78,6 @@ func _ready() -> void:
 	_join_button.pressed.connect(_on_join_pressed)
 	_relay_create_button.pressed.connect(_on_relay_create_pressed)
 	_relay_join_button.pressed.connect(_on_relay_join_pressed)
-	_saki_server_button.pressed.connect(_on_saki_server_pressed)
 	_host_button.gui_input.connect(_on_host_gui_input)
 	_join_button.gui_input.connect(_on_join_gui_input)
 	_ip_input.gui_input.connect(_on_ip_input_gui_input)
@@ -114,6 +123,9 @@ func _ready() -> void:
 	_refresh_addr_mode()
 	_refresh_manual_ip()
 	_build_room_list()
+	_setup_saved_confirm()
+	_build_server_list_button()
+	_build_server_submenu()
 	_build_interactive_controls()
 
 	visible = false
@@ -245,7 +257,15 @@ func _on_page_anim_finished(anim_name: StringName) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not on_coop or not _is_gamepad_event(event):
+	if not on_coop:
+		return
+	# 子菜单开启时，取消键只关子菜单（不关整个联机覆盖层）
+	if _server_submenu != null and _server_submenu.visible:
+		if _is_ui_cancel(event):
+			_close_server_submenu()
+			get_viewport().set_input_as_handled()
+			return
+	if not _is_gamepad_event(event):
 		return
 	if _is_ui_cancel(event):
 		out_coop_selected()
@@ -286,7 +306,8 @@ func _get_nav_items() -> Array[Control]:
 	elif _selected_mode == CoopPanelMode.RELAY:
 		items.append(_relay_server_input)
 		items.append(_relay_create_button)
-		items.append(_saki_server_button)
+		if _server_list_button != null:
+			items.append(_server_list_button)
 		items.append(_relay_room_input)
 		items.append(_relay_join_button)
 	elif _selected_mode == CoopPanelMode.OPTION:
@@ -365,6 +386,7 @@ func on_coop_selected() -> void:
 
 func out_coop_selected() -> void:
 	SoundManager.play_sfx("UISounds2")
+	_close_server_submenu()
 	on_coop = false
 	_set_buttons_enabled(false)
 	_play_out()
@@ -376,7 +398,7 @@ func _build_interactive_controls() -> void:
 	_interactive_controls = [
 		_host_button, _join_button, _ip_input, _port_input,
 		_public_ip_input, _public_ip_clear,
-		_relay_server_input, _relay_room_input, _relay_create_button, _relay_join_button, _saki_server_button,
+		_relay_server_input, _relay_room_input, _relay_create_button, _relay_join_button, _server_list_button,
 		option, _player_id_input, _player_id_confirm,
 		_addr_lan_toggle, _addr_public_toggle,
 	]
@@ -580,9 +602,278 @@ func _set_relay_busy(busy: bool) -> void:
 		_relay_room_input.editable = not busy
 
 
-func _on_saki_server_pressed() -> void:
+# ---------------- RELAY 页：已保存的服务器列表（名称+地址） ----------------
+
+func _build_server_list_button() -> void:
+	if _relay_panel == null:
+		return
+	_server_list_button = Button.new()
+	_server_list_button.name = "ServerListButton"
+	_server_list_button.custom_minimum_size = Vector2(150, 30)
+	_server_list_button.text = "coop_server_list"
+	_server_list_button.pressed.connect(_open_server_submenu)
+	var saki_row := _relay_panel.get_node_or_null("SakiServerRow")
+	if saki_row != null:
+		saki_row.add_child(_server_list_button)
+	else:
+		_relay_panel.add_child(_server_list_button)
+
+
+# 子菜单：挂在 CoopMenu 根下（不属于 _panel），故不受 _set_buttons_enabled 的后代 IGNORE 影响。
+func _build_server_submenu() -> void:
+	_server_submenu = Control.new()
+	_server_submenu.name = "ServerSubmenu"
+	_server_submenu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_server_submenu.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_server_submenu.visible = false
+	add_child(_server_submenu)
+
+	var backdrop := ColorRect.new()
+	backdrop.name = "Backdrop"
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0, 0, 0, 0.6)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	backdrop.gui_input.connect(_on_submenu_backdrop_input)
+	_server_submenu.add_child(backdrop)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_server_submenu.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(360, 0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.14, 0.14, 0.16, 1.0)
+	sb.border_color = Color(0.3, 0.3, 0.35, 1.0)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 12
+	sb.content_margin_top = 12
+	sb.content_margin_right = 12
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "coop_saved_servers"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	_server_submenu_scroll = ScrollContainer.new()
+	_server_submenu_scroll.name = "ServerListScroll"
+	_server_submenu_scroll.custom_minimum_size = Vector2(340, 230)
+	_server_submenu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_server_submenu_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_server_submenu_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 复用本体触摸/鼠标拖拽滚动脚本；必须在 add_child 前挂，否则 _ready 不跑、gui_input 不连。
+	_server_submenu_scroll.set_script(load("res://script/ScrollBox.gd"))
+	vbox.add_child(_server_submenu_scroll)
+
+	_relay_saved_list = VBoxContainer.new()
+	_relay_saved_list.name = "SavedServerList"
+	_relay_saved_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_relay_saved_list.add_theme_constant_override("separation", 4)
+	_server_submenu_scroll.add_child(_relay_saved_list)
+
+	var add_row := HBoxContainer.new()
+	add_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(add_row)
+	_submenu_name_input = LineEdit.new()
+	_submenu_name_input.custom_minimum_size = Vector2(110, 30)
+	_submenu_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_submenu_name_input.placeholder_text = "coop_server_name_placeholder"
+	_submenu_name_input.gui_input.connect(_on_submenu_name_input_gui_input)
+	add_row.add_child(_submenu_name_input)
+	_submenu_addr_input = LineEdit.new()
+	_submenu_addr_input.custom_minimum_size = Vector2(130, 30)
+	_submenu_addr_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_submenu_addr_input.placeholder_text = "coop_relay_server_placeholder"
+	_submenu_addr_input.gui_input.connect(_on_submenu_addr_input_gui_input)
+	add_row.add_child(_submenu_addr_input)
+	_submenu_save_button = Button.new()
+	_submenu_save_button.custom_minimum_size = Vector2(72, 30)
+	_submenu_save_button.text = "coop_server_save"
+	_submenu_save_button.pressed.connect(_on_saved_server_save_pressed)
+	add_row.add_child(_submenu_save_button)
+
+	_submenu_close_button = Button.new()
+	_submenu_close_button.custom_minimum_size = Vector2(0, 30)
+	_submenu_close_button.text = "coop_server_close"
+	_submenu_close_button.pressed.connect(_close_server_submenu)
+	vbox.add_child(_submenu_close_button)
+
+	_rebuild_saved_servers()
+
+
+func _open_server_submenu() -> void:
 	SoundManager.play_sfx("ButtonSounds")
-	_relay_server_input.text = "mc.yqst.top:32085"
+	if _server_submenu == null:
+		return
+	# 每次打开都清空输入框（干净起始态）
+	if _submenu_name_input != null:
+		_submenu_name_input.text = ""
+	if _submenu_addr_input != null:
+		_submenu_addr_input.text = ""
+	_rebuild_saved_servers()
+	_server_submenu.visible = true
+
+
+func _close_server_submenu() -> void:
+	if _server_submenu != null:
+		_server_submenu.visible = false
+
+
+func _setup_saved_confirm() -> void:
+	_saved_confirm = ConfirmationDialog.new()
+	_saved_confirm.ok_button_text = tr("coop_server_delete")
+	_saved_confirm.cancel_button_text = tr("coop_cancel")
+	_saved_confirm.confirmed.connect(_on_saved_delete_confirmed)
+	add_child(_saved_confirm)
+
+
+func _get_relay_servers() -> Array:
+	var coop = CoopNetScript.instance
+	if coop == null:
+		return []
+	var s = coop.get("settings")
+	if s == null:
+		return []
+	var v = s.get("relay_servers")
+	return v if v is Array else []
+
+
+func _save_relay_servers(servers: Array) -> void:
+	var coop = CoopNetScript.instance
+	if coop == null:
+		return
+	var s = coop.get("settings")
+	if s != null:
+		s.call("apply_relay_servers", servers)
+
+
+func _rebuild_saved_servers() -> void:
+	if _relay_saved_list == null:
+		return
+	for c in _relay_saved_list.get_children():
+		_relay_saved_list.remove_child(c)
+		c.queue_free()
+	var servers: Array = _get_relay_servers()
+	if servers.is_empty():
+		var lbl := Label.new()
+		lbl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+		lbl.text = tr("coop_saved_empty")
+		_relay_saved_list.add_child(lbl)
+	else:
+		for e in servers:
+			if not (e is Dictionary):
+				continue
+			var addr: String = str(e.get("addr", ""))
+			if addr == "":
+				continue
+			var nm: String = str(e.get("name", addr))
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 4)
+			var pick := Button.new()
+			pick.text = nm
+			pick.tooltip_text = addr
+			pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pick.pressed.connect(_on_saved_server_pressed.bind(addr))
+			row.add_child(pick)
+			var del := Button.new()
+			del.text = "coop_server_delete"
+			del.tooltip_text = "coop_server_delete"
+			del.custom_minimum_size = Vector2(72, 0)
+			del.pressed.connect(_on_saved_server_delete_pressed.bind(addr, nm))
+			row.add_child(del)
+			_relay_saved_list.add_child(row)
+
+
+func _on_saved_server_pressed(addr: String) -> void:
+	SoundManager.play_sfx("ButtonSounds")
+	if _relay_server_input != null:
+		_relay_server_input.text = addr
+	_close_server_submenu()
+
+
+func _on_saved_server_save_pressed() -> void:
+	SoundManager.play_sfx("ButtonSounds")
+	var addr: String = _submenu_addr_input.text.strip_edges() if _submenu_addr_input != null else ""
+	if addr == "":
+		_notice("coop_server_invalid")
+		return
+	var nm: String = _submenu_name_input.text.strip_edges() if _submenu_name_input != null else ""
+	if nm == "":
+		nm = addr
+	nm = nm.left(32)
+	var servers: Array = _get_relay_servers()
+	var updated := false
+	for e in servers:
+		if e is Dictionary and str(e.get("addr", "")) == addr:
+			e["name"] = nm
+			updated = true
+			break
+	if not updated:
+		servers.append({"name": nm, "addr": addr})
+	_save_relay_servers(servers)
+	if _submenu_name_input != null:
+		_submenu_name_input.text = ""
+	if _submenu_addr_input != null:
+		_submenu_addr_input.text = ""
+	_rebuild_saved_servers()
+	_notice("coop_server_saved")
+
+
+func _on_saved_server_delete_pressed(addr: String, nm: String) -> void:
+	SoundManager.play_sfx("ButtonSounds")
+	_pending_delete_addr = addr
+	if _saved_confirm != null:
+		_saved_confirm.dialog_text = tr("coop_server_delete_confirm") % (nm if nm != "" else addr)
+		_saved_confirm.popup_centered()
+
+
+func _on_saved_delete_confirmed() -> void:
+	var addr: String = _pending_delete_addr
+	_pending_delete_addr = ""
+	if addr == "":
+		return
+	var servers: Array = _get_relay_servers()
+	var out: Array = []
+	for e in servers:
+		if e is Dictionary and str(e.get("addr", "")) == addr:
+			continue
+		out.append(e)
+	_save_relay_servers(out)
+	_rebuild_saved_servers()
+	_notice("coop_server_removed")
+
+
+func _notice(key: String) -> void:
+	if _player_id_notice != null and is_instance_valid(_player_id_notice):
+		_player_id_notice.call("notice", key)
+
+
+func _on_submenu_name_input_gui_input(event: InputEvent) -> void:
+	if event as InputEventScreenTouch and event.pressed:
+		_submenu_name_input.grab_focus()
+		DisplayServer.virtual_keyboard_show(_submenu_name_input.text)
+		_submenu_name_input.accept_event()
+
+
+func _on_submenu_addr_input_gui_input(event: InputEvent) -> void:
+	if event as InputEventScreenTouch and event.pressed:
+		_submenu_addr_input.grab_focus()
+		DisplayServer.virtual_keyboard_show(_submenu_addr_input.text)
+		_submenu_addr_input.accept_event()
+
+
+func _on_submenu_backdrop_input(event: InputEvent) -> void:
+	if (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed):
+		_close_server_submenu()
 
 
 func mouse_on_lan() -> void:

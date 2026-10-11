@@ -28,10 +28,10 @@ const DEFAULT_BATTLE_SCENE: String = "res://scenes/main/main.tscn"
 const MENU_SCENE: String = "res://scenes/main/menu_screen.tscn"
 # 协议/版本握手：不一致直接拒绝。RPC 契约变更时必须递增 PROTOCOL_VERSION。
 const PROTOCOL_VERSION: int = 3
-const MOD_VERSION: String = "0.1.9"
-const HELLO_TIMEOUT_MSEC: int = 5000
+const MOD_VERSION: String = "0.1.10"
+const HELLO_TIMEOUT_MSEC: int = 30000
 # 客机：发出 _client_hello 后等待 _hello_accept 的上限；超时视为握手失败（旧房主/版本不匹配）
-const HELLO_ACCEPT_TIMEOUT_MSEC: int = 6000
+const HELLO_ACCEPT_TIMEOUT_MSEC: int = 30000
 # 掉线宽限：host 保留掉线 peer 的状态等待自动重连，超时才做破坏性清理
 const REJOIN_GRACE_MSEC: int = 45000
 # 客机自动重连退避（毫秒），超出宽限则回退「房主离开」流程
@@ -2340,6 +2340,10 @@ func _gate_player_death(player) -> bool:
 	if not is_lan_game:
 		return false
 	if player == null or player != get_local_player():
+		return false
+	# 生命数（如 Ichika 杂鱼酱）优先：交还本体走复活流程，不转倒地
+	var st = player.get("stats")
+	if st != null and int(st.get("life_num")) > 0:
 		return false
 	if player.has_method("set_downed_state"):
 		player.set_downed_state(true)

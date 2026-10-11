@@ -513,14 +513,6 @@ custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="SakiServerButton" type="Button" parent="Panel/RootHBox/ContentRoot/RelayPanel/SakiServerRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 30)
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-text = "coop_saki_server"
-
 [node name="RelayServerRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/RelayPanel"]
 layout_mode = 2
 theme_override_constants/separation = 8

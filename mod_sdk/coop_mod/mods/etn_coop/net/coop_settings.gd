@@ -9,6 +9,9 @@ const SECTION: String = "feedback"
 const PROFILE_SECTION: String = "profile"
 const DEBUG_SECTION: String = "debug"
 const MAX_NAME_LEN: int = 12
+# 保存的中继服务器列表（名称+地址）；首次运行默认含 Saki 服务器。
+const DEFAULT_RELAY_SERVERS: Array = [{"name": "Saki", "addr": "mc.yqst.top:32085"}]
+const MAX_RELAY_SERVERS: int = 50
 
 var remote_effect_freq: int = 4
 var remote_flash_freq: int = 4
@@ -25,6 +28,8 @@ var room_address_mode: int = 0
 var manual_public_ip: String = ""
 # 稳定客户端令牌（UUID，持久化）：断线重连时 host 用它识别「同一个玩家」并迁移状态。
 var client_token: String = ""
+# 保存的中继服务器列表 [{name, addr}]。
+var relay_servers: Array = []
 
 
 func load_settings() -> void:
@@ -41,6 +46,7 @@ func load_settings() -> void:
 	room_address_mode = clampi(int(cfg.get_value(DEBUG_SECTION, "room_address_mode", 0)), 0, 1)
 	manual_public_ip = str(cfg.get_value(DEBUG_SECTION, "manual_public_ip", "")).strip_edges()
 	client_token = str(cfg.get_value(PROFILE_SECTION, "client_token", "")).strip_edges()
+	relay_servers = sanitize_relay_servers(cfg.get_value(DEBUG_SECTION, "relay_servers", DEFAULT_RELAY_SERVERS))
 	if client_token == "":
 		ensure_client_token()
 
@@ -57,6 +63,7 @@ func save_settings() -> void:
 	cfg.set_value(DEBUG_SECTION, "lan_port", lan_port)
 	cfg.set_value(DEBUG_SECTION, "room_address_mode", room_address_mode)
 	cfg.set_value(DEBUG_SECTION, "manual_public_ip", manual_public_ip)
+	cfg.set_value(DEBUG_SECTION, "relay_servers", relay_servers)
 	cfg.save(PATH)
 
 
@@ -83,6 +90,39 @@ func apply_room_address_mode(value: int) -> void:
 func apply_manual_public_ip(value: String) -> void:
 	manual_public_ip = value.strip_edges()
 	save_settings()
+
+
+func apply_relay_servers(servers: Array) -> void:
+	relay_servers = sanitize_relay_servers(servers)
+	save_settings()
+
+
+# 清洗/规整保存列表：每项 {name, addr}；addr 非空且去重、name 空则回落 addr、限制条数与长度。
+static func sanitize_relay_servers(servers) -> Array:
+	var out: Array = []
+	var seen: Dictionary = {}
+	if not (servers is Array):
+		return out
+	for entry in servers:
+		var nm: String = ""
+		var ad: String = ""
+		if entry is Dictionary:
+			nm = str(entry.get("name", "")).replace("\n", "").replace("\r", "").strip_edges()
+			ad = str(entry.get("addr", "")).strip_edges()
+		elif entry is String:
+			ad = str(entry).strip_edges()
+		if ad == "" or ad.length() > 128:
+			continue
+		if nm == "":
+			nm = ad
+		nm = nm.left(32)
+		if seen.has(ad):
+			continue
+		seen[ad] = true
+		out.append({"name": nm, "addr": ad})
+		if out.size() >= MAX_RELAY_SERVERS:
+			break
+	return out
 
 
 func apply_player_id(value: String) -> void:

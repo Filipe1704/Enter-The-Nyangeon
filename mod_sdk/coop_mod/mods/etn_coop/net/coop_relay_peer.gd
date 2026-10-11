@@ -8,8 +8,8 @@ signal relay_room_created(room_code: String)
 signal relay_room_joined(peer_id: int)
 signal relay_error(message: String)
 
-const JOIN_HANDSHAKE_TIMEOUT_MSEC: int = 15000
-const CONNECT_TIMEOUT_MSEC: int = 10000
+const JOIN_HANDSHAKE_TIMEOUT_MSEC: int = 30000
+const CONNECT_TIMEOUT_MSEC: int = 30000
 
 var _ws := WebSocketPeer.new()
 var _unique_id: int = 0
@@ -109,6 +109,8 @@ func _poll() -> void:
 
 	if not _action_sent and _pending_action != "":
 		_action_sent = true
+		# 发送建/入房控制帧即起算握手超时：覆盖「WS 已 open 但首个控制回复迟迟不来」的缺口
+		_join_handshake_started_msec = Time.get_ticks_msec()
 		if _pending_action == "create":
 			_ws.send_text(JSON.stringify({
 				"type": "create_room",
@@ -155,6 +157,7 @@ func _on_control(text: String) -> void:
 			_unique_id = int(data.get("peer_id", 1))
 			_known_peers[_unique_id] = "self"
 			_status = MultiplayerPeer.CONNECTION_CONNECTED
+			_join_handshake_started_msec = 0
 			relay_room_created.emit(str(data.get("room_code", "")))
 		"join_prepared":
 			_unique_id = int(data.get("peer_id", 0))
