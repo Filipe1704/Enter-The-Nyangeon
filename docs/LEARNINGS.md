@@ -2044,3 +2044,10 @@
 - Validation / 验证: 无 MOD 完整渲染回归 187 项通过，包含真实选角确认后逐帧采样；带本机 MOD 副本的难度专项渲染 37 项、无窗口 32 项通过。本机 MOD 包未修改。
 - Source / 来源: user + test
 - Date / 日期: 2026-10-11
+
+### [UI] 支援主卡的焦点描边不能放在圆角裁剪内部或列表下方
+- Evidence / 证据: 用户截图 `codex-clipboard-744b0aae-3f29-485b-beb4-ac0feb89a4c2.png`；`ui/support_ui/support_select_ui.tscn` 的 `main_card.clip_children=1` 及其兄弟 `MarginContainer`；`ui/level_select.gd:_create_focus_outline`；`tests/test_ui_ux_regressions.gd:_check_support_focus_frame`。
+- Notes / 说明: 原 ReferenceRect 作为主卡子节点绘制直角框，圆角遮罩裁掉四角，后绘制的兄弟列表还遮住了侧边。前轮截图验证的是列表项目焦点，没有覆盖主卡持有焦点时展开列表的外框。修复为独立圆角 Panel 描边，置于主卡和列表上方并忽略鼠标输入，随主卡矩形变化同步尺寸；其他卡片保留矩形焦点框。实际渲染像素检查覆盖四个圆角和两侧，原实现失败、修复后通过，同时检查展开与收起状态。支援键盘展开测试等待实际动画和布局完成，避免截图读回耗时导致固定 0.2 秒检查提前结束。
+- Validation / 验证: 无 MOD 渲染专项 39 项通过；最终带本机 MOD 副本的难度页渲染专项 41 项通过，包含新增的收起状态检查。本机 MOD 包保持原样。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-11

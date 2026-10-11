@@ -51,6 +51,33 @@ func _focus_group(control: Control) -> int:
 		return 3
 	return 1
 
+func _create_focus_outline(control: Control) -> Control:
+	if control == support_select.main_card:
+		# 主卡会裁剪圆角，列表又是它的兄弟节点；焦点框必须独立绘制在二者上方。
+		var outline := Panel.new()
+		var style := StyleBoxFlat.new()
+		style.draw_center = false
+		style.border_color = Color.WHITE
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(6)
+		style.anti_aliasing = false
+		outline.add_theme_stylebox_override("panel", style)
+		outline.z_index = 1
+		support_select.add_child(outline)
+		var sync_rect := func():
+			outline.position = control.position
+			outline.size = control.size
+		control.item_rect_changed.connect(sync_rect)
+		sync_rect.call()
+		return outline
+	var outline := ReferenceRect.new()
+	outline.editor_only = false
+	outline.border_color = Color.WHITE
+	outline.border_width = 2
+	control.add_child(outline)
+	outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	return outline
+
 func _bind_focus_controls() -> void:
 	var controls: Array = [support_select.main_card]
 	controls.append_array(support_select.support_box.get_children())
@@ -61,14 +88,9 @@ func _bind_focus_controls() -> void:
 			continue
 		control.set_meta("level_focus_outline", true)
 		# 焦点边框与已选择状态分开，避免模式填色或卡片动画抹掉焦点提示。
-		var outline := ReferenceRect.new()
+		var outline := _create_focus_outline(control)
 		outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		outline.editor_only = false
-		outline.border_color = Color.WHITE
-		outline.border_width = 2
 		outline.visible = false
-		control.add_child(outline)
-		outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		control.focus_entered.connect(func():
 			outline.show()
 			_last_focus[_focus_group(control)] = control

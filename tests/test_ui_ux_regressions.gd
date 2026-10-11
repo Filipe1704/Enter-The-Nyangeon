@@ -149,6 +149,29 @@ func _level_tab(reverse: bool = false) -> void:
 	press.pressed = false
 	root.push_input(press)
 
+func _open_support_with_keyboard(support: Node2D) -> void:
+	_tap_key(KEY_ENTER)
+	if support.ui_anim.is_playing():
+		await support.ui_anim.animation_finished
+	await process_frame
+	await process_frame
+
+func _check_support_focus_frame(support: Node2D, label: String) -> void:
+	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		return
+	await _capture(label)
+	var frame := root.get_texture().get_image()
+	var scale := Vector2(frame.get_size()) / root.get_visible_rect().size
+	var card: Control = support.get_node("main_card")
+	var size := card.size
+	var offsets := [Vector2(2, 2), Vector2(size.x - 3, 2), Vector2(2, size.y - 3), Vector2(size.x - 3, size.y - 3), Vector2(1, size.y * 0.6), Vector2(size.x - 2, size.y * 0.6)]
+	var continuous := true
+	for offset: Vector2 in offsets:
+		var position: Vector2 = card.get_global_transform_with_canvas() * offset
+		var color := frame.get_pixelv(Vector2i(position * scale))
+		continuous = continuous and color.r > 0.8 and color.g > 0.8 and color.b > 0.8
+	_check(continuous, label + " 焦点边框四角及两侧均连续绘制")
+
 func _check_level_keyboard_regions() -> void:
 	var support_data := root.get_node("SupportData")
 	var player_data := root.get_node("PlayerData")
@@ -214,8 +237,11 @@ func _check_level_keyboard_regions() -> void:
 	_level_tab()
 	_level_tab()
 	_check(root.gui_get_focus_owner() == support.main_card, "Tab 从返回按钮循环到支援区域")
-	_tap_key(KEY_ENTER)
-	await create_timer(0.2).timeout
+	support.open_list()
+	await support.ui_anim.animation_finished
+	await process_frame
+	await _check_support_focus_frame(support, "level-support-panel-focus")
+	await _open_support_with_keyboard(support)
 	_check(support.margin_container.visible and root.gui_get_focus_owner() == support.support_box.get_child(0), "Enter 展开支援列表并聚焦当前支援")
 	_tap_key(KEY_DOWN)
 	_check(root.gui_get_focus_owner() == support.support_box.get_child(1), "上下键选择支援项目")
@@ -226,8 +252,8 @@ func _check_level_keyboard_regions() -> void:
 	await create_timer(0.5).timeout
 	_check(support_data.game_support.support_id == "kei", "Enter 应用支援选择")
 	_check(not support.margin_container.visible and root.gui_get_focus_owner() == support.main_card, "选择支援后收起列表并返回支援主卡")
-	_tap_key(KEY_ENTER)
-	await create_timer(0.2).timeout
+	await _check_support_focus_frame(support, "level-support-panel-collapsed")
+	await _open_support_with_keyboard(support)
 	_check(root.gui_get_focus_owner() == support.support_box.get_child(1), "重新展开时聚焦已选支援")
 	_tap_key(KEY_ESCAPE)
 	await support.ui_anim.animation_finished

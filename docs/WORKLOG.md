@@ -19,6 +19,12 @@
 
 ---
 
+## 2026-10-11 — 支援主卡焦点边框修正
+- Correction / 修正: 前轮焦点框视觉验证仅覆盖列表项目 → 用户截图指出主卡展开时圆角断边、侧边被列表遮住；已按主卡持有焦点的真实展开状态复现并补充像素检查（来源：user）。
+- Files / 涉及文件: `ui/level_select.gd`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: 主卡描边改为独立上层圆角 Panel，随展开和收起同步矩形，避开主卡裁剪和兄弟列表遮挡；带本机 MOD 副本的渲染专项 41 项通过。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「难度页辅助区域键盘控制」、`docs/LEARNINGS.md` 对应焦点描边条目。
+
 ## 2026-10-11 — 难度页键盘控制与入场闪动修复
 - Correction / 修正: 前轮难度页回归仅验证入场完成后的焦点及操作 → 用户指出选择角色后所有难度按钮会闪一遍；过程采样复现 HARD、EXTREME、INSANE 短暂高亮，不能用最终焦点正确推断入场动画正常（来源：user）。
 - Files / 涉及文件: `ui/level_select.gd`、`ui/level_button.gd`、`ui/gamemode_type.gd`、`ui/support_ui/support_select_ui.gd`、`ui/support_ui/support_shop_card.gd`、`tests/run_ui_ux_checks.py`、`tests/test_ui_ux_regressions.gd`。
