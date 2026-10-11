@@ -150,6 +150,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - **难度启动取消（2026-10-10）**：返回逐个调用 `level_button.cancel_selection()` 停 Timer、复位选择并更新选择序号，阻止尚未结束的触屏预览回调重新激活；Timer 超时再核验选择和页面状态，切场幕布开始后禁止重复返回（`ui/level_button.gd:46,116`、`ui/level_select.gd:28`）。
 - **升级卡长文案（2026-10-10）**：正文及效果保持字号 10，标题使用 `auto_text.gd`、下限 12；内容路径改为 `ContentScroll/VBoxContainer/*`（`ui/ability_upgrade_card.tscn:564`），长内容滚动，不再每帧缩字。触屏释放才预览/确认，`_input` 提前观察拖动，防止滚动容器消费事件后误提交；两次点按语义保留。
 - **测试房道具列表鼠标交互（2026-10-11）**：`ui/test_item_card.gd:_on_button_gui_input` 仅在左键抬起且仍位于同一卡片按钮内时发放道具。`_input` 先于 GUI 观察视口坐标位移，按住期间任一时刻超过 14 像素即取消本次点击，拖回原点也不恢复；保留 PASS 冒泡供 `script/ScrollBox.gd` 滚动。列表外松手通过带序号的延迟清理取消状态，防止清理前次释放时打断后一次点击；隐藏、禁用及窗口失焦也取消待确认按压。触屏沿用两次点按。专项命令：`python tests/run_ui_ux_checks.py --godot <Godot路径> --screenshots --test-item-input-only`，可追加 `--installed-mods` 验证本机 MOD 副本。
+- **共用纵向列表拖动（2026-10-11）**：`script/ScrollBox.gd` 被测试房角色/道具/敌人列表、主菜单社团列及多个菜单复用。鼠标仅由真实左键按下启动拖动，移动事件还须带左键掩码；滚轮交给原生滚动，不改变拖动状态。`_input` 在 GUI 分发前清理左键或当前触点的释放，列表隐藏和窗口失焦也清理；触屏按 index 跟踪，其他手指不能接管或结束当前手势。专项命令：`python tests/run_ui_ux_checks.py --godot <Godot路径> --screenshots --scroll-input-only`。本机 `etn_coop 0.1.9` 包含 `res://script/ScrollBox.gd.remap → ScrollBox.gdc`，会覆盖本地源码；该包需另行同步修复。
 - 分数记录用 JSON-lines：`save_record_as_json` / `load_all_records_as_json`（`:92-118`），文件 `user://scorebound/game_score.json`。
 
 ## 3. Group-name contracts / 组名契约

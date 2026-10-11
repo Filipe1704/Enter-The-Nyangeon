@@ -19,6 +19,13 @@
 
 ---
 
+## 2026-10-11 — 列表滚动问题范围补充
+- Correction / 修正: 本机 MOD 旧编译脚本是否也要修补尚未确定 → 用户明确仅修复项目源码、保留本机 MOD 包；本次未重建或替换安装包（来源：user）。
+- Correction / 修正: 前轮道具卡回归仅检查点击与拖动时的道具发放 → 用户补充角色列表未拖动时也跟随鼠标；共用 ScrollBox 将滚轮按下误当拖动起点，已复现并补充滚轮、释放清理及触点归属回归（来源：user）。
+- Files / 涉及文件: `script/ScrollBox.gd`、`tests/run_ui_ux_checks.py`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: 无 MOD 滚动专项 14 项通过，完整渲染 UI 回归复跑 148 项通过；本机 MOD 0.1.9 内的旧编译脚本覆盖修复，兼容边界另见经验库。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「共用纵向列表拖动」、`docs/LEARNINGS.md`「ScrollBox 把滚轮当拖动起点会让列表在未按鼠标时跟随指针」。
+
 ## 2026-10-11 — 主菜单焦点问题范围澄清
 - Correction / 修正: 前轮主菜单专项只覆盖鼠标与键盘交接，未检查 MOD 菜单上下路径 → 用户补充安装 MOD 后 QUIT 下键跳回 OPTION；已复现并按可见菜单顺序统一重建所有入口的上下邻居，首尾停留（来源：user）。
 - Correction / 修正: 主界面焦点问题尚需区分悬停选中不一致或弹窗返回丢焦点 → 用户明确为「多项同时高亮，Enter 确认项与鼠标指向不一致」；本轮围绕文字菜单按钮统一鼠标、键盘及触摸预览焦点（来源：user）。

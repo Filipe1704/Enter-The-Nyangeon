@@ -56,6 +56,11 @@ func _run() -> void:
 		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 		quit(1 if failures else 0)
 		return
+	if "--ui-ux-scroll-input-only" in OS.get_cmdline_user_args():
+		await _check_scroll_mouse_state()
+		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	if "--ui-ux-main-menu-focus-only" in OS.get_cmdline_user_args():
 		await _check_main_menu_focus()
 		await _check_main_menu_order()
@@ -89,6 +94,7 @@ func _run() -> void:
 	await _check_character_focus_pointer()
 	await _check_character_preview_input()
 	await _check_test_item_mouse()
+	await _check_scroll_mouse_state()
 	print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 	quit(1 if failures else 0)
 
@@ -100,12 +106,83 @@ func _item_mouse_button(position: Vector2, pressed: bool, index: MouseButton = M
 	event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed and index == MOUSE_BUTTON_LEFT else 0
 	root.push_input(event, true)
 
-func _item_mouse_motion(position: Vector2, relative: Vector2) -> void:
+func _item_mouse_motion(position: Vector2, relative: Vector2, mask: int = MOUSE_BUTTON_MASK_LEFT) -> void:
 	var event := InputEventMouseMotion.new()
 	event.position = position
 	event.relative = relative
-	event.button_mask = MOUSE_BUTTON_MASK_LEFT
+	event.button_mask = mask
 	root.push_input(event, true)
+
+func _check_scroll_mouse_state() -> void:
+	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		return
+	var scroll := ScrollContainer.new()
+	scroll.set_script(load("res://script/ScrollBox.gd"))
+	scroll.position = Vector2(30, 30)
+	scroll.size = Vector2(190, 130)
+	root.add_child(scroll)
+	var content := Control.new()
+	content.custom_minimum_size = Vector2(160, 800)
+	content.mouse_filter = Control.MOUSE_FILTER_PASS
+	scroll.add_child(content)
+	await process_frame
+	await process_frame
+	var point := Vector2(80, 100)
+	root.warp_mouse(point)
+	await create_timer(0.1).timeout
+	scroll.scroll_vertical = 200
+	_item_mouse_motion(point + Vector2(0, -10), Vector2(0, -10), 0)
+	_check(scroll.scroll_vertical == 200, "未按鼠标时移动指针不滚动列表")
+	_item_mouse_button(point, true, MOUSE_BUTTON_WHEEL_DOWN)
+	var after_wheel: int = scroll.scroll_vertical
+	_check(after_wheel > 200, "滚轮仍按原生方式滚动列表")
+	_check(not scroll.isDrag, "滚轮事件不进入列表拖动状态")
+	_item_mouse_motion(point + Vector2(0, -20), Vector2(0, -20), 0)
+	_check(scroll.scroll_vertical == after_wheel, "滚轮操作后仅移动鼠标不再带动角色列表")
+	_item_mouse_button(point, false, MOUSE_BUTTON_WHEEL_DOWN)
+	_item_mouse_button(point, true, MOUSE_BUTTON_RIGHT)
+	var before: int = scroll.scroll_vertical
+	_item_mouse_motion(point + Vector2(0, -20), Vector2(0, -20), MOUSE_BUTTON_MASK_RIGHT)
+	_check(not scroll.isDrag and scroll.scroll_vertical == before, "右键按住移动不启动列表拖动")
+	_item_mouse_button(point, false, MOUSE_BUTTON_RIGHT)
+	_item_mouse_button(point, true)
+	before = scroll.scroll_vertical
+	_item_mouse_motion(point + Vector2(0, -20), Vector2(0, -20))
+	_check(scroll.scroll_vertical == before + 20, "左键按住移动仍可正常拖动列表")
+	_item_mouse_button(point + Vector2(0, -20), false)
+	before = scroll.scroll_vertical
+	_item_mouse_motion(point, Vector2(0, 20), 0)
+	_check(not scroll.isDrag and scroll.scroll_vertical == before, "松开左键后鼠标移动不继续拖动")
+	_item_mouse_button(point, true)
+	before = scroll.scroll_vertical
+	_item_mouse_motion(point + Vector2(0, -20), Vector2(0, -20), 0)
+	_check(not scroll.isDrag and scroll.scroll_vertical == before, "移动事件显示左键已松开时清理遗漏的释放状态")
+	_item_mouse_button(point, true)
+	_item_mouse_button(Vector2(300, 250), false)
+	_check(not scroll.isDrag, "在列表外松开左键也结束拖动")
+	_item_mouse_button(point, true)
+	scroll.hide()
+	scroll.show()
+	_check(not scroll.isDrag, "关闭并重新显示列表不保留拖动状态")
+	_item_mouse_button(point, false)
+	_item_mouse_button(point, true)
+	scroll.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+	_check(not scroll.isDrag, "窗口失焦会取消列表拖动")
+	_item_mouse_button(point, false)
+	root.push_input(_touch(3, true, point), true)
+	before = scroll.scroll_vertical
+	var drag := InputEventScreenDrag.new()
+	drag.index = 3
+	drag.position = point + Vector2(0, -20)
+	drag.relative = Vector2(0, -20)
+	root.push_input(drag, true)
+	_check(scroll.scroll_vertical > before, "触屏仍可拖动列表")
+	root.push_input(_touch(4, true, point), true)
+	root.push_input(_touch(4, false, point), true)
+	_check(scroll.isDrag, "其它手指的释放不会中断当前触屏拖动")
+	root.push_input(_touch(3, false, Vector2(300, 250), true), true)
+	_check(not scroll.isDrag, "当前触点在列表外取消也结束拖动")
+	scroll.free()
 
 func _check_test_item_mouse() -> void:
 	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():

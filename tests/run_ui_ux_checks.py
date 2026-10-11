@@ -20,11 +20,14 @@ def main():
     parser.add_argument("--main-menu-focus-only", action="store_true", help="只检查主菜单焦点交接与 MOD 菜单顺序（需 --screenshots）")
     parser.add_argument("--installed-mods", action="store_true", help="复制本机已安装 MOD 到隔离目录后检查")
     parser.add_argument("--test-item-input-only", action="store_true", help="只检查测试房道具列表的鼠标点击与拖动（需 --screenshots）")
+    parser.add_argument("--scroll-input-only", action="store_true", help="只检查列表滚动的鼠标拖动状态（需 --screenshots）")
     args = parser.parse_args()
     if args.main_menu_focus_only and not args.screenshots:
         parser.error("--main-menu-focus-only 需要 --screenshots，以验证真实鼠标命中")
     if args.test_item_input_only and not args.screenshots:
         parser.error("--test-item-input-only 需要 --screenshots，以验证真实 GUI 事件路由")
+    if args.scroll_input_only and not args.screenshots:
+        parser.error("--scroll-input-only 需要 --screenshots，以验证真实 GUI 事件路由")
     repo = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="etn-ui-ux-") as directory:
         temporary = Path(directory)
@@ -78,6 +81,8 @@ def main():
             game_args.append("--ui-ux-main-menu-focus-only")
         if args.test_item_input_only:
             game_args.append("--ui-ux-test-item-input-only")
+        if args.scroll_input_only:
+            game_args.append("--ui-ux-scroll-input-only")
         if game_args:
             command += ["--", *game_args]
         result = subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=90)

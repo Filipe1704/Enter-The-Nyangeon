@@ -2020,3 +2020,12 @@
 - Validation / 验证: 无 MOD 的完整渲染 UI 回归 134 项通过；日志仍有既有 `godot_ai` 缺失及退出资源清理告警。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-11
+
+### [UI] ScrollBox 把滚轮当拖动起点会让列表在未按鼠标时跟随指针
+- Evidence / 证据: 用户 2026-10-11 反馈角色列表在不拖动时也随鼠标移动；`script/ScrollBox.gd:set_scrollbox_gui_input/_input/_end_drag`；`ui/character_test_menu.tscn:13`；`tests/test_ui_ux_regressions.gd:_check_scroll_mouse_state`。
+- Notes / 说明: 原脚本对任意 `InputEventMouseButton.pressed` 设置 `isDrag=true`，滚轮没有对应释放事件，导致随后无按键的鼠标移动仍滚动列表；右键也会错误启动。最小真实 GUI 回归 6 项中 3 项失败。修复限定左键启动及移动掩码，提前观察释放并在隐藏/失焦时清理，同时按 index 保持触屏手势归属。扩展后的无 MOD 专项 14 项通过。前轮道具卡点击回归未覆盖共用滚动脚本的滚轮状态，不能用其通过来推断所有列表手势都正常。
+- Compatibility / 兼容边界: 本机 `etn_coop 0.1.9` 的 `replace_files=true`，其 `res://script/ScrollBox.gd.remap` 指向包内旧 `ScrollBox.gdc`；带该包专项 14 项中 7 项仍失败。本地源码修复不会自动更新已编译 MOD；当前仓库 SDK 为 0.1.6，不能直接重建替换为该旧版本。尚未改动本机安装包。
+- Validation / 验证: 无 MOD 完整 UI 回归首次 148 项中一项系统鼠标位置检查失败；未改动相关代码的复跑 148 项全部通过。日志仍有既有 `godot_ai` 缺失及退出资源清理告警。已询问是否同时修补本机 MOD，答复到达前保留安装包。
+- 用户确认 / User confirmation: 用户随后明确选择“项目源码修复，保留本机 MOD 包”；本次以源码修复为范围，不修补、重建或替换本机 MOD，带旧包仍受上述覆盖限制。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
