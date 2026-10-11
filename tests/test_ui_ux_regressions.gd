@@ -46,6 +46,13 @@ func _run() -> void:
 		push_error("请通过 run_ui_ux_checks.py 在独立用户目录运行")
 		quit(2)
 		return
+	if "--ui-ux-character-focus-only" in OS.get_cmdline_user_args():
+		await _check_character_focus()
+		await _check_character_focus_pointer()
+		await _check_character_preview_input()
+		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	var events := root.get_node("GameEvents")
 	events.menu_button.connect(func(id: String):
 		if id == "ui_ux_test":
@@ -60,6 +67,9 @@ func _run() -> void:
 	await _check_settings()
 	await _check_hud()
 	await _check_navigation()
+	await _check_character_focus()
+	await _check_character_focus_pointer()
+	await _check_character_preview_input()
 	print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 	quit(1 if failures else 0)
 
@@ -259,6 +269,14 @@ func _check_hud() -> void:
 	game.hit_flash_freq = old_flash
 
 func _check_navigation() -> void:
+	var data := root.get_node("PlayerData")
+	var original_characters: Array = data.character
+	var original_groups: Array = data.group
+	data.character = original_characters.duplicate()
+	for card in load("res://resources/player/all_player.tres").player_group:
+		if not data.character.has(card.id):
+			data.character.append(card.id)
+	data.group = ["GDD", "ED", "HSD", "FTF", "JTF", "DC"]
 	var menu = load("res://scenes/main/menu_screen.tscn").instantiate()
 	root.add_child(menu)
 	await create_timer(0.8).timeout
@@ -269,14 +287,265 @@ func _check_navigation() -> void:
 	_check(menu.player_card_box.get_child_count() > 0, "键盘开始游戏显示默认社团角色")
 	if menu.player_card_box.get_child_count() > 0:
 		_check(root.gui_get_focus_owner() == menu.player_card_box.get_child(0), "选角自动聚焦首张卡")
+		_tap_key(KEY_RIGHT)
+		_check(root.gui_get_focus_owner() == menu.player_card_box.get_child(1), "左右键保留角色焦点导航")
+		_tap_key(KEY_DOWN)
+		_tap_key(KEY_DOWN)
+		var repeat := _key(KEY_DOWN)
+		repeat.echo = true
+		root.push_input(repeat)
+		await create_timer(0.7).timeout
+		_check(menu.society_card_group.back().group_id == "ED", "下键切换下一社团，快速输入及长按不重复切换")
+		_check(menu.player_card_box.get_child_count() == 3 and menu.player_card_box.get_child(0).player_card.id == "utaha", "切换社团只生成该社团角色")
+		_check(root.gui_get_focus_owner() == menu.player_card_box.get_child(0), "切换社团后聚焦首个角色")
+		menu.society_card_box.get_child(2).hide()
+		_tap_key(KEY_DOWN)
+		await create_timer(0.7).timeout
+		_check(menu.society_card_group.back().group_id == "FTF", "上下切换跳过隐藏社团")
+		_tap_key(KEY_UP)
+		await create_timer(0.7).timeout
+		_check(menu.society_card_group.back().group_id == "ED", "上键切换上一社团")
+		menu.society_card_box.get_child(2).show()
+		_tap_key(KEY_UP)
+		await create_timer(0.7).timeout
+		var society_scroll: ScrollContainer = menu.society_card_box.get_parent()
+		var original_scroll_height := society_scroll.size.y
+		society_scroll.size.y = 150
+		await process_frame
+		_tap_key(KEY_UP)
+		await create_timer(0.7).timeout
+		_check(menu.society_card_group.back().group_id == "DC", "首社团上键循环到最后社团")
+		_check(society_scroll.scroll_vertical > 0, "列表超出可视区域时自动滚动到所选社团")
+		society_scroll.size.y = original_scroll_height
+		society_scroll.scroll_vertical = 0
+		await process_frame
+		await _capture("society-keyboard-last")
+		_tap_key(KEY_DOWN)
+		await create_timer(0.7).timeout
+		_check(menu.society_card_group.back().group_id == "GDD", "末社团下键循环到首社团")
+		for society in menu.society_card_box.get_children():
+			society.visible = society.group_id == "GDD"
+		_tap_key(KEY_DOWN)
+		_check(menu.society_card_group.back().group_id == "GDD" and not menu._society_switching, "仅一个可见社团时上下键不重建角色")
+		for society in menu.society_card_box.get_children():
+			society.show()
 		root.push_input(_key(KEY_ENTER))
 		var level_screen = menu.get_node("LevelSelect")
 		await level_screen.animation_player.animation_finished
 		await _wait_for_focus(level_screen.level_box.get_child(0))
 		_check(level_screen.visible, "键盘确认角色进入难度页")
 		_check(root.gui_get_focus_owner() == level_screen.level_box.get_child(0), "难度页自动聚焦首个难度")
+		_tap_key(KEY_DOWN)
+		_check(menu.society_card_group.back().group_id == "GDD", "难度页上下键不切换背后的社团")
 		root.push_input(_key(KEY_ESCAPE))
 		await create_timer(0.2).timeout
 		_check(not level_screen.visible, "Esc 从难度页返回选角")
 		_check(root.gui_get_focus_owner() == menu.player_card_box.get_child(0), "返回选角恢复角色焦点")
+		_tap_key(KEY_DOWN)
+		_tap_key(KEY_ESCAPE)
+		await create_timer(0.7).timeout
+		_check(not menu.on_select_player and menu.player_card_box.get_child_count() == 0 and not menu._society_switching, "社团切换中返回不会残留角色或切换锁")
+		menu.menu_button_press("new_game")
+		await create_timer(0.9).timeout
+		_check(menu.society_card_group.size() == 1 and menu.society_card_group.back().group_id == "GDD" and menu.player_card_box.get_child_count() == 4, "中途返回后重新选角恢复默认社团且无混入角色")
 	menu.free()
+	data.character = original_characters
+	data.group = original_groups
+
+
+func _tap_key(keycode: Key) -> void:
+	root.push_input(_key(keycode))
+	var release := _key(keycode)
+	release.pressed = false
+	root.push_input(release)
+
+
+func _check_character_focus() -> void:
+	var data := root.get_node("PlayerData")
+	var original_characters: Array = data.character
+	var original_groups: Array = data.group
+	data.character = ["momoi", "midori", "yuzu", "aris", "aris_armed"]
+	data.group = ["GDD"]
+	var menu = load("res://scenes/main/menu_screen.tscn").instantiate()
+	root.add_child(menu)
+	await create_timer(0.8).timeout
+	_tap_key(KEY_ENTER)
+	for frame in 180:
+		if not menu._society_switching and menu.player_card_box.get_child_count() == 4 and root.gui_get_focus_owner() == menu.player_card_box.get_child(0):
+			break
+		await create_timer(0.005).timeout
+	# 社团刚填完时，末张卡的入场动画仍可能尚未结束。
+	for index in 3:
+		_tap_key(KEY_RIGHT)
+	await create_timer(0.2).timeout
+	var focused := root.gui_get_focus_owner()
+	_check(focused == menu.player_card_box.get_child(3), "快速三次右键聚焦末张角色卡")
+	_check(menu.player_card_box.get_child(3).mouse_filter != Control.MOUSE_FILTER_IGNORE, "快速导航不会让末张角色卡永久禁用输入")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.9).timeout
+	_check(menu.get_node("LevelSelect").visible, "连续左右切换后 Enter 仍能确认角色并进入难度页")
+	_tap_key(KEY_ESCAPE)
+	await create_timer(0.2).timeout
+	# 重放真实日志：爱丽丝预览完成 → 左到柚子 → 退场动画中立即右返。
+	# 此时分支按钮还可见，自动几何导航曾误入该按钮，随后隐藏导致焦点为 null。
+	var reversal_stayed := true
+	for delay in [0.016, 0.033, 0.05, 0.067, 0.083]:
+		menu.player_card_box.get_child(3).grab_focus()
+		await create_timer(0.2).timeout
+		_tap_key(KEY_LEFT)
+		await create_timer(delay).timeout
+		_tap_key(KEY_RIGHT)
+		reversal_stayed = reversal_stayed and root.gui_get_focus_owner() == menu.player_card_box.get_child(3)
+		await create_timer(0.2).timeout
+		reversal_stayed = reversal_stayed and root.gui_get_focus_owner() == menu.player_card_box.get_child(3)
+	_check(reversal_stayed, "爱丽丝退场动画中左右折返不会误入分支按钮或丢失焦点")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.9).timeout
+	_check(menu.get_node("LevelSelect").visible, "动画中连续左右折返后 Enter 仍能确认角色")
+	if menu.get_node("LevelSelect").visible:
+		_tap_key(KEY_ESCAPE)
+		await create_timer(0.2).timeout
+	else:
+		menu.player_card_box.get_child(3).grab_focus()
+	var stayed_on_cards := true
+	for index in 48:
+		var event := _key(KEY_RIGHT if index < 24 else KEY_LEFT)
+		event.echo = index % 4 == 3
+		root.push_input(event)
+		var release := _key(event.keycode)
+		release.pressed = false
+		root.push_input(release)
+		await process_frame
+		var owner := root.gui_get_focus_owner()
+		stayed_on_cards = stayed_on_cards and owner != null and owner.get_parent() == menu.player_card_box
+		await create_timer(0.015).timeout
+	_check(stayed_on_cards, "48 次连续左右及重复按键不丢失角色焦点")
+	_tap_key(KEY_LEFT)
+	_check(root.gui_get_focus_owner() == menu.player_card_box.get_child(0), "首张角色卡向左保持焦点")
+	for index in 3:
+		_tap_key(KEY_RIGHT)
+	var aris = menu.player_card_box.get_child(3)
+	_tap_key(KEY_RIGHT)
+	_check(root.gui_get_focus_owner() == aris, "末张角色卡向右保持焦点")
+	await create_timer(0.2).timeout
+	_tap_key(KEY_TAB)
+	await create_timer(0.2).timeout
+	_check(root.gui_get_focus_owner() == aris.branch_button and aris.branch_button.is_visible_in_tree(), "Tab 可进入形态切换按钮且预览保持展开")
+	var previous_branch: int = aris.branch_index
+	_tap_key(KEY_ENTER)
+	await create_timer(0.4).timeout
+	_check(aris.branch_index != previous_branch and root.gui_get_focus_owner() == aris, "Enter 切换形态并将焦点交还角色卡")
+	aris.branch_button.pressed.emit()
+	_tap_key(KEY_LEFT)
+	_tap_key(KEY_RIGHT)
+	await create_timer(0.4).timeout
+	_check(not aris._switching and aris.mouse_filter != Control.MOUSE_FILTER_IGNORE, "分支动画期间左右切换不会残留输入锁")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.9).timeout
+	_check(menu.get_node("LevelSelect").visible, "连续导航及分支切换后键盘仍可确认角色")
+	_tap_key(KEY_ESCAPE)
+	await create_timer(0.2).timeout
+	aris.branch_button.pressed.emit()
+	_tap_key(KEY_LEFT)
+	_tap_key(KEY_ENTER)
+	await create_timer(0.9).timeout
+	_check(menu.get_node("LevelSelect").visible and not aris._switching and aris.mouse_filter == Control.MOUSE_FILTER_IGNORE, "其他角色确认后分支动画完成不会重新启用背景卡片")
+	menu.free()
+	data.character = original_characters
+	data.group = original_groups
+
+
+func _check_character_focus_pointer() -> void:
+	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		return
+	var data := root.get_node("PlayerData")
+	var original_characters: Array = data.character
+	var original_groups: Array = data.group
+	data.character = ["momoi", "midori", "yuzu", "aris", "aris_armed"]
+	data.group = ["GDD"]
+	var menu = load("res://scenes/main/menu_screen.tscn").instantiate()
+	root.add_child(menu)
+	await create_timer(0.8).timeout
+	menu.menu_button_press("new_game")
+	await create_timer(0.8).timeout
+	for pointer_index in 4:
+		var card: Control = menu.player_card_box.get_child(pointer_index)
+		var motion := InputEventMouseMotion.new()
+		motion.position = card.get_global_rect().get_center()
+		root.push_input(motion, true)
+		root.warp_mouse(motion.position)
+		await create_timer(0.1).timeout
+		_check(card.get_global_mouse_position().distance_to(motion.position) < 2, "渲染窗口鼠标确实停在目标角色 %s" % pointer_index)
+		var stayed := true
+		for index in 64:
+			var key := _key(KEY_RIGHT if index % 16 < 8 else KEY_LEFT)
+			key.echo = index % 3 == 2
+			Input.parse_input_event(key)
+			Input.flush_buffered_events()
+			await create_timer(0.025).timeout
+			var release := _key(key.keycode)
+			release.pressed = false
+			Input.parse_input_event(release)
+			Input.flush_buffered_events()
+			await create_timer(0.007).timeout
+			var focused := root.gui_get_focus_owner()
+			if focused == null or focused.get_parent() != menu.player_card_box:
+				stayed = false
+		_check(stayed, "鼠标停在角色 %s 时连续左右键不丢失焦点" % pointer_index)
+		_tap_key(KEY_ENTER)
+		await create_timer(0.8).timeout
+		_check(menu.get_node("LevelSelect").visible, "鼠标悬停期间连续左右键后仍可确认 %s" % pointer_index)
+		if not menu.get_node("LevelSelect").visible:
+			await _capture("character-focus-pointer-failed")
+			break
+		_tap_key(KEY_ESCAPE)
+		await create_timer(0.2).timeout
+	menu.free()
+	data.character = original_characters
+	data.group = original_groups
+
+
+func _check_character_preview_input() -> void:
+	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		return
+	var data := root.get_node("PlayerData")
+	var original_characters: Array = data.character
+	var original_groups: Array = data.group
+	data.character = ["momoi", "midori", "yuzu", "aris", "aris_armed"]
+	data.group = ["GDD"]
+	var menu = load("res://scenes/main/menu_screen.tscn").instantiate()
+	root.add_child(menu)
+	await create_timer(0.8).timeout
+	menu.menu_button_press("new_game")
+	await create_timer(0.8).timeout
+	root.warp_mouse(Vector2(630, 350))
+	await create_timer(0.2).timeout
+	_tap_key(KEY_RIGHT)
+	_tap_key(KEY_RIGHT)
+	await create_timer(0.2).timeout
+	var midori: Control = menu.player_card_box.get_child(1)
+	var yuzu: Control = menu.player_card_box.get_child(2)
+	var motion := InputEventMouseMotion.new()
+	motion.position = midori.get_global_rect().get_center()
+	motion.relative = Vector2(1, 0)
+	root.warp_mouse(motion.position)
+	root.push_input(motion, true)
+	await create_timer(0.2).timeout
+	_check(midori.get_global_mouse_position().distance_to(motion.position) < 2, "混合输入检查的鼠标确实位于绿子卡片")
+	_check(root.gui_get_focus_owner() == midori and midori.color_rect.visible and not yuzu.color_rect.visible, "鼠标移动到另一角色时焦点与唯一预览同步")
+	# 鼠标继续停在绿子，键盘返回柚子；静止指针不得维持第二张预览。
+	midori.grab_focus()
+	_tap_key(KEY_RIGHT)
+	await create_timer(0.2).timeout
+	_check(root.gui_get_focus_owner() == yuzu and yuzu.color_rect.visible and not midori.color_rect.visible, "键盘切换后静止鼠标不展开另一张角色卡")
+	# 无实际位移的鼠标事件不能抢回键盘焦点。
+	motion.relative = Vector2.ZERO
+	root.push_input(motion, true)
+	await create_timer(0.2).timeout
+	_check(root.gui_get_focus_owner() == yuzu, "零位移鼠标事件不抢回键盘角色焦点")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.9).timeout
+	_check(menu.get_node("LevelSelect").visible and menu.get_node("LevelSelect").player == yuzu.player, "混合输入后 Enter 确认当前唯一预览角色")
+	menu.free()
+	data.character = original_characters
+	data.group = original_groups

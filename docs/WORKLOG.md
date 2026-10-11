@@ -19,6 +19,14 @@
 
 ---
 
+## 2026-10-11 — 选角连续左右导航的修正
+- Correction / 修正: 录像反馈尚需区分键盘无响应或双卡预览 → 用户明确为「同时展开两张角色卡，选中状态混乱」；已让鼠标移动与键盘导航共享角色焦点，静止指针不维持另一张预览，专项 30 项及完整 UI 回归 227 项通过（来源：user）
+- Correction / 修正: 稳定显示后的剩余问题尚未复现 → 用户再次复现的日志明确显示焦点误入形态按钮并随面板隐藏丢失；已用动画中左右折返复现失败，改为显式左右邻居并保护形态按钮焦点，修复后该回归通过（来源：user）
+- Correction / 修正: 入场动画保护及 204 项检查通过即可认定问题完全修复 → 用户复测仍存在：角色完全显示后连续左右键会失去选择响应，但 Esc 可返回；前轮结论仅覆盖入场窗口，剩余问题仍在调查（来源：user）
+- Correction / 修正: 单次左右焦点检查通过即可说明角色键盘导航正常 → 用户反馈连续左右键会导致角色不可确认；已复现为焦点预览打断末张卡入场动画，补充动画保护与连续导航回归（来源：user）
+- Files / 涉及文件: `scenes/main/menu_screen.gd`、`ui/player_card.gd`、`tests/test_ui_ux_regressions.gd`、`tests/run_ui_ux_checks.py`。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §2、`docs/LEARNINGS.md` 同主题条目。
+
 ## 2026-09-25 — Establish project knowledge base / 建立项目知识库
 - Files / 涉及文件: `AGENTS.md`, `docs/PROJECT_MAP.md`, `docs/ARCHITECTURE.md`, `docs/SYSTEMS.md`, `docs/CONVENTIONS.md`, `docs/LEARNINGS.md`, `docs/WORKLOG.md`
 - Summary / 改动摘要: 新增 `docs/` 知识库（项目地图 / 运行时架构 / 核心系统 / 约定 / 经验库 / 改动记录），并在 `AGENTS.md` 增加知识库维护约定。

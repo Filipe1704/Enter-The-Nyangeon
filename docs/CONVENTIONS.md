@@ -83,6 +83,9 @@ layer N = bit `1<<(N-1)`：
 
 共 23 个：`ui_accept/cancel/left/right/up/down`、`move_left/right/up/down`(A/D/W/S + 左摇杆, deadzone 0.2)、`move_jump`(Space + 手柄 A/Axis4)、`shoot`(左键 + A)、`use`(E + Y)、`reload`(R + X)、`pause`(Esc + Select/Start)、`EX_skill`(F + 右摇杆按下)、`kick`(右键 + button9)、`fire`(左键 + Axis5)、`cheat_menu`(`` ` ``)、`aim_left/right/up/down`(右摇杆 Axis2/3, deadzone 0.2)。
 
+- 主菜单选角页：`ui_up/ui_down` 切换社团（首尾循环），`ui_left/ui_right` 按显式邻居移动角色焦点（边界停留），`ui_accept` 确认角色，`pause` 返回。本体角色有已解锁形态时，Tab 进入形态按钮、Enter 切换后焦点返回角色卡。社团切换复用已有动作，因此键盘方向键与手柄十字键均可使用；按键重复事件不连续切换社团。
+- 角色卡的鼠标预览与键盘确认共用角色焦点：实际鼠标移动进入另一张卡才转移焦点；静止指针及零位移事件不抢回键盘选择。形态按钮焦点计入所属角色，稳定显示时只展开当前角色的说明。
+
 ## 6. Rendering & misc / 渲染与杂项
 
 - `default_texture_filter=3`, `viewport/hdr_2d=true`, shader cache disabled（`project.godot:236-243`）。

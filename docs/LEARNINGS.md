@@ -1964,3 +1964,37 @@
 - Notes / 说明: 难度页动画 method track 会启用按钮焦点；`animation_finished` 后再等一个 `process_frame` 才抢焦点，避免 deferred method 尚未执行时控件仍为 `FOCUS_NONE`。测试应等待动画完成而非固定 0.3 秒，渲染首帧较慢时固定计时可能早于动画完成。设置通过递归焦点开关隔离缩放隐藏的子页，见 `ARCHITECTURE.md`。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-10
+
+### [UI] 社团清卡信号也会在退出选角时发出，不能视为继续填卡的许可
+- Evidence / 证据: `scenes/main/menu_screen.gd:society_card_filter`、`scenes/main/menu_screen.gd:change_player_card`、`tests/test_ui_ux_regressions.gd:_check_navigation`。
+- Notes / 说明: 社团切换等待 `player_card_clear_done` 后逐张填充角色，但 Esc 返回也会调用 `change_player_card()` 发同一信号。因此清卡后要核验选角仍打开；填充方法内部有逐卡 Timer，返回可能发生在填充途中，完成后仍需再次核验并清理。社团上下导航在 `_input` 阶段消费事件，否则原生 GUI 焦点导航可能先吃掉方向键；难度页必须排除，避免切换背景社团。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 角色焦点预览会打断入场动画，丢失恢复输入的关键帧
+- Evidence / 证据: 用户 2026-10-11 反馈选角页连续左右键后无法确认；`ui/society_card.gd:populate_player_cards`（逐卡等待 0.07 秒）；`ui/player_card_anim.tres:398,416`（`add_card` 长 0.1 秒，末帧将 mouse_filter 设为 STOP）；`ui/player_card.gd:97,196,202`；`tests/test_ui_ux_regressions.gd:_check_character_focus`。
+- Notes / 说明: 上一轮单次左右焦点检查不足以覆盖连续导航。社团刚填完时快速三次右键可以聚焦仍在入场的末张卡；原 `focus_entered → select_card` 打断 `add_card`，使 mouse_filter 永久停在 IGNORE，焦点仍存在但 `add_player` 拒绝 Enter。最小复现修复前稳定失败；仅提前完成末张卡入场动画即可通过。修复以 `_entering/_switching` 保护不可打断动画，完成后再应用预览；恢复输入同时服从 `_input_open`，不重新启用难度页后的背景卡。新增连续/重复方向键、分支期间切换焦点及 Enter 确认检查。
+- SUPERSEDED: 2026-10-11 用户复测仍可触发，明确发生在角色完全显示后，且 Esc 可以正常返回。上述入场窗口问题及修复仍有测试证据，但不能视为已解决用户报告的全部症状；稳定显示后的问题继续调查。已使用渲染窗口验证鼠标位置、键盘输入状态，并复制本机 etn_coop MOD 到隔离目录，尚未复现该剩余问题；需以真实运行的焦点/输入记录定位。
+- SUPERSEDED: 2026-10-11 后续真实日志及折返回归已复现剩余问题，见下条；入场保护继续保留，用于独立的入场输入锁问题。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 稳定显示后的连续左右导航失效：等待真实运行记录定位
+- Evidence / 证据: 用户 2026-10-11 复测反馈「角色已完全显示后，连续按左右键」「Esc 可以正常返回」；当时 `scenes/main/menu_screen.gd:_trace_character_input` 的临时 `[DEBUG-nav2]` 记录；本机 `user://logs/ETN_debug.log`。
+- Notes / 说明: 调查时，入场动画修复不足以覆盖此症状。实际渲染窗口、四张卡片上的真实鼠标位置、`Input.parse_input_event` 方向键输入和本机 etn_coop 包副本的组合检查通过，但没有复现用户剩余问题，因此等待真实焦点/输入/动画日志。
+- SUPERSEDED: 2026-10-11 用户再次复现后的日志已定位：爱丽丝 → 柚子 → 动画中右返，焦点误入分支按钮并随面板隐藏而丢失；见下条。临时诊断代码已移除，本条从待确认区移入正文保留调查历史。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-11
+
+### [UI] 角色卡尺寸动画期间必须显式指定左右焦点邻居
+- Evidence / 证据: 用户 2026-10-11 反馈「角色已完全显示后，连续按左右键」「Esc 可以正常返回」并再次复现；真实 `user://logs/ETN_debug.log` 出现角色卡 → `BranchButton` → null；`scenes/main/menu_screen.gd:_link_player_card_focus`；`ui/player_card.gd:_has_card_focus/_on_card_focus_exited/switch_branch`；`ui/player_card_anim.tres:1020`；`tests/test_ui_ux_regressions.gd:_check_character_focus`。
+- Notes / 说明: 爱丽丝预览展开后，左移柚子并在 0.1 秒退场动画中右返，卡片宽度变化会使原生几何搜索选中仍可见的分支按钮；随后文本面板隐藏释放焦点，方向键与 Enter 均失效，Esc 仍走菜单返回逻辑。修复前折返检查失败，修复后通过。社团填卡后统一设置角色卡的左右邻居，边界指向自身，避免动画影响目标；本体分支按钮沿用同一左右路径。Tab 仍能进入分支按钮，卡片把子按钮焦点视为自身预览焦点；切换分支的 RESET 隐藏面板前先将焦点交回角色卡，避免另一条丢焦点路径。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
+
+### [UI] 鼠标悬停与键盘焦点各自驱动预览，会同时展开两张角色卡
+- Evidence / 证据: 用户提供录像 `C:/Users/gytxtx/Videos/2026-10-11 14-19-13.mp4`，约 31–42 秒可见绿子/柚子等角色同时展开；`ui/player_card.gd:_input/_apply_hover/_on_card_anim_finished`；`tests/test_ui_ux_regressions.gd:_check_character_preview_input`。
+- Notes / 说明: 原预览条件为「拥有焦点或鼠标落在矩形内」，两种输入可分别激活不同角色。真实渲染测试复现绿子和柚子同时展开而键盘焦点在柚子，该路径 Enter 仍可确认；录像未显示按键事件，不能仅凭双预览认定仍然丢失输入。修复让真实鼠标位移进入角色卡时转移焦点，预览及分支动画恢复仅依据所属角色焦点，零位移事件不抢回键盘焦点。新增检查在修复前失败、修复后通过，涵盖鼠标接管、静止指针、零位移事件和 Enter 确认。触屏原有两次点按流程保留。
+- 用户确认 / User confirmation: 用户随后明确录像主要问题为「同时展开两张角色卡，选中状态混乱」，本条修复对应此问题。带本机 MOD 副本的选角专项 30 项通过，无 MOD 的完整渲染 UI 回归 227 项通过。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11

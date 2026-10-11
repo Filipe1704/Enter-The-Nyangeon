@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -15,6 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--godot", required=True, help="Godot 4.7 可执行文件路径")
     parser.add_argument("--screenshots", action="store_true", help="使用渲染窗口输出场景截图到 .godot/ui_ux_checks")
+    parser.add_argument("--character-focus-only", action="store_true", help="只检查选角连续左右导航与确认")
+    parser.add_argument("--installed-mods", action="store_true", help="复制本机已安装 MOD 到隔离目录后检查")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="etn-ui-ux-") as directory:
@@ -47,6 +50,10 @@ def main():
             raise RuntimeError("Godot 用户目录隔离验证失败，未启动项目测试")
         save_directory = Path(user_directory).parent / "Enter The Nyangeon"
         save_directory.mkdir(parents=True, exist_ok=True)
+        if args.installed_mods:
+            installed = Path(os.environ["APPDATA"]) / "Godot/app_userdata/Enter The Nyangeon/mods"
+            if installed.exists():
+                shutil.copytree(installed, save_directory / "mods")
         (probe / "probe.gd").write_text(
             'extends SceneTree\nfunc _initialize():\n'
             '\tquit(ResourceSaver.save(Resource.new(), '
@@ -56,8 +63,13 @@ def main():
         subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=30, check=True)
         display = [] if args.screenshots else ["--headless"]
         command = [args.godot, *display, "--path", str(repo), "--script", "res://tests/test_ui_ux_regressions.gd"]
+        game_args = []
         if args.screenshots:
-            command += ["--", "--ui-ux-screenshots"]
+            game_args.append("--ui-ux-screenshots")
+        if args.character_focus_only:
+            game_args.append("--ui-ux-character-focus-only")
+        if game_args:
+            command += ["--", *game_args]
         result = subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=90)
         print(result.stdout, end="")
         print(result.stderr, end="")

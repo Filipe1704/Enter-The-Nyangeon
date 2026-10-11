@@ -25,12 +25,14 @@ var _revealed_path: String = ""
 var branch_button: Control = null
 var _hovered: bool = false
 var _switching: bool = false
+var _entering: bool = true
+var _input_open: bool = true
 var _touch_mode: bool = false
 
 func _ready():
 	focus_mode = Control.FOCUS_ALL
 	focus_entered.connect(select_player_card)
-	focus_exited.connect(select_out_player_card)
+	focus_exited.connect(_on_card_focus_exited)
 	card_anim.play("add_card")
 	card_anim.animation_finished.connect(_on_card_anim_finished)
 	gui_input.connect(add_player)
@@ -57,6 +59,19 @@ func _setup_branch_button():
 	color_rect.add_child(branch_button)
 	branch_button.position = Vector2(15, -55)
 	branch_button.pressed.connect(switch_branch)
+	branch_button.focus_entered.connect(select_player_card)
+	branch_button.focus_exited.connect(_on_card_focus_exited)
+	focus_next = get_path_to(branch_button)
+	branch_button.focus_previous = branch_button.get_path_to(self)
+
+
+func _has_card_focus() -> bool:
+	return has_focus() or (is_instance_valid(branch_button) and branch_button.has_focus())
+
+
+func _on_card_focus_exited() -> void:
+	# 等待焦点转移完成；Tab 进入分支按钮时仍应保持所属卡片展开。
+	select_out_player_card.call_deferred()
 
 
 func _input(event: InputEvent):
@@ -64,25 +79,25 @@ func _input(event: InputEvent):
 		_touch_mode = true
 	elif event is InputEventMouse and event.device != InputEvent.DEVICE_ID_EMULATION:
 		_touch_mode = false
+		if event is InputEventMouseMotion and event.relative != Vector2.ZERO:
+			# 只有实际移动指针才切换角色；静止指针不与键盘焦点争夺预览。
+			if _input_open and not _entering and not _switching and get_global_rect().has_point(event.position) and not _has_card_focus():
+				grab_focus()
 
 
 func _process(_delta):
 	if _touch_mode:
 		return
-	if _switching:
+	if _entering or _switching:
 		return
 	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
 		return
 	_apply_hover()
 
 
-# 逐帧轮询悬停：鼠标在卡片矩形内、或在分支按钮矩形内（含按钮尚未显示时）都算悬停。
-# 轮询避免事件式的 1 帧延迟与快移漏判；按钮区域也算热区，移过去即可触发并显示按钮。
+# 鼠标与键盘共用角色焦点，分支按钮焦点也属于该角色的预览。
 func _apply_hover():
-	var m := get_global_mouse_position()
-	var over := has_focus() or get_global_rect().has_point(m)
-	if not over and branch_button != null and is_instance_valid(branch_button):
-		over = branch_button.get_global_rect().has_point(m)
+	var over := _has_card_focus()
 	if over == _hovered:
 		return
 	_hovered = over
@@ -93,14 +108,20 @@ func _apply_hover():
 
 
 func _on_card_anim_finished(anim_name: StringName):
+	if anim_name == "add_card":
+		_entering = false
+		mouse_filter = Control.MOUSE_FILTER_STOP if _input_open else Control.MOUSE_FILTER_IGNORE
+		# 填卡间隔短于入场动画；提前聚焦时，等恢复输入的关键帧执行完再预览。
+		if not _touch_mode and mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			_hovered = false
+			_apply_hover()
 	if anim_name == "branch_anim":
 		_switching = false
 		# RESET 会把 mouse_filter 设成 IGNORE，这里恢复可交互
-		mouse_filter = Control.MOUSE_FILTER_STOP
-		var m := get_global_mouse_position()
-		var over := get_global_rect().has_point(m)
-		if not over and branch_button != null and is_instance_valid(branch_button):
-			over = branch_button.get_global_rect().has_point(m)
+		mouse_filter = Control.MOUSE_FILTER_STOP if _input_open else Control.MOUSE_FILTER_IGNORE
+		if not _input_open:
+			return
+		var over := _has_card_focus()
 		_hovered = over
 		if over:
 			# 瞬间套用 select_card 末帧（尺寸/位置/显示带），不播放过程、无音效
@@ -111,6 +132,9 @@ func _on_card_anim_finished(anim_name: StringName):
 func switch_branch():
 	if branch_list.size() <= 1:
 		return
+	# RESET/分支动画会隐藏按钮面板，先将键盘焦点交还角色卡。
+	if branch_button.has_focus():
+		grab_focus()
 	branch_index = (branch_index + 1) % branch_list.size()
 	cur = branch_list[branch_index]
 	player_card = cur
@@ -169,6 +193,7 @@ func _exit_tree() -> void:
 		_revealed_path = ""
 
 func mouse_open():
+	_input_open = true
 	mouse_filter = 0
 	focus_mode = Control.FOCUS_ALL
 	if on_select == true:
@@ -177,14 +202,19 @@ func mouse_open():
 		on_touch = false
 
 func mouse_close():
+	_input_open = false
 	mouse_filter = 2
 	focus_mode = Control.FOCUS_NONE
 
 func select_player_card():
+	if _entering or _switching or on_select:
+		return
 	SoundManager.play_sfx("ButtonSounds2")
 	card_anim.play("select_card")
 
 func select_out_player_card():
+	if _entering or _switching or _has_card_focus():
+		return
 	if on_select == false:
 		card_anim.play("select_out")
 
