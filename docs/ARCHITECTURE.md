@@ -149,6 +149,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - **角色卡混合输入（2026-10-11）**：`ui/player_card.gd:_input/_apply_hover` 让鼠标与键盘共用角色焦点，实际鼠标位移进入卡片才转移焦点；静止指针不独立激活另一张预览，零位移事件不抢回键盘选择。卡片与其形态按钮合并判断焦点，分支动画结束也只恢复当前焦点角色。触屏原有两次点按流程保留。渲染检查 `tests/test_ui_ux_regressions.gd:_check_character_preview_input` 覆盖鼠标接管、键盘切换、静止指针和确认角色。
 - **难度启动取消（2026-10-10）**：返回逐个调用 `level_button.cancel_selection()` 停 Timer、复位选择并更新选择序号，阻止尚未结束的触屏预览回调重新激活；Timer 超时再核验选择和页面状态，切场幕布开始后禁止重复返回（`ui/level_button.gd:46,116`、`ui/level_select.gd:28`）。
 - **升级卡长文案（2026-10-10）**：正文及效果保持字号 10，标题使用 `auto_text.gd`、下限 12；内容路径改为 `ContentScroll/VBoxContainer/*`（`ui/ability_upgrade_card.tscn:564`），长内容滚动，不再每帧缩字。触屏释放才预览/确认，`_input` 提前观察拖动，防止滚动容器消费事件后误提交；两次点按语义保留。
+- **测试房道具列表鼠标交互（2026-10-11）**：`ui/test_item_card.gd:_on_button_gui_input` 仅在左键抬起且仍位于同一卡片按钮内时发放道具。`_input` 先于 GUI 观察视口坐标位移，按住期间任一时刻超过 14 像素即取消本次点击，拖回原点也不恢复；保留 PASS 冒泡供 `script/ScrollBox.gd` 滚动。列表外松手通过带序号的延迟清理取消状态，防止清理前次释放时打断后一次点击；隐藏、禁用及窗口失焦也取消待确认按压。触屏沿用两次点按。专项命令：`python tests/run_ui_ux_checks.py --godot <Godot路径> --screenshots --test-item-input-only`，可追加 `--installed-mods` 验证本机 MOD 副本。
 - 分数记录用 JSON-lines：`save_record_as_json` / `load_all_records_as_json`（`:92-118`），文件 `user://scorebound/game_score.json`。
 
 ## 3. Group-name contracts / 组名契约

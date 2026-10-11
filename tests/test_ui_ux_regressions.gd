@@ -9,6 +9,11 @@ var filter_presses: int = 0
 class HudPlayer extends Node2D:
 	var player_card: Resource
 
+class TestUpgradeReceiver extends Node:
+	var applied: int = 0
+	func apply_upgrade(_upgrade: AbilityUpgrade) -> void:
+		applied += 1
+
 func _initialize() -> void:
 	_run.call_deferred()
 
@@ -46,6 +51,11 @@ func _run() -> void:
 		push_error("请通过 run_ui_ux_checks.py 在独立用户目录运行")
 		quit(2)
 		return
+	if "--ui-ux-test-item-input-only" in OS.get_cmdline_user_args():
+		await _check_test_item_mouse()
+		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	if "--ui-ux-main-menu-focus-only" in OS.get_cmdline_user_args():
 		await _check_main_menu_focus()
 		await _check_main_menu_order()
@@ -78,8 +88,134 @@ func _run() -> void:
 	await _check_character_focus()
 	await _check_character_focus_pointer()
 	await _check_character_preview_input()
+	await _check_test_item_mouse()
 	print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 	quit(1 if failures else 0)
+
+func _item_mouse_button(position: Vector2, pressed: bool, index: MouseButton = MOUSE_BUTTON_LEFT) -> void:
+	var event := InputEventMouseButton.new()
+	event.position = position
+	event.button_index = index
+	event.pressed = pressed
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed and index == MOUSE_BUTTON_LEFT else 0
+	root.push_input(event, true)
+
+func _item_mouse_motion(position: Vector2, relative: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = position
+	event.relative = relative
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT
+	root.push_input(event, true)
+
+func _check_test_item_mouse() -> void:
+	if not "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		return
+	# 复用测试房的真实 ScrollBox 和道具卡，替换的仅是道具效果接收器。
+	var receiver := TestUpgradeReceiver.new()
+	root.add_child(receiver)
+	var scroll := ScrollContainer.new()
+	scroll.set_script(load("res://script/ScrollBox.gd"))
+	scroll.position = Vector2(30, 30)
+	scroll.size = Vector2(190, 130)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(scroll)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	scroll.add_child(grid)
+	var upgrade := AbilityUpgrade.new()
+	upgrade.id = "ui_test_drag"
+	upgrade.order_num = 10
+	for index in 24:
+		var card = load("res://ui/test_item_card.tscn").instantiate()
+		card.custom_minimum_size = Vector2(40, 40)
+		grid.add_child(card)
+		card.upgrade_manager = receiver
+		card.get_card(upgrade)
+	await process_frame
+	await process_frame
+	scroll.scroll_vertical = 40
+	await process_frame
+	var card = grid.get_child(8)
+	var start: Vector2 = card.button.get_global_transform_with_canvas() * (card.button.size / 2)
+	var before_scroll: int = scroll.scroll_vertical
+	root.warp_mouse(start)
+	await create_timer(0.1).timeout
+	_item_mouse_button(start, true)
+	_check(receiver.applied == 0, "道具鼠标按下不立即发放，等待区分点击与拖动")
+	_item_mouse_motion(start + Vector2(0, -34), Vector2(0, -34))
+	await process_frame
+	_item_mouse_button(start + Vector2(0, -34), false)
+	await process_frame
+	_check(scroll.scroll_vertical > before_scroll, "从道具卡开始的鼠标拖动仍能滚动列表")
+	_check(receiver.applied == 0 and card.num == 10, "鼠标拖动道具列表不发放道具或消耗次数")
+	var point: Vector2 = card.button.get_global_transform_with_canvas() * (card.button.size / 2)
+	var before: int = receiver.applied
+	_item_mouse_button(point, true)
+	_item_mouse_button(point, false)
+	await process_frame
+	_check(receiver.applied == before + 1, "鼠标普通点击道具恰好生效一次")
+	before = receiver.applied
+	_item_mouse_button(point, true, MOUSE_BUTTON_RIGHT)
+	_item_mouse_button(point, false, MOUSE_BUTTON_RIGHT)
+	await process_frame
+	_check(receiver.applied == before, "鼠标右键不发放道具")
+	# 按住时滚出再移回，结束点相同也属于拖动。
+	scroll.scroll_vertical = 40
+	await process_frame
+	point = card.button.get_global_transform_with_canvas() * (card.button.size / 2)
+	before = receiver.applied
+	_item_mouse_button(point, true)
+	_item_mouse_motion(point + Vector2(0, -30), Vector2(0, -30))
+	_item_mouse_motion(point, Vector2(0, 30))
+	_item_mouse_button(point, false)
+	await process_frame
+	_check(receiver.applied == before, "拖动后移回原点松手仍不发放道具")
+	# 小幅抖动仍视为普通点击。
+	point = card.button.get_global_transform_with_canvas() * (card.button.size / 2)
+	_item_mouse_button(point, true)
+	_item_mouse_motion(point + Vector2(2, 2), Vector2(2, 2))
+	_item_mouse_button(point + Vector2(2, 2), false)
+	await process_frame
+	_check(receiver.applied == before + 1, "鼠标点击的小幅抖动仍可发放道具")
+	before = receiver.applied
+	point = card.button.get_global_transform_with_canvas() * (card.button.size / 2)
+	_item_mouse_button(point, true)
+	_item_mouse_motion(Vector2(300, 250), Vector2(300, 250) - point)
+	_item_mouse_button(Vector2(300, 250), false)
+	await process_frame
+	_check(receiver.applied == before and not card._mouse_pressed, "列表外松手不发放道具且清理按压状态")
+	scroll.scroll_vertical = 40
+	await process_frame
+	point = card.button.get_global_transform_with_canvas() * (card.button.size / 2)
+	_item_mouse_button(point, false)
+	await process_frame
+	_check(receiver.applied == before, "没有对应按下的释放不发放道具")
+	_item_mouse_button(point, true)
+	card.close_button()
+	_item_mouse_button(point, false)
+	await process_frame
+	card.open_button()
+	_check(receiver.applied == before and not card._mouse_pressed, "按住期间禁用卡片会取消待确认点击")
+	# 前一次释放的延迟清理不得取消紧随其后的下一次按下。
+	_item_mouse_button(point, true)
+	_item_mouse_button(point, false)
+	_item_mouse_button(point, true)
+	await process_frame
+	_check(receiver.applied == before + 1 and card._mouse_pressed, "快速连续点击不会被前次延迟清理打断")
+	_item_mouse_button(point, false)
+	await process_frame
+	_check(receiver.applied == before + 2, "快速连续点击每次释放只发放一次")
+	before = receiver.applied
+	root.push_input(_touch(0, true, point), true)
+	root.push_input(_touch(0, false, point), true)
+	await process_frame
+	_check(receiver.applied == before and card.on_touch, "触屏第一次点按仍只预览道具")
+	root.push_input(_touch(0, true, point), true)
+	root.push_input(_touch(0, false, point), true)
+	await process_frame
+	_check(receiver.applied == before + 1, "触屏第二次点按仍发放道具一次")
+	scroll.free()
+	receiver.free()
 
 func _main_menu_highlights(menu: Node) -> Array:
 	var highlighted: Array = []

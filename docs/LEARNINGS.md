@@ -2013,3 +2013,10 @@
 - Validation / 验证: 无 MOD 的完整渲染 UI 回归 120 项通过；带本机 MOD 副本的主菜单专项 27 项通过。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-11
+
+### [UI] 测试房道具卡必须在鼠标释放后区分点击与列表拖动
+- Evidence / 证据: 用户 2026-10-11 反馈鼠标拖动测试房道具列表会选中按到的道具；`ui/test_item_card.gd:_on_button_gui_input/_input`；`script/ScrollBox.gd:set_scrollbox_gui_input`；`tests/test_ui_ux_regressions.gd:_check_test_item_mouse`。
+- Notes / 说明: 道具卡原先在左键按下时调用 `_on_button_pressed()`，而事件通过 PASS 冒泡给 ScrollBox 启动滚动，因此同一手势既发放道具又滚动。真实卡片与真实 ScrollBox 的最小渲染回归已复现：列表滚动成功，但按下即发放道具且消耗次数。修复把业务动作延后到有效释放；使用视口坐标记录整个手势的最大位移，避免滚动造成卡片本地坐标漂移，也避免拖出再拖回被当作点击。释放的延迟清理必须校验按压序号，否则同帧下一次按下可能被前一次清理取消。专项覆盖正常点击、拖动滚动、拖回、小抖动、列表外释放、无对应按下、禁用、连续点击及触屏两次点按，14 项通过，带本机 MOD 副本同样 14 项通过。
+- Validation / 验证: 无 MOD 的完整渲染 UI 回归 134 项通过；日志仍有既有 `godot_ai` 缺失及退出资源清理告警。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-11
