@@ -2029,3 +2029,18 @@
 - 用户确认 / User confirmation: 用户随后明确选择“项目源码修复，保留本机 MOD 包”；本次以源码修复为范围，不修补、重建或替换本机 MOD，带旧包仍受上述覆盖限制。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-11
+
+### [UI] 难度页辅助焦点与开关动画需要独立的页面输入门控
+- Evidence / 证据: `ui/level_select.gd:_input/_lock_selection/_set_auxiliary_enabled`；`ui/support_ui/support_select_ui.gd:open_list/close_list`；`ui/gamemode_type.gd:add_game_mode/erase_game_mode/set_interactive`；`tests/test_ui_ux_regressions.gd:_check_level_keyboard_regions`。
+- Notes / 说明: 支援展开后聚焦已选项目必须等待动画及容器布局完成，并核验展开序号，否则 Tab 或 Esc 离开后旧回调会抢回焦点。模式切换中焦点变化不能打断填色动画，冲突模式引发的新切换需用序号淘汰旧恢复回调；完成后恢复鼠标输入仍须服从页面门控，避免难度确认或返回后重新启用。`AnimationPlayer.play("RESET")` 的离散 visible 轨道不会在调用当帧立即应用，测试收起和返回应等待动画完成，不能仅等一次 `process_frame`。模式互斥按资源配置执行：闪击与无尽可共存，二者均与 `hujiu` 冲突。
+- Validation / 验证: 独立用户目录完整渲染 UI 回归 182 项通过；最终带本机 MOD 副本的难度页渲染专项 33 项通过，无 MOD 及带 MOD 的无窗口专项各 28 项通过。本机 MOD 包保持原样。日志仍含既有 `godot_ai/runtime/game_helper.gd` 缺失及退出资源清理告警。
+- Coverage / 覆盖边界: 上述检查未逐帧观察入场按钮亮度；用户随后反馈选择角色后所有难度按钮闪动，新增过程检查已复现，修复见下一条。
+- Source / 来源: test
+- Date / 日期: 2026-10-11
+
+### [UI] 难度初始化不能复用从高亮首帧开始的失焦动画
+- Evidence / 证据: 用户 2026-10-11 反馈选择角色后所有难度按钮闪一遍；`ui/level_select.tscn:417-429`；`ui/level_button.gd:open_mouse/cancel_selection`；`ui/level_button.tscn:125-164`；`tests/test_ui_ux_regressions.gd:_observe_level_entry/_check_level_entry_visuals/_check_character_focus`。
+- Notes / 说明: 入场动画在 0.2 秒通过 `player_selected` 对全部难度按钮调用 `open_mouse`，复用 `cancel_selection` 撤销旧选择。原取消播放的 `mouse_out` 在首帧强制写入完全高亮的遮罩、纹理和宽度，再用 0.1 秒退回默认，导致非焦点按钮也集体闪亮。无窗口过程检查在修复前稳定捕捉到三个非默认按钮变亮，最终焦点仍正确，说明只检查入场完成状态会漏报。修复以 `RESET` + `advance(0)` 同步复位外观，继续保留计时器停止和选择序号失效。回归采样持续到页面真正启用焦点再等待动画稳定，避免渲染首帧或着色器编译较慢时固定等待时长提前结束检查。
+- Validation / 验证: 无 MOD 完整渲染回归 187 项通过，包含真实选角确认后逐帧采样；带本机 MOD 副本的难度专项渲染 37 项、无窗口 32 项通过。本机 MOD 包未修改。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-11

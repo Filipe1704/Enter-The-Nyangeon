@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--installed-mods", action="store_true", help="复制本机已安装 MOD 到隔离目录后检查")
     parser.add_argument("--test-item-input-only", action="store_true", help="只检查测试房道具列表的鼠标点击与拖动（需 --screenshots）")
     parser.add_argument("--scroll-input-only", action="store_true", help="只检查列表滚动的鼠标拖动状态（需 --screenshots）")
+    parser.add_argument("--level-focus-only", action="store_true", help="只检查难度页支援、难度、模式及返回的键盘导航")
     args = parser.parse_args()
     if args.main_menu_focus_only and not args.screenshots:
         parser.error("--main-menu-focus-only 需要 --screenshots，以验证真实鼠标命中")
@@ -83,6 +84,8 @@ def main():
             game_args.append("--ui-ux-test-item-input-only")
         if args.scroll_input_only:
             game_args.append("--ui-ux-scroll-input-only")
+        if args.level_focus_only:
+            game_args.append("--ui-ux-level-focus-only")
         if game_args:
             command += ["--", *game_args]
         result = subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=90)

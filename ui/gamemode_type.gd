@@ -13,12 +13,17 @@ var game_mode: String
 var on_selected: bool = false
 var on_touch: bool = false
 var show_text: bool = false
+var _changing := false
+var _input_open := true
+var _change_sequence: int = 0
 
 func _ready() -> void:
 	mouse_entered.connect(_mouse_enter)
 	mouse_exited.connect(_mouse_exit)
 	gui_input.connect(gamemode_selected)
 	GameEvents.gamemode_conflicting.connect(has_game_mode_conflicting)
+	focus_entered.connect(_mouse_enter)
+	focus_exited.connect(_mouse_exit)
 
 func _process(delta: float) -> void:
 	if label.size.x > 39:
@@ -29,7 +34,7 @@ func _process(delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if show_text == true:
-		if on_touch == false:
+		if on_touch == false and not has_focus():
 			text_show.global_position = get_global_mouse_position()
 		else:
 			text_show.global_position = self.global_position
@@ -45,7 +50,15 @@ func get_gamemode_card():
 		animation_player.play("full_anim")
 
 func open_mouse():
-	mouse_filter = 0
+	mouse_filter = Control.MOUSE_FILTER_STOP if _input_open else Control.MOUSE_FILTER_IGNORE
+
+func set_interactive(enabled: bool) -> void:
+	_input_open = enabled
+	focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+	if enabled and not _changing:
+		open_mouse()
+	else:
+		close_mouse()
 
 func close_mouse():
 	mouse_filter = 2
@@ -53,6 +66,8 @@ func close_mouse():
 func _mouse_enter() -> void:
 	show_text = true
 	text_show.visible = true
+	if _changing:
+		return
 	if on_selected == false:
 		SoundManager.play_sfx("ButtonSounds2")
 		animation_player.play("select_anim")
@@ -61,8 +76,12 @@ func _mouse_enter() -> void:
 		animation_player.play("full_select")
 
 func _mouse_exit():
+	if has_focus():
+		return
 	show_text = false
 	text_show.visible = false
+	if _changing:
+		return
 	if on_selected == false:
 		animation_player.play_backwards("select_anim")
 	else:
@@ -76,6 +95,9 @@ func touch_out():
 		animation_player.play_backwards("select_anim")
 
 func add_game_mode():
+	_change_sequence += 1
+	var sequence := _change_sequence
+	_changing = true
 	close_mouse()
 	on_selected = true
 	SoundManager.play_sfx("ButtonSounds")
@@ -85,9 +107,17 @@ func add_game_mode():
 		Game.save_playerdata()
 	animation_player.play("full_anim")
 	await animation_player.animation_finished
+	if sequence != _change_sequence:
+		return
 	open_mouse()
+	_changing = false
+	if has_focus():
+		_mouse_enter()
 
 func erase_game_mode():
+	_change_sequence += 1
+	var sequence := _change_sequence
+	_changing = true
 	close_mouse()
 	on_selected = false
 	SoundManager.play_sfx("ButtonSounds")
@@ -96,20 +126,44 @@ func erase_game_mode():
 		Game.save_playerdata()
 	animation_player.play_backwards("full_anim")
 	await animation_player.animation_finished
+	if sequence != _change_sequence:
+		return
 	animation_player.play_backwards("select_anim")
 	await animation_player.animation_finished
+	if sequence != _change_sequence:
+		return
 	open_mouse()
+	_changing = false
+	if has_focus():
+		_mouse_enter()
 
 func has_game_mode_conflicting(now_conflicting: Array):
 	if now_conflicting.has(gamemode_card.game_mode_id) and PlayerData.game_mode.has(game_mode):
 		erase_game_mode()
 
 func gamemode_selected(event: InputEvent):
-	
+	if not _input_open:
+		return
+	if event is InputEventMouseMotion and focus_mode != Control.FOCUS_NONE and event.relative != Vector2.ZERO and event.device != InputEvent.DEVICE_ID_EMULATION:
+		grab_focus()
+		return
+	if event.is_action_pressed("ui_accept") and has_focus():
+		accept_event()
+		if event.is_echo() or _changing:
+			return
+		if on_selected:
+			erase_game_mode()
+		else:
+			add_game_mode()
+		return
+	if _changing:
+		return
 	if event as InputEventScreenTouch and event.pressed:
 		if on_selected == false and on_touch == false:
 			GameEvents.emit_player_card_touch()
 			await get_tree().create_timer(0.1).timeout
+			if not _input_open or _changing:
+				return
 			on_touch = true
 			show_text = true
 			text_show.visible = true

@@ -14,6 +14,8 @@ func _ready() -> void:
 	mouse_exited.connect(mouse_out)
 	gui_input.connect(add_card)
 	GameEvents.support_card_select.connect(check_card)
+	focus_entered.connect(mouse_in)
+	focus_exited.connect(mouse_out)
 	get_card()
 
 func get_card():
@@ -67,6 +69,8 @@ func mouse_in():
 	card_anim.play("select_anim")
 
 func mouse_out():
+	if has_focus():
+		return
 	if on_select == false:
 		card_anim.play_backwards("select_anim")
 
@@ -76,6 +80,15 @@ func emit_support_card():
 	mouse_close()
 
 func add_card(event: InputEvent):
+	if event is InputEventMouseMotion and focus_mode != Control.FOCUS_NONE and event.relative != Vector2.ZERO and event.device != InputEvent.DEVICE_ID_EMULATION:
+		grab_focus()
+		return
+	if event.is_action_pressed("ui_accept") and has_focus():
+		accept_event()
+		if not event.is_echo():
+			SoundManager.play_sfx("ButtonSounds")
+			emit_support_card()
+		return
 	
 	if event as InputEventScreenTouch and event.pressed:
 		if on_select == false:

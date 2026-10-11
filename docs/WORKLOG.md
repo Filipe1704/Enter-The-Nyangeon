@@ -19,6 +19,13 @@
 
 ---
 
+## 2026-10-11 — 难度页键盘控制与入场闪动修复
+- Correction / 修正: 前轮难度页回归仅验证入场完成后的焦点及操作 → 用户指出选择角色后所有难度按钮会闪一遍；过程采样复现 HARD、EXTREME、INSANE 短暂高亮，不能用最终焦点正确推断入场动画正常（来源：user）。
+- Files / 涉及文件: `ui/level_select.gd`、`ui/level_button.gd`、`ui/gamemode_type.gd`、`ui/support_ui/support_select_ui.gd`、`ui/support_ui/support_shop_card.gd`、`tests/run_ui_ux_checks.py`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: Tab / Shift+Tab 切换支援、难度、模式、返回区域；支援上下浏览并确认，模式左右选择和 Enter / Space 开关，返回按钮确认后恢复角色焦点。追加独立焦点边框，防止展开及开关动画的旧回调抢焦点或重启输入。初始化复用的取消逻辑改为立即应用 `RESET`，避免从高亮首帧播放 `mouse_out`；补充首次进入、返回后再进入及真实选角确认流程的亮度检查。
+- Verified / 验证: 完整渲染 UI 回归 187 项通过，带本机 MOD 副本的难度专项渲染 37 项、无窗口 32 项通过；本机 MOD 包不变。日志仍有既有插件缺失及退出资源清理告警。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「难度页辅助区域键盘控制」「难度启动取消」、`docs/CONVENTIONS.md`「输入动作」、`docs/LEARNINGS.md` 对应两条 UI 经验。
+
 ## 2026-10-11 — 列表滚动问题范围补充
 - Correction / 修正: 本机 MOD 旧编译脚本是否也要修补尚未确定 → 用户明确仅修复项目源码、保留本机 MOD 包；本次未重建或替换安装包（来源：user）。
 - Correction / 修正: 前轮道具卡回归仅检查点击与拖动时的道具发放 → 用户补充角色列表未拖动时也跟随鼠标；共用 ScrollBox 将滚轮按下误当拖动起点，已复现并补充滚轮、释放清理及触点归属回归（来源：user）。

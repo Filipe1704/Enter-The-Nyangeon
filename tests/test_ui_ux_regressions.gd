@@ -56,6 +56,12 @@ func _run() -> void:
 		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 		quit(1 if failures else 0)
 		return
+	if "--ui-ux-level-focus-only" in OS.get_cmdline_user_args():
+		await _check_level_entry_visuals()
+		await _check_level_keyboard_regions()
+		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	if "--ui-ux-scroll-input-only" in OS.get_cmdline_user_args():
 		await _check_scroll_mouse_state()
 		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
@@ -95,8 +101,176 @@ func _run() -> void:
 	await _check_character_preview_input()
 	await _check_test_item_mouse()
 	await _check_scroll_mouse_state()
+	await _check_level_entry_visuals()
+	await _check_level_keyboard_regions()
 	print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
 	quit(1 if failures else 0)
+
+func _check_level_entry_visuals() -> void:
+	var screen = load("res://ui/level_select.tscn").instantiate()
+	root.add_child(screen)
+	root.warp_mouse(Vector2(20, 20))
+	for opening in 2:
+		root.get_node("GameEvents").emit_level_select_in()
+		var flashed: Array[String] = await _observe_level_entry(screen)
+		_check(flashed.is_empty(), "第 %d 次进入难度页时未聚焦按钮不闪亮：%s" % [opening + 1, str(flashed)])
+		_check(root.gui_get_focus_owner() == screen.level_box.get_child(0), "入场完成后仍只聚焦 NORMAL")
+		_tap_key(KEY_DOWN)
+		await create_timer(0.15).timeout
+		_tap_key(KEY_ESCAPE)
+		await screen.animation_player.animation_finished
+	screen.free()
+
+func _observe_level_entry(screen: CanvasLayer) -> Array[String]:
+	var flashed: Array[String] = []
+	var start := Time.get_ticks_msec()
+	var settled_at := -1
+	while Time.get_ticks_msec() - start < 4000:
+		await process_frame
+		if screen._keyboard_ready and settled_at < 0:
+			settled_at = Time.get_ticks_msec()
+		if not screen.visible:
+			continue
+		# 全程观察入场；只检查动画结束后的最终状态会漏掉短暂亮起。
+		for button in screen.level_box.get_children().slice(1):
+			var shade: ColorRect = button.get_node("Node2D/LevelColor/BlackColor")
+			if shade.color.a < 0.6 and not flashed.has(button.name):
+				flashed.append(button.name)
+		if settled_at >= 0 and Time.get_ticks_msec() - settled_at >= 150:
+			break
+	return flashed
+
+func _level_tab(reverse: bool = false) -> void:
+	var press := _key(KEY_TAB)
+	press.shift_pressed = reverse
+	root.push_input(press)
+	press = _key(KEY_TAB)
+	press.shift_pressed = reverse
+	press.pressed = false
+	root.push_input(press)
+
+func _check_level_keyboard_regions() -> void:
+	var support_data := root.get_node("SupportData")
+	var player_data := root.get_node("PlayerData")
+	var old_supports: Dictionary = support_data.support_data.duplicate()
+	var old_support: SupportCard = support_data.game_support
+	var old_modes: Array = player_data.game_mode.duplicate()
+	support_data.support_data = {}
+	support_data.add_new_data(load("res://resources/support/kei.tres"))
+	support_data.game_support = support_data.null_support
+	player_data.game_mode = []
+	var screen = load("res://ui/level_select.tscn").instantiate()
+	var mode_panel = screen.get_node("Node2D2/gamemode_button")
+	mode_panel.gamemode_card = mode_panel.gamemode_card.duplicate()
+	mode_panel.gamemode_card.append(load("res://resources/game_mode/hujiu_mode.tres"))
+	root.add_child(screen)
+	root.warp_mouse(Vector2(630, 350))
+	root.get_node("GameEvents").emit_level_select_in()
+	await screen.animation_player.animation_finished
+	await process_frame
+	var support = screen.get_node("Node2D2/support_ui")
+	var modes: Array = screen.get_node("Node2D2/gamemode_button/MarginContainer/ScrollContainer/GridContainer").get_children()
+	var back: Button = screen.get_node("Node2D2/return")
+	_check(root.gui_get_focus_owner() == screen.level_box.get_child(0), "难度页打开仍聚焦 NORMAL")
+	_level_tab()
+	_check(root.gui_get_focus_owner() == modes[0], "Tab 从难度区域进入模式区域")
+	_check(modes[0].text_show.visible, "键盘聚焦模式时显示说明")
+	if "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		_item_mouse_motion(modes[1].get_global_rect().get_center(), Vector2(10, 0), 0)
+		_check(root.gui_get_focus_owner() == modes[1], "鼠标实际移动进入另一模式时接管焦点")
+		_tap_key(KEY_LEFT)
+		_item_mouse_motion(modes[1].get_global_rect().get_center(), Vector2.ZERO, 0)
+		_check(root.gui_get_focus_owner() == modes[0], "静止鼠标不抢回键盘模式焦点")
+	await create_timer(0.15).timeout
+	await _capture("level-mode-keyboard")
+	_tap_key(KEY_ENTER)
+	var echo := _key(KEY_ENTER)
+	echo.echo = true
+	root.push_input(echo)
+	_tap_key(KEY_ENTER)
+	_check(player_data.game_mode.has(modes[0].game_mode), "按键重复及动画期间重复确认不反复切换模式")
+	await create_timer(0.6).timeout
+	_check(player_data.game_mode.has(modes[0].game_mode), "Enter 开启聚焦模式")
+	_tap_key(KEY_SPACE)
+	await create_timer(0.6).timeout
+	_check(not player_data.game_mode.has(modes[0].game_mode), "Space 关闭聚焦模式")
+	_tap_key(KEY_RIGHT)
+	_check(root.gui_get_focus_owner() == modes[1], "左右键在模式区域内移动")
+	_tap_key(KEY_ENTER)
+	_tap_key(KEY_LEFT)
+	_tap_key(KEY_ENTER)
+	await create_timer(0.6).timeout
+	_check(player_data.game_mode.has(modes[0].game_mode) and player_data.game_mode.has(modes[1].game_mode), "闪击与无尽模式仍可同时开启")
+	_tap_key(KEY_RIGHT)
+	_tap_key(KEY_RIGHT)
+	_tap_key(KEY_ENTER)
+	_tap_key(KEY_LEFT)
+	await create_timer(0.6).timeout
+	_check(player_data.game_mode == ["hujiu"] and not modes[0].on_selected and not modes[1].on_selected, "键盘启用扩展模式时保留互斥规则，动画中移动焦点不打断切换")
+	_level_tab()
+	_check(root.gui_get_focus_owner() == back, "Tab 从模式区域进入返回按钮")
+	_level_tab(true)
+	_check(root.gui_get_focus_owner() == modes[1], "Shift+Tab 返回模式区域并记住原位置")
+	_level_tab()
+	_level_tab()
+	_check(root.gui_get_focus_owner() == support.main_card, "Tab 从返回按钮循环到支援区域")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.2).timeout
+	_check(support.margin_container.visible and root.gui_get_focus_owner() == support.support_box.get_child(0), "Enter 展开支援列表并聚焦当前支援")
+	_tap_key(KEY_DOWN)
+	_check(root.gui_get_focus_owner() == support.support_box.get_child(1), "上下键选择支援项目")
+	_check(support_data.game_support.support_id == "null", "仅浏览支援不立即应用")
+	await create_timer(0.15).timeout
+	await _capture("level-support-keyboard")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.5).timeout
+	_check(support_data.game_support.support_id == "kei", "Enter 应用支援选择")
+	_check(not support.margin_container.visible and root.gui_get_focus_owner() == support.main_card, "选择支援后收起列表并返回支援主卡")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.2).timeout
+	_check(root.gui_get_focus_owner() == support.support_box.get_child(1), "重新展开时聚焦已选支援")
+	_tap_key(KEY_ESCAPE)
+	await support.ui_anim.animation_finished
+	_check(screen.visible and not support.margin_container.visible and root.gui_get_focus_owner() == support.main_card, "Esc 优先收起支援列表而不退出难度页")
+	_tap_key(KEY_ENTER)
+	_level_tab()
+	await create_timer(0.2).timeout
+	_check(root.gui_get_focus_owner() == screen.level_box.get_child(0), "支援展开中 Tab 离开后延迟回调不抢回焦点")
+	_tap_key(KEY_DOWN)
+	_check(root.gui_get_focus_owner() == screen.level_box.get_child(1), "上下键选择难度")
+	if "--ui-ux-screenshots" in OS.get_cmdline_user_args():
+		_item_mouse_motion(screen.level_box.get_child(2).get_global_rect().get_center(), Vector2(0, 10), 0)
+		_check(root.gui_get_focus_owner() == screen.level_box.get_child(2), "鼠标进入难度按钮后 Enter 与焦点一致")
+	_level_tab()
+	_level_tab()
+	_tap_key(KEY_ENTER)
+	await screen.animation_player.animation_finished
+	_check(not screen.visible, "返回按钮 Enter 返回选角页")
+	_check(support.main_card.focus_mode == Control.FOCUS_NONE and modes[0].focus_mode == Control.FOCUS_NONE, "关闭页面后辅助区域不接收焦点")
+	root.get_node("GameEvents").emit_level_select_in()
+	await screen.animation_player.animation_finished
+	await process_frame
+	_level_tab()
+	_tap_key(KEY_ENTER)
+	_level_tab(true)
+	_tap_key(KEY_ENTER)
+	var difficulty = screen.level_box.get_child(0)
+	_check(not difficulty.timer.is_stopped(), "难度 Enter 仍启动入场计时")
+	_check(support.main_card.focus_mode == Control.FOCUS_NONE and back.disabled, "确认难度后锁定支援、模式和返回按钮")
+	support.open_list()
+	_check(not support.list_open and support.main_card.mouse_filter == Control.MOUSE_FILTER_IGNORE, "确认难度后鼠标也不能重新打开支援列表")
+	_level_tab()
+	await create_timer(0.3).timeout
+	_check(modes[0].mouse_filter == Control.MOUSE_FILTER_IGNORE, "模式动画结束不会重新启用已锁定页面")
+	_tap_key(KEY_ESCAPE)
+	await process_frame
+	_check(difficulty.timer.is_stopped(), "Esc 返回仍取消难度入场计时")
+	screen.free()
+	support_data.support_data = old_supports
+	support_data.game_support = old_support
+	player_data.game_mode = old_modes
+	if old_support != null:
+		support_data.get_card(old_support)
 
 func _item_mouse_button(position: Vector2, pressed: bool, index: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 	var event := InputEventMouseButton.new()
@@ -717,8 +891,17 @@ func _check_character_focus() -> void:
 	_check(focused == menu.player_card_box.get_child(3), "快速三次右键聚焦末张角色卡")
 	_check(menu.player_card_box.get_child(3).mouse_filter != Control.MOUSE_FILTER_IGNORE, "快速导航不会让末张角色卡永久禁用输入")
 	_tap_key(KEY_ENTER)
-	await create_timer(0.9).timeout
+	var flashed: Array[String] = await _observe_level_entry(menu.get_node("LevelSelect"))
+	_check(flashed.is_empty(), "真实选角确认后未聚焦难度不闪亮：" + str(flashed))
+	await create_timer(0.25).timeout
 	_check(menu.get_node("LevelSelect").visible, "连续左右切换后 Enter 仍能确认角色并进入难度页")
+	_level_tab()
+	_level_tab()
+	_tap_key(KEY_ENTER)
+	await create_timer(0.2).timeout
+	_check(not menu.get_node("LevelSelect").visible and not menu.on_select_level and root.gui_get_focus_owner() == menu.player_card_box.get_child(3), "难度页返回按钮 Enter 关闭覆盖层并恢复角色焦点")
+	_tap_key(KEY_ENTER)
+	await create_timer(0.9).timeout
 	_tap_key(KEY_ESCAPE)
 	await create_timer(0.2).timeout
 	# 重放真实日志：爱丽丝预览完成 → 左到柚子 → 退场动画中立即右返。

@@ -50,7 +50,9 @@ func cancel_selection() -> void:
 	on_touch = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	focus_mode = Control.FOCUS_NONE
-	animation_player.play("mouse_out")
+	# 初始化/取消直接恢复默认外观；mouse_out 从高亮首帧开始，会让所有按钮闪亮。
+	animation_player.play("RESET")
+	animation_player.advance(0)
 
 func mouse_in():
 	if on_selected == false:
@@ -71,6 +73,9 @@ func touch_out():
 
 func level_selected(event: InputEvent):
 	if on_selected or mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		return
+	if event is InputEventMouseMotion and event.relative != Vector2.ZERO and event.device != InputEvent.DEVICE_ID_EMULATION:
+		grab_focus()
 		return
 	if event as InputEventScreenTouch and event.pressed:
 		if on_selected == false and on_touch == false:
