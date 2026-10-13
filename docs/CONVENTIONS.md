@@ -122,6 +122,7 @@ layer N = bit `1<<(N-1)`：
 - 改动结构性内容后同步更新 `docs/`（见 `AGENTS.md` 知识库维护约定）。
 - **不提交** `project.godot` 中 godot_ai 插件相关改动（`_mcp_game_helper` autoload 的增删/移位）——属本地开发工具状态（见 `AGENTS.md`「本地文件与在制品」）。
 - `mod_sdk/mobile_hotfix/` 为**未拍板在制品**：不提交、不并入；待用户「结案」后移除。
+- **Git 分工**：提交（`git add`/`git commit`）由 AI 负责；**`git push` 一律由用户执行**（AI 不自动推送，提交后提示用户）。
 
 ## 10. Mod package / Mod 包约定
 
