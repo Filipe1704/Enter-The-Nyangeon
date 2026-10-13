@@ -21,12 +21,14 @@ func _ready():
 	PoolManager.add_pool("big_explosion",self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	shoot = true
 	self.visible = false
 	self.global_position = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	self.visible = true
 	animation_player.play("explosion")

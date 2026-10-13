@@ -37,6 +37,7 @@ func is_on_ready():
 	player = PlayerRef.resolve(self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	if !body_group.is_empty():
 		body_group.clear()
@@ -48,6 +49,7 @@ func idle_state():
 	hit_box.set_deferred("monitoring" , false)
 
 func active_state():
+	reset_physics_interpolation()
 	
 	if is_ready == false:
 		return

@@ -12,6 +12,8 @@ extends OptionMenu
 @onready var resolutions_block: Control = %ResolutionsTouchBlock
 @onready var mobile_notice = %MobileNotice
 @onready var resolutions: OptionButton = %Resolutions
+@onready var max_fps: HSlider = %MaxFps
+@onready var max_fps_value: Label = %MaxFpsValue
 
 func _ready():
 	setting_status()
@@ -28,6 +30,7 @@ func _ready():
 	damage_freq.value_changed.connect(_on_damage_freq_value_changed)
 	effect_freq.value_changed.connect(_on_effect_freq_value_changed)
 	hit_flash_freq.value_changed.connect(_on_hit_flash_freq_value_changed)
+	max_fps.value_changed.connect(_on_max_fps_value_changed)
 	resolutions_block.gui_input.connect(_on_resolutions_touch_block_gui_input)
 	resolutions_block.mouse_filter = (
 		Control.MOUSE_FILTER_STOP if OS.has_feature("mobile") else Control.MOUSE_FILTER_IGNORE
@@ -216,6 +219,8 @@ func setting_status():
 	effect_freq_value.text = _effect_freq_text(Game.effect_freq)
 	hit_flash_freq.set_value_no_signal(Game.hit_flash_freq)
 	hit_flash_freq_value.text = _effect_freq_text(Game.hit_flash_freq)
+	max_fps.set_value_no_signal(Game.max_fps_index)
+	max_fps_value.text = _max_fps_text(Game.max_fps_index)
 
 func _on_resolutions_item_selected(index):
 	var n: int
@@ -289,3 +294,19 @@ func _on_hit_flash_freq_value_changed(value: float):
 	Game.hit_flash_freq = idx
 	Game.save_config()
 	hit_flash_freq_value.text = _effect_freq_text(idx)
+
+# 帧率上限滑条（设置项）：0=无限制 / 1=60 / 2=75 / 3=90 / 4=120 / 5=144。
+# 写入档位后立即应用 Engine.max_fps 并持久化。
+func _on_max_fps_value_changed(value: float):
+	var idx: int = clampi(int(round(value)), 0, Game.FPS_CHOICES.size() - 1)
+	if idx == Game.max_fps_index:
+		return
+	Game.max_fps_index = idx
+	Game.apply_max_fps()
+	Game.save_config()
+	max_fps_value.text = _max_fps_text(idx)
+
+func _max_fps_text(idx: int) -> String:
+	if idx <= 0:
+		return tr("fps_unlimited")
+	return str(Game.FPS_CHOICES[idx])

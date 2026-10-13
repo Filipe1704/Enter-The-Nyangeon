@@ -30,6 +30,7 @@ func _ready():
 	PoolManager.add_pool("stone_bullet", self)
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	is_idle = 1
@@ -38,6 +39,7 @@ func idle_state():
 	self.global_position = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	self.visible = true
 	animation_player.play("new_animation")

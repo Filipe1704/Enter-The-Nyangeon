@@ -43,6 +43,7 @@ func _ready():
 			knockback_hit_box.monitoring = false
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	_kb_targets.clear()
 	if knockback_hit_box != null:
@@ -64,6 +65,7 @@ func _interrupt_weapons() -> void:
 			n.stop_shoot()
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	_kb_targets.clear()
 	if knockback_hit_box != null and contact_knockback > 0:

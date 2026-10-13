@@ -24,6 +24,7 @@ func is_on_ready():
 	active_state()
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	is_idle = 1
@@ -32,6 +33,7 @@ func idle_state():
 	collision_shape_2d.set_deferred("disabled", true)
 
 func active_state():
+	reset_physics_interpolation()
 	if is_ready == false:
 		return
 	is_idle = 0

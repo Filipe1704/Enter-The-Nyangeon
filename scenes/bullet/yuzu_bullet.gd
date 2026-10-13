@@ -23,11 +23,13 @@ func does_direct_hit() -> bool:
 	return false
 
 func idle_state():
+	reset_physics_interpolation()
 	super.idle_state()
 	homing_landing = false
 	fall_timer.stop()
 
 func active_state():
+	reset_physics_interpolation()
 	if is_ready == false:
 		return
 	super.active_state()

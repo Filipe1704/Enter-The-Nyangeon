@@ -56,6 +56,7 @@ func _resolve(entity: Node2D) -> void:
 		return
 	var radius := _body_radius(entity)
 	entity.global_position = nearest_inside(pos, radius)
+	entity.reset_physics_interpolation()
 	if entity is CharacterBody2D:
 		entity.velocity = Vector2.ZERO
 

@@ -217,6 +217,7 @@ func shoot_bullet():
 		target_positions[i] = target_positions[i].rotated(global_rotation)
 		target_positions[i] += global_position
 		bullet.global_position = target_positions[i]
+		bullet.reset_physics_interpolation()
 		bullets.append(bullet)
 		bullet.bullet_idle.connect(erase_bullet)
 	center_position += global_position

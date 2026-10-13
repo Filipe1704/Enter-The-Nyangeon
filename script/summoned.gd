@@ -44,6 +44,7 @@ func _ready():
 	ExtensionHooks.notify(ExtensionHooks.on_summoned_spawned, [self, str(scene_file_path)])
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_summoned_despawned, [self])
 	self_is_idle.emit()

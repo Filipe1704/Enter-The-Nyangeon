@@ -99,6 +99,7 @@ func _exit_tree() -> void:
 	PoolManager.unregister_active_enemy(self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	_target_cache = null
 	_target_cache_frame = -1
@@ -135,6 +136,7 @@ func _interrupt_weapons() -> void:
 			n.stop_shoot()
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	_target_cache = null
 	_target_cache_frame = -1

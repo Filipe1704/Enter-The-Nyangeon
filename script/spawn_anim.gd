@@ -40,6 +40,7 @@ func _release_claim() -> void:
 		_claimed_id = ""
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	_release_claim()
 	coin_mult = 1
@@ -51,6 +52,7 @@ func idle_state():
 	self.global_position = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	self.visible = true
 	gpu_particles_2d.restart()

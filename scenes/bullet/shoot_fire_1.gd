@@ -6,6 +6,7 @@ extends Node2D
 @onready var gpu_particles_2d_4 = $GPUParticles2D4
 
 func active_state():
+	reset_physics_interpolation()
 	gpu_particles_2d.restart()
 	gpu_particles_2d_3.restart()
 	gpu_particles_2d_4.restart()

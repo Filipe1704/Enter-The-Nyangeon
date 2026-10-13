@@ -27,6 +27,7 @@ func _set_shape_disabled_guarded(value: bool, gen: int) -> void:
 	collision_shape_2d.disabled = value
 
 func idle_state():
+	reset_physics_interpolation()
 	poison_damage = 0
 	self.global_position = Vector2.ZERO
 	self.visible = false
@@ -34,6 +35,7 @@ func idle_state():
 	gpu_particles_2d.emitting = false
 
 func active_state():
+	reset_physics_interpolation()
 	self.visible = true
 	animation_player.play("new_animation")
 	apply_poison_dealt()

@@ -1,8 +1,9 @@
-[gd_scene load_steps=2 format=3 uid="uid://boa3irb8xtr7s"]
+[gd_scene format=3 uid="uid://boa3irb8xtr7s"]
 
-[ext_resource type="Script" path="res://scenes/game_camera/gamecamera.gd" id="1_tlg1o"]
+[ext_resource type="Script" uid="uid://c0hjqtm12gb0i" path="res://scenes/game_camera/gamecamera.gd" id="1_tlg1o"]
 
-[node name="Camera2D" type="Camera2D"]
+[node name="Camera2D" type="Camera2D" unique_id=733844294]
+physics_interpolation_mode = 2
 position_smoothing_enabled = true
 position_smoothing_speed = 10.0
 script = ExtResource("1_tlg1o")

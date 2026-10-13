@@ -26,6 +26,7 @@
 - 内置 `csv_translation` importer：`.import` 中 `importer="csv_translation"`, `type="Translation"`, `dest_files` 每语言一个 `.translation`。
 - 参数：`compress=true`, `delimiter=0`(逗号), `unescape_keys=false`, `unescape_translations=true`。
 - 生成物 `<name>.<locale>.translation` 已提交，并在 `project.godot:208` 的 `locale/translations` 注册。
+- ⚠️ 重导入会重写该 CSV **全部** locale 的 `.translation`。仅改部分语言列时，未改动 locale 也可能出现**无内容变化的字节抖动**（`OptimizedTranslation` 序列化差异，2026-10-13 实测 `en`/`vi_VN`）；提交前还原这些抖动，**只提交实义变化的 locale**。
 
 ### 2.3 代码/scene 引用方式
 - **无** 自动翻译键系统；`script/auto_text.gd` / `auto_text_box.gd` 是**字体自动适配**工具（调用 `atr(text)`），不是翻译器。
@@ -95,6 +96,8 @@ layer N = bit `1<<(N-1)`：
 - 按语言切换字体：`vi_VN` 时**只把显示本地化文本的文字控件**换成 Roboto（数字/符号/硬编码英文/CJK 保持像素字），由 autoload `LocaleFont`（`script/locale_font.gd`）运行时按节点替换（`ARCHITECTURE.md` §1.10）。原因：像素字（`BoutiqueBitmap*`）只含 `đ/ă` 等少量越南语字形，缺 `ơ ư ộ ế…`，只能整段替换而非 fallback。判定＝文本是翻译键（`TranslationServer.translate(text) != text`）或含像素字缺失的越南语字形。
 - 文件日志开启：`user://logs/ETN_debug.log`（最多 20 份）。
 - 设计分辨率 640×360，`stretch/mode="canvas_items"`。
+- **2D 物理插值**：`project.godot [physics] common/physics_interpolation=true`（高刷显示器下玩家/相机不再跳帧）。约定：① 由 `_process` 每帧驱动的节点（`gamecamera.tscn`/`camera_2d.tscn` 的 Camera2D、`player.gd` 的 `halo`）设 `physics_interpolation_mode = OFF`，避免二次插值；② 池化节点在 `active_state()`/`idle_state()` 顶部（位置由调用方先设好）调用 `reset_physics_interpolation()`，coop 远程镜像同理由代理自插值 → 关插值；③ 传送点（`map_bounds.gd`、发射器初始定位、coop 出生点）在设位后 `reset_physics_interpolation()`；④ 在 `_physics_process` 内移动的节点无需 reset。
+- **帧率上限设置**：`Game.max_fps_index`（滑条档位 → `Game.FPS_CHOICES = [0,60,75,90,120,144]`，0=无限制）持久化到 `config.ini [game] max_fps_index`；**全平台默认 60**；UI 在 `ui/game_option.tscn` Graphics 页 `RowMaxFps`（位于伤害数字频率上方）。
 
 ### 6.1 Android launcher icons / Android 启动器图标
 
@@ -125,6 +128,8 @@ layer N = bit `1<<(N-1)`：
 - 改本地化 CSV 后**必须 reimport** 并确认编码。
 - 改 `.tscn`/`.tres` 优先用编辑器或 MCP 工具，避免破坏 `uid`/`ext_resource` 引用。
 - 改动结构性内容后同步更新 `docs/`（见 `AGENTS.md` 知识库维护约定）。
+- **不提交** `project.godot` 中 godot_ai 插件相关改动（`_mcp_game_helper` autoload 的增删/移位）——属本地开发工具状态（见 `AGENTS.md`「本地文件与在制品」）。
+- `mod_sdk/mobile_hotfix/` 为**未拍板在制品**：不提交、不并入；待用户「结案」后移除。
 
 ## 10. Mod package / Mod 包约定
 

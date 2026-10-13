@@ -72,6 +72,7 @@ func _set_shape_disabled_guarded(value: bool, gen: int) -> void:
 	collision_shape_2d.disabled = value
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	is_idle = 1
@@ -89,6 +90,7 @@ func idle_state():
 	bullet_idle.emit(self)
 
 func active_state():
+	reset_physics_interpolation()
 	
 	if is_ready == false:
 		return

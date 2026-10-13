@@ -15,6 +15,7 @@ func _pool_key() -> String:
 	return name.to_snake_case()
 
 func idle_state() -> void:
+	reset_physics_interpolation()
 	is_idle = 1
 	global_position = Vector2.ZERO
 	target = null

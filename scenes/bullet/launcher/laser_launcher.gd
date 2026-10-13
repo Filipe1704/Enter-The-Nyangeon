@@ -42,6 +42,7 @@ func _ready() -> void:
 	creat_laser()
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	is_idle = 1
@@ -54,6 +55,7 @@ func idle_state():
 	#clear_laser()
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	life_time_left = life_time
 	warning_time = 0

@@ -47,6 +47,7 @@ var aim: int = 0
 @onready var head = $Graphics/AnimatedSprite2D2
 
 func active_state():
+	reset_physics_interpolation()
 	super.active_state()
 	can_shoot = false
 	aim_end = false

@@ -48,6 +48,7 @@ func _on_network_boss_event(event_name: String, data: Dictionary) -> void:
 	_net_visual_replaying = false
 
 func active_state():
+	reset_physics_interpolation()
 	_dead_started = false
 	await get_tree().create_timer(0.1).timeout
 	update_tower()
