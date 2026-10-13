@@ -7,6 +7,7 @@
 script = ExtResource("2_if0qf")
 name = "SHIRAISHI UTAHA"
 weapon = "MEISTER ZERO"
+weapon_type = "SMG"
 sprite_path = "res://sprites/player/utaha/utaha_picture.png"
 halo = ExtResource("1_y5tft")
 color = Color(0.831373, 0.72549, 0.984314, 1)

@@ -7,6 +7,7 @@
 script = ExtResource("2_048ma")
 name = "HANEKAWA HASUMI"
 weapon = "IMPALEMENT"
+weapon_type = "SR"
 sprite_path = "res://sprites/player/hasumi/hasumi_picture.png"
 halo = ExtResource("1_ruj8k")
 color = Color(0.994929, 0.497784, 0.436898, 1)

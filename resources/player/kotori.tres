@@ -7,6 +7,7 @@
 script = ExtResource("2_os2y6")
 name = "TOYOMI KOTORI"
 weapon = "PROFESSOR K"
+weapon_type = "MG"
 sprite_path = "res://sprites/player/kotori/kotori_picture.png"
 halo = ExtResource("1_2yqxk")
 color = Color(0.980392, 0.917647, 0.568627, 1)

@@ -7,6 +7,7 @@
 script = ExtResource("1_vrucv")
 name = "HINOMIYA CHINATSU"
 weapon = "SUPPORT POINTER"
+weapon_type = "HG"
 sprite_path = "res://sprites/player/chinatsu/chinatsu_picture.png"
 halo = ExtResource("2_jr2y8")
 color = Color(0.9959995, 0.54703337, 0.37284824, 1)

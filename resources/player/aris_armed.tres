@@ -7,6 +7,7 @@
 script = ExtResource("1_52jrl")
 name = "TENDOU ARIS (ARMED)"
 weapon = "ABI-ESHUH'S SWORD OF LIGHT"
+weapon_type = "AR"
 sprite_path = "res://sprites/player/aris_armed/aris_armed_picture.png"
 halo = ExtResource("2_y5vdx")
 color = Color(0.227451, 0.607843, 0.929412, 1)

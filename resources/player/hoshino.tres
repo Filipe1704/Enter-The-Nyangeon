@@ -7,6 +7,7 @@
 script = ExtResource("2_k5nek")
 name = "TAKANASHI HOSHINO"
 weapon = "EYE OF HORUS"
+weapon_type = "SG"
 sprite_path = "res://sprites/player/hoshino/hoshino_picture.png"
 halo = ExtResource("1_uekj2")
 color = Color(1, 0.73089, 0.857225, 1)

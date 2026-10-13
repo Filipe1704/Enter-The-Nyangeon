@@ -7,6 +7,7 @@
 script = ExtResource("2_k172q")
 name = "NEKOZUKA HIBIKI"
 weapon = "FANCY LIGHT"
+weapon_type = "MT"
 sprite_path = "res://sprites/player/hibiki/hibiki_picture.png"
 halo = ExtResource("1_llfm7")
 color = Color(0.792157, 0.85098, 1, 1)

@@ -7,6 +7,7 @@
 script = ExtResource("1_kqmhs")
 name = "SAIBA MOMOI"
 weapon = "UNIQUE IDEA"
+weapon_type = "AR"
 sprite_path = "res://sprites/player/momoi/momoi_picture.png"
 halo = ExtResource("1_khgkd")
 color = Color(0.980392, 0.580392, 0.662745, 1)

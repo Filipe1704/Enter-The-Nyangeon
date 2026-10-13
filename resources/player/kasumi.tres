@@ -7,6 +7,7 @@
 script = ExtResource("2_i0xje")
 name = "KINUGAWA KASUMI"
 weapon = "RED RECTOR"
+weapon_type = "HG"
 sprite_path = "res://sprites/player/kasumi/kasumi_picture.png"
 halo = ExtResource("1_imkj1")
 color = Color(0.745098, 0.490196, 0.443137, 1)

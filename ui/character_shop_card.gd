@@ -154,7 +154,7 @@ func add_character():
 	if !PlayerData.character.has(shop_card.id):
 		PlayerData.character.push_back(shop_card.id)
 		Game.save_playerdata()
-	if !PlayerData.group.has(shop_card.group):
+	if shop_card.group != "" and !PlayerData.group.has(shop_card.group):
 		PlayerData.group.push_back(shop_card.group)
 		Game.save_playerdata()
 	# 解锁后通知各处刷新（社团列表动态补建 / 角色卡过滤等）

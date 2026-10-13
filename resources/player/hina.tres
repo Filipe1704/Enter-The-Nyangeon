@@ -7,6 +7,7 @@
 script = ExtResource("2_ficon")
 name = "SORASAKI HINA"
 weapon = "DESTROYER OF DENOUEMENT"
+weapon_type = "MG"
 sprite_path = "res://sprites/player/hina/hina_picture.png"
 halo = ExtResource("1_p6ltb")
 color = Color(0.976471, 0.698039, 0.905882, 1)

@@ -7,6 +7,7 @@
 script = ExtResource("2_7m1oc")
 name = "SUNAOOKAMI SHIROKO"
 weapon = "WHITE FANG 465"
+weapon_type = "AR"
 sprite_path = "res://sprites/player/shiroko/shiroko_picture.png"
 halo = ExtResource("1_f1q1y")
 color = Color(0.511315, 0.877785, 0.996798, 1)

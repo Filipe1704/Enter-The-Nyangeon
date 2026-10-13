@@ -7,6 +7,7 @@
 script = ExtResource("2_wgm1w")
 name = "SHIROMI IORI"
 weapon = "CRACK SHOT"
+weapon_type = "SR"
 sprite_path = "res://sprites/player/iori/iori_picture.png"
 halo = ExtResource("1_85ig4")
 color = Color(1, 0.458824, 0.419608, 1)

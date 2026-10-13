@@ -7,6 +7,7 @@
 script = ExtResource("2_88jlq")
 name = "HANAOKA YUZU"
 weapon = "NYANS DASH"
+weapon_type = "GL"
 sprite_path = "res://sprites/player/yuzu/yuzu_picture.png"
 halo = ExtResource("1_ppiy0")
 color = Color(0.890196, 0.576471, 0.109804, 1)

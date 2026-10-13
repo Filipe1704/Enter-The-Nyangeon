@@ -18,6 +18,10 @@ const API_VERSION := 1
 const IMPORT_MAX_FILES := 2000
 const IMPORT_MAX_MB := 256
 const IMPORT_MAX_BYTES := IMPORT_MAX_MB * 1024 * 1024
+# unlock_mode=shop 的 mod 角色/分支缺 shop_characters 条目时，用其 PlayerCard 合成通用商店卡的价格。
+const DEFAULT_SHOP_CHARACTER_COST := 6
+# 武器类型图标目录：res://ui/weapon/<type>_icon.png（type 取值见 PlayerCard.weapon_type）。
+const WEAPON_TYPE_ICON_DIR := "res://ui/weapon"
 
 # kind -> 期望的 class_name（用于类型校验）
 const KIND_CLASS := {
@@ -1115,8 +1119,10 @@ func is_character_locked(id: String) -> bool:
 	return not PlayerData.character.has(id)
 
 
-# 校验：声明 shop 的角色/分支必须有同名 shop_characters 条目，否则永远无法获得。
+# 校验：声明 shop 的角色/分支必须有同名 shop_characters 条目；缺失时用其 PlayerCard
+# 合成一张通用商店卡（原版 character_shop_card 数据驱动，故视觉与原版一致），保证仍可获得。
 func _validate_shop_unlocks(rec: Dictionary) -> void:
+	var overrides: Array = rec.manifest.get("overrides", [])
 	var shop_reg: Dictionary = _registry.get("shop_characters", {})
 	for id in _order.get("characters", []):
 		var e = _registry["characters"].get(id, null)
@@ -1125,15 +1131,57 @@ func _validate_shop_unlocks(rec: Dictionary) -> void:
 		var res = e.res
 		var mode := _character_unlock_mode(res)
 		if mode == "shop" and not shop_reg.has(id):
-			push_warning("[ModManager] 角色 %s 声明 unlock_mode=shop 但缺 shop_characters 条目，将无法获得" % id)
+			_register_synthesized_shop_card(rec.id, overrides, res, id)
 		for b in res.get("branches"):
 			if b == null or b.get("id") == null:
 				continue
 			var bmode := _character_unlock_mode(b)
 			if bmode == "shop" and not shop_reg.has(b.id):
-				push_warning("[ModManager] 分支 %s 声明 unlock_mode=shop 但缺 shop_characters 条目" % b.id)
+				_register_synthesized_shop_card(rec.id, overrides, b, str(b.id))
 			elif mode == "shop" and bmode == "auto":
 				push_warning("[ModManager] shop 角色 %s 的分支 %s 为 auto，会被免费解锁，请改为 shop" % [id, b.id])
+
+
+# 用 PlayerCard 合成并注册一张通用 CharacterCard（仅补 shop 缺卡场景）。
+func _register_synthesized_shop_card(mod_id: String, overrides: Array, pc, id: String) -> void:
+	var card := _synthesize_shop_card(pc, id)
+	if card == null:
+		return
+	if not _register_res(mod_id, overrides, "shop_characters", id, card, "", ""):
+		push_warning("[ModManager] 通用商店卡合成注册失败：%s" % id)
+
+
+# 由 PlayerCard 生成 CharacterCard：名字/武器/立绘可直接映射，武器类型名+图标取自 PlayerCard.weapon_type
+# （图标统一从 res://ui/weapon/<type>_icon.png 取）；学校/社团等无来源字段留空。
+func _synthesize_shop_card(pc, id: String) -> CharacterCard:
+	if pc == null:
+		return null
+	var card := CharacterCard.new()
+	card.id = id
+	var full_name := str(pc.get("name"))
+	card.name_1 = full_name
+	card.name_2 = ""
+	var sp := full_name.rfind(" ")
+	if sp > 0:
+		card.name_1 = full_name.substr(0, sp)
+		card.name_2 = full_name.substr(sp + 1)
+	card.character_sprite_path = str(pc.get("sprite_path"))
+	card.weapon_name = str(pc.get("weapon"))
+	var wt := str(pc.get("weapon_type"))
+	card.weapon_type_name = wt
+	card.weapon_icon = _shop_weapon_icon(wt)
+	card.cost = DEFAULT_SHOP_CHARACTER_COST
+	return card
+
+
+# 武器类型 -> 图标（缺失/未设返回 null）。
+func _shop_weapon_icon(weapon_type: String) -> Texture2D:
+	if weapon_type == "":
+		return null
+	var path := WEAPON_TYPE_ICON_DIR.path_join(weapon_type + "_icon.png")
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
 
 
 func list_mods() -> Array:

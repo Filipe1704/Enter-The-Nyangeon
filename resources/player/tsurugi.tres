@@ -7,6 +7,7 @@
 script = ExtResource("2_3jno7")
 name = "KENZAKI TSURUGI"
 weapon = "BLOOD & GUNPOWDER"
+weapon_type = "SG"
 sprite_path = "res://sprites/player/tsurugi/tsurugi_picture.png"
 halo = ExtResource("1_ij6kh")
 color = Color(0.936522, 0.393196, 0.377471, 1)

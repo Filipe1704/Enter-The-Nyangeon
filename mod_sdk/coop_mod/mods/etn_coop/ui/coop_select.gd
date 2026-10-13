@@ -62,7 +62,8 @@ func set_interactive(v: bool) -> void:
 #   官方卡的选择会经 player_card_selected → mouse_close 永久置 IGNORE，而恢复用的 mouse_open
 #   只在 level_select_out 触发；coop 从不发该信号，故取消就绪时须手动恢复（否则当前社团
 #   的卡不可再选，只有切换社团重新实例化的卡能选）。
-# - mod 卡（mod_player_card.gd，Button）：无 mouse_open，退化为 disabled。
+# - mod 通用卡（mod_player_card.gd，player_card.gd 子类）：同样有 mouse_open/mouse_close，走上一分支；
+#   mod 自定义的 Button 选人卡无 mouse_open，退化为 disabled。
 func _set_cards_interactive(enabled: bool) -> void:
 	for card in _player_box.get_children():
 		if card.has_method("mouse_open") and card.has_method("mouse_close"):

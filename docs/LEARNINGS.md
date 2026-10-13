@@ -1862,6 +1862,7 @@
 ### [UI] 官方 player_card 的 mouse_close 依赖 level_select_out 恢复，coop 取消就绪须自行 mouse_open
 - Evidence / 证据: `ui/player_card.gd:34-35,168-176`（`player_card_selected→mouse_close` 置 `mouse_filter=IGNORE`；`level_select_out→mouse_open` 恢复并复位 `on_select`/`on_touch`）；`ui/society_card.gd:33-46`（切换社团重新 `instantiate` 角色卡）；`mod_sdk/coop_mod/mods/etn_coop/ui/coop_select.gd:_set_cards_interactive`（遍历 `%PlayerBox` 调 mouse_open/mouse_close；mod `Button` 卡退化为 `disabled`）
 - Notes / 说明: **现象**（user）：取消就绪后**当前社团**的角色卡无法再选择，只有切换社团重新加载的卡能选。**根因**：官方 `player_card.gd` 在选择时经 `GameEvents.player_card_selected→mouse_close` 把所有官方卡的 `mouse_filter` 置 `IGNORE`，而恢复用的 `mouse_open` 只挂在 `level_select_out` 上；coop 流程从不发 `level_select_out` → 当前社团的卡永久不可点；切换社团会重新实例化卡（新卡默认可点）故只有新卡能用。`_confirming=false`（上一处修复）只是必要条件，挡在 `mouse_filter` 之后。**修法**：`set_interactive(true)` 遍历 `%PlayerBox` 子节点，官方卡调 `mouse_open()`（顺带播 `select_out`、复位 `on_select`/`on_touch`），mod 卡（`mod_player_card.gd`，`Button`）置 `disabled=false`；`set_interactive(false)` 对称 `mouse_close()`/`disabled=true`；两种卡用 `has_method("mouse_open")` 区分。注意官方卡与 mod 卡形态不同：官方是 `PanelContainer`+手写 gui_input，mod 是 `Button`+`pressed`。
+- SUPERSEDED / 已被替代: 2026-10-13 通用 mod 卡（`ui/mod_player_card.gd`）改为 `extends "res://ui/player_card.gd"` 的 `PanelContainer` 子类，同样具备 `mouse_open/mouse_close`，coop 的 `_set_cards_interactive` 对其改走前者；`card is BaseButton` 退化路径仅对 mod 自定义的 `Button` 选人卡保留。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-10
 
@@ -2110,4 +2111,16 @@
 - Evidence / 证据: `project.godot` `[physics] common/physics_interpolation=true`；`scenes/game_camera/gamecamera.tscn`、`camera_2d.tscn` 的 Camera2D `physics_interpolation_mode = 2`(OFF)；`script/player.gd` 的 `halo` 设 OFF；池化基类 `script/player_bullet.gd`、`script/entity_ENEMY.gd`、`scenes/item/coin.gd` 等的 `active_state()`/`idle_state()` 顶部 `reset_physics_interpolation()`；`script/map_bounds.gd` 拉回后 reset；coop 镜像 `coop_enemy_proxy.gd`/`coop_summoned_proxy.gd` 关插值、`coop_visual_sync.gd`/`coop_net.gd` 出生点 reset。依据 issue #4（Naitrate，高刷显示器角色/摄像机抖动）。
 - Notes / 说明: 高刷屏下渲染帧率 > 物理 60Hz 时，物理体按 60Hz 跳步、而相机在 `_process` 每帧跟随 → 相对抖动。开启插值让物理体在 tick 间平滑，但：① 位置在 `_process` 每帧赋值的节点（相机、逐帧 lerp 的视觉子节点）会与内插叠加 → 必须 `physics_interpolation_mode = OFF`（相机建议配 `position_smoothing` 由引擎在 `_process` 平滑）；② 对象池复用/传送时若不理会，会从旧坐标插值「拉丝」一帧 → 在最终定位后 `reset_physics_interpolation()`；③ 在 `_physics_process` 内移动的节点**不要**每 tick reset（会抵消内插）；④ 迁移期：新增需要逐帧 `_process` 定位的视觉节点应主动设 OFF，新增池化/传送点应补 reset。移动端原先硬编码 `Engine.max_fps = 60` 的 workaround 已由「帧率上限设置」取代。
 - Source / 来源: user + test
+- Date / 日期: 2026-10-13
+
+### [Mod] 通用 mod 选人卡保持原版风格 = 继承 player_card.gd + 克隆原版节点树
+- Evidence / 证据: `ui/mod_player_card.gd`（`extends "res://ui/player_card.gd"`，覆写 `_ready`/`_update_visual` + `_apply_generic_visual`）；`ui/mod_player_card.tscn`（克隆 `scenes/player/ako/ako_card.tscn` 节点树，加载 `ui/player_card_anim.tres`）；`ui/mod_society_base.gd:50-58`（缺 `card_scene` 时实例化并注入 `player_card`）。
+- Notes / 说明: 原通用卡是 `Button`+简化 `VBox`，与本体 `PanelContainer`+`player_card_anim` 的展开/分支动画风格不一致。改用克隆原版节点树 + 继承 `player_card.gd` 后，`branch_anim` 的 method track 调到覆写的 `_update_visual`，分支切换时同步名字/武器/立绘/光环/配色。父类 `_ready` 不写名字/武器标签（原版靠场景烘焙），故通用卡须在 `_apply_generic_visual` 自行赋值；`player_card` 由 `mod_society_base` 在 `add_child` 前注入，`_ready` 判空后卫。宽 135 与原版一致（4×135+间距=552 正好铺满固定宽 `PlayerCardBox`）。⚠️ 复制卡场景勿内嵌角色专属大图（名字艺术字/halo），halo 运行时由 `PlayerCard.halo` 注入。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-13
+
+### [Mod] unlock_mode=shop 缺 shop_characters 时用 PlayerCard 合成通用商店卡
+- Evidence / 证据: `script/mod_manager.gd:_validate_shop_unlocks/_register_synthesized_shop_card/_synthesize_shop_card/_shop_weapon_icon`（`DEFAULT_SHOP_CHARACTER_COST=6`、`WEAPON_TYPE_ICON_DIR="res://ui/weapon"`）；`resources/player/player.gd`（新增 `@export_enum(...) weapon_type`）；22 份 `resources/player/*.tres` 补齐 `weapon_type`；`ui/character_shop_card.gd:add_character`（空 `group` 保护）。`ui/character_shop_card.tscn` 本身即原版风格且数据驱动，故商店侧只需数据。
+- Notes / 说明: 原本 shop 角色缺 `defs/shop_characters/<id>.tres` 仅 `push_warning`，角色永远无法购买。现改为在 `_scan_mod` 之后（该 mod 角色/商店条目均已注册）用其 `PlayerCard` 合成 `CharacterCard` 并经 `_register_res`（走 id 治理）注册进 `shop_characters`，`ui/shop_menu.gd` 既有 `get_content("shop_characters")` 循环自动收录。字段映射：`name` 末空格拆 `name_1/2`、`sprite_path`→`character_sprite_path`、`weapon`→`weapon_name`、`weapon_type`→`weapon_type_name`+`weapon_icon`（`ui/weapon/<type>_icon.png`，缺失为 null）、`cost=6`、`group=""`。`weapon_type` 取值 AR/FT/GL/HG/MG/MT/RG/RL/SG/SMG/SR；本体 18 份取自同名商店卡，无商店卡的 aris/midori/momoi/yuzu 按武器表现（RG/SR/AR/GL，user 裁定）。合成卡 `group` 为空，`add_character` 必须跳过空串，否则写入 `PlayerData.group` 空项。
+- Source / 来源: user + code + test
 - Date / 日期: 2026-10-13

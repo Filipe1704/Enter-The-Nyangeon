@@ -7,6 +7,7 @@
 script = ExtResource("2_w7a78")
 name = "AMAU AKO"
 weapon = "HOT SHOT"
+weapon_type = "HG"
 sprite_path = "res://sprites/player/ako/ako_picture.png"
 halo = ExtResource("1_vyj3w")
 color = Color(0.44313726, 0.6039216, 0.9490196, 1)

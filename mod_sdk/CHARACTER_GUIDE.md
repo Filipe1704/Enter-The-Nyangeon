@@ -147,6 +147,7 @@ mods/<mod_id>/
 | `id` | **必带 `<mod_id>_` 前缀**（如 `mychar_hero`） |
 | `name` | 显示名（**直接字符串**，可任意语言，不走翻译） |
 | `weapon` | 武器名（直接字符串） |
+| `weapon_type` | 武器类型短名（`AR`/`FT`/`GL`/`HG`/`MG`/`MT`/`RG`/`RL`/`SG`/`SMG`/`SR`，可空）。用于缺省商店卡的武器类型名与图标（图标取 `res://ui/weapon/<type>_icon.png`）。 |
 | `sprite_path` | 立绘 PNG 路径（`@export_file("*.png")`） |
 | `halo` | 光环/头饰贴图（可选） |
 | `color` | 主题色（HUD/名字颜色） |
@@ -178,7 +179,7 @@ mods/<mod_id>/
 
 ### 3.8 自定义选人卡（可选）
 
-- 缺省用通用卡 `ui/mod_player_card.tscn`（显示立绘/名字/武器 + 分支）。
+- 缺省用通用卡 `ui/mod_player_card.tscn`（**原版卡风格**：克隆本体 `<char>_card` 节点树与展开/分支动画，名字/武器/立绘/光环/配色由 `PlayerCard` 资源驱动 + 分支切换）。
 - 想用自己的选人卡，两种等价写法：
   - 在角色的 `PlayerCard` 资源里设 `card_scene`（推荐，`defs/characters/` 扫描也能生效）；或
   - 在 `mod.json` 显式声明角色：
@@ -272,7 +273,7 @@ func _on_first_round() -> void:
   - 放 `defs/shop_characters/<id>.tres`，类型 `CharacterCard`（脚本 `resources/shop/character/character_card.gd`），**`id` 与角色的 `PlayerCard.id` 相同**。
   - `CharacterCard` 字段：`cost`、`name_1`/`name_2`、`weapon_name`/`weapon_type_name`/`weapon_icon`、`school_name`/`school_icon`、`character_sprite_path`、`group`（通常填该 mod 社团的 `group_id`）。
   - 购买后由本体 `ui/character_shop_card.gd` 自动把 id/group 写入 `PlayerData` 并刷新。
-  - 若声明 `shop` 却没有对应 `shop_characters` 条目，注册时会**告警**且该角色永远无法获得。
+  - 若声明 `shop` 却没有对应 `shop_characters` 条目，本体会用该角色的 `PlayerCard` **自动合成一张通用商店卡**（`name` 拆 `name_1/2`、`weapon`→`weapon_name`、`weapon_type`→类型名+图标、`cost` 用默认值），角色仍可购买；填好 `weapon_type` 可让类型名/图标正确、不空缺。自带商店卡可覆盖该兜底。
 - **分支各自声明**：每个 `branches` 里的子 `PlayerCard` 也各有 `unlock_mode`；`shop` 主卡的分支若为 `auto` 会被免费解锁，注册时告警（应一并设为 `shop`）。
 
 ## 4. 打包

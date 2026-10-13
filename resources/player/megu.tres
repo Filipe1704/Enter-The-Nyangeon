@@ -7,6 +7,7 @@
 script = ExtResource("2_lq1bs")
 name = "SHIMOKURA MEGU"
 weapon = "MOLTEN MEG-MA!"
+weapon_type = "FT"
 sprite_path = "res://sprites/player/megu/megu_picture.png"
 halo = ExtResource("1_r058d")
 color = Color(1, 0.498039, 0.470588, 1)

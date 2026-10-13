@@ -3,6 +3,8 @@ class_name PlayerCard
 
 @export var name: String
 @export var weapon: String
+# 武器类型（预定义短名，用于通用商店卡的类型名与图标，图标取 res://ui/weapon/<type>_icon.png）
+@export_enum("AR", "FT", "GL", "HG", "MG", "MT", "RG", "RL", "SG", "SMG", "SR") var weapon_type: String = ""
 @export_file("*.png") var sprite_path: String
 @export var halo: Texture
 @export var color: Color

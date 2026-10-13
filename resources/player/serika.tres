@@ -7,6 +7,7 @@
 script = ExtResource("2_hd8tq")
 name = "KUROMI SERIKA"
 weapon = "SINCERITY"
+weapon_type = "AR"
 sprite_path = "res://sprites/player/serika/serika_picture.png"
 halo = ExtResource("1_6jd5n")
 color = Color(1, 0.654902, 0.768627, 1)

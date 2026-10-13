@@ -7,6 +7,7 @@
 script = ExtResource("2_7p3oj")
 name = "IZAYOI NONOMI"
 weapon = "MINI NO.5"
+weapon_type = "MG"
 sprite_path = "res://sprites/player/nonomi/nonomi_picture.png"
 halo = ExtResource("1_oampx")
 color = Color(0.745098, 0.909804, 0.611765, 1)
