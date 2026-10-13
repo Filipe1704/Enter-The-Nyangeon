@@ -99,6 +99,14 @@ layer N = bit `1<<(N-1)`：
 - **2D 物理插值**：`project.godot [physics] common/physics_interpolation=true`（高刷显示器下玩家/相机不再跳帧）。约定：① 由 `_process` 每帧驱动的节点（`gamecamera.tscn`/`camera_2d.tscn` 的 Camera2D、`player.gd` 的 `halo`）设 `physics_interpolation_mode = OFF`，避免二次插值；② 池化节点在 `active_state()`/`idle_state()` 顶部（位置由调用方先设好）调用 `reset_physics_interpolation()`，coop 远程镜像同理由代理自插值 → 关插值；③ 传送点（`map_bounds.gd`、发射器初始定位、coop 出生点）在设位后 `reset_physics_interpolation()`；④ 在 `_physics_process` 内移动的节点无需 reset。
 - **帧率上限设置**：`Game.max_fps_index`（滑条档位 → `Game.FPS_CHOICES = [0,60,75,90,120,144]`，0=无限制）持久化到 `config.ini [game] max_fps_index`；**全平台默认 60**；UI 在 `ui/game_option.tscn` Graphics 页 `RowMaxFps`（位于伤害数字频率上方）。
 
+### 6.1 Android launcher icons / Android 启动器图标
+
+- `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
+- `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
+- 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
+- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成，随源资源提交。
+- 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
+
 ## 7. Shaders / 着色器（`shaders/`）
 
 20 个 `shader_type canvas_item;` + `funcs.gdshaderinc`（共享函数）+ `erotion_shader.tres`。
