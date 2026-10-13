@@ -54,8 +54,12 @@ func get_card():
 		name_1.text = shop_card.name_1
 		name_2.text = shop_card.name_2
 		weapon_name.text = shop_card.weapon_name
-		weapon.text = shop_card.weapon_type_name
+		# 武器类型名/图标：优先卡片自带；缺失时按 ModManager 注册表解析（通用合成商店卡的类型名/图标）。
+		var wt: String = str(shop_card.weapon_type_name)
+		weapon.text = ModManager.get_weapon_type_name(wt) if wt != "" else ""
 		weapon_icon.texture = shop_card.weapon_icon
+		if weapon_icon.texture == null and wt != "":
+			weapon_icon.texture = ModManager.get_weapon_type_icon(wt)
 		school.text = shop_card.school_name
 		school_icon.texture = shop_card.school_icon
 		cost.text = str(shop_card.cost)

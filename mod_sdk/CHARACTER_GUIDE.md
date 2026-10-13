@@ -147,7 +147,7 @@ mods/<mod_id>/
 | `id` | **必带 `<mod_id>_` 前缀**（如 `mychar_hero`） |
 | `name` | 显示名（**直接字符串**，可任意语言，不走翻译） |
 | `weapon` | 武器名（直接字符串） |
-| `weapon_type` | 武器类型短名（`AR`/`FT`/`GL`/`HG`/`MG`/`MT`/`RG`/`RL`/`SG`/`SMG`/`SR`，可空）。用于缺省商店卡的武器类型名与图标（图标取 `res://ui/weapon/<type>_icon.png`）。 |
+| `weapon_type` | 武器类型：**下拉建议内置短名（`AR`/`FT`/`GL`/`HG`/`MG`/`MT`/`RG`/`RL`/`SG`/`SMG`/`SR`），也可直接手输自定义类型**（可空）。用于缺省商店卡的类型名/图标；自定义类型可在 entry 里用 `ModAPI.register_weapon_type(code, icon_path, display_name)` 注册名称与图标，未注册则名称回退原串、图标为空。 |
 | `sprite_path` | 立绘 PNG 路径（`@export_file("*.png")`） |
 | `halo` | 光环/头饰贴图（可选） |
 | `color` | 主题色（HUD/名字颜色） |
@@ -157,6 +157,14 @@ mods/<mod_id>/
 | `card_scene` | 自定义选人卡场景路径（可选；缺省用通用卡，等价于 manifest 的 `characters[].card_scene`） |
 | `unlock_mode` | `auto`（默认，进游戏自动解锁）/ `shop`（需在商店购买，见 §3.13） |
 | `branches` | 分支形态（§4.7） |
+
+> 武器类型：`weapon_type` 在 inspector 里是「可输入文本框 + 下拉建议」（内置 11 种），可直接手输新类型。想让自定义类型有正确的显示名/图标，在 `mod.json.entry` 脚本里注册：
+>
+> ```gdscript
+> ModAPI.register_weapon_type("RAILGUN", "res://mods/<id>/sprites/railgun_icon.png", "RAILGUN")
+> ```
+>
+> 未注册的类型：商店卡显示名回退原串、图标为空（不报错）。内置类型图标固定取 `res://ui/weapon/<code>_icon.png`。
 
 ### 3.5 立绘 / 精灵
 
@@ -273,7 +281,7 @@ func _on_first_round() -> void:
   - 放 `defs/shop_characters/<id>.tres`，类型 `CharacterCard`（脚本 `resources/shop/character/character_card.gd`），**`id` 与角色的 `PlayerCard.id` 相同**。
   - `CharacterCard` 字段：`cost`、`name_1`/`name_2`、`weapon_name`/`weapon_type_name`/`weapon_icon`、`school_name`/`school_icon`、`character_sprite_path`、`group`（通常填该 mod 社团的 `group_id`）。
   - 购买后由本体 `ui/character_shop_card.gd` 自动把 id/group 写入 `PlayerData` 并刷新。
-  - 若声明 `shop` 却没有对应 `shop_characters` 条目，本体会用该角色的 `PlayerCard` **自动合成一张通用商店卡**（`name` 拆 `name_1/2`、`weapon`→`weapon_name`、`weapon_type`→类型名+图标、`cost` 用默认值），角色仍可购买；填好 `weapon_type` 可让类型名/图标正确、不空缺。自带商店卡可覆盖该兜底。
+  - 若声明 `shop` 却没有对应 `shop_characters` 条目，本体会用该角色的 `PlayerCard` **自动合成一张通用商店卡**（`name` 拆 `name_1/2`、`weapon`→`weapon_name`、`weapon_type`→类型名/图标（经武器类型注册表解析）、`cost` 用默认值），角色仍可购买；填好 `weapon_type`（并可选 `ModAPI.register_weapon_type` 注册自定义类型）可让类型名/图标正确、不空缺。自带商店卡可覆盖该兜底。
 - **分支各自声明**：每个 `branches` 里的子 `PlayerCard` 也各有 `unlock_mode`；`shop` 主卡的分支若为 `auto` 会被免费解锁，注册时告警（应一并设为 `shop`）。
 
 ## 4. 打包

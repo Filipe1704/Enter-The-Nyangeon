@@ -3,7 +3,7 @@ class_name ModAPI
 # Mod 稳定接口：mod 的 entry 脚本（`mod.json.entry`）可调用，避免直接依赖 ModManager 内部结构。
 # 版本随破坏性变更递增；mod 在 manifest 声明 `api_version`，超版本会被 ModManager 跳过 entry。
 
-const VERSION := 1
+const VERSION := 2
 
 
 # ---------------- 只读 ----------------
@@ -130,3 +130,19 @@ static func register_translations_from_dir(dir_path: String) -> int:
 # opts 可选：font_map:Dictionary、glyph_ranges:Array、display_font:String|Font。
 static func register_language(locale: String, display_name: String, opts: Dictionary = {}) -> bool:
 	return ModManager.register_language(locale, display_name, opts)
+
+
+# 注册/覆盖一个武器类型：code（字母/数字/下划线/短横线）、图标路径、显示名（空则用 code）。
+# 供 PlayerCard.weapon_type 使用（通用商店卡的类型名/图标）；返回是否成功。
+static func register_weapon_type(code: String, icon_path: String = "", display_name: String = "") -> bool:
+	return ModManager.register_weapon_type(code, icon_path, display_name)
+
+
+# 武器类型显示名（未注册回退原 code）。
+static func get_weapon_type_name(code: String) -> String:
+	return ModManager.get_weapon_type_name(code)
+
+
+# 武器类型图标（未注册或无图标返回 null）。
+static func get_weapon_type_icon(code: String) -> Texture2D:
+	return ModManager.get_weapon_type_icon(code)

@@ -13,7 +13,7 @@ const STATE_PATH := "user://mods/mods_state.json"
 const ORDER_PATH := "user://mods/mods_order.json"
 # 卸载时因 pck 被占用/目录只读而未能删除的 mod id，下次启动挂载前再删。
 const PENDING_UNINSTALL_PATH := "user://mods/.pending_uninstall.json"
-const API_VERSION := 1
+const API_VERSION := 2
 # zip 导入上限（防恶意/误打包的超大包）
 const IMPORT_MAX_FILES := 2000
 const IMPORT_MAX_MB := 256
@@ -22,6 +22,8 @@ const IMPORT_MAX_BYTES := IMPORT_MAX_MB * 1024 * 1024
 const DEFAULT_SHOP_CHARACTER_COST := 6
 # 武器类型图标目录：res://ui/weapon/<type>_icon.png（type 取值见 PlayerCard.weapon_type）。
 const WEAPON_TYPE_ICON_DIR := "res://ui/weapon"
+# 内置武器类型短名（图标 = res://ui/weapon/<code>_icon.png；mod 可 register_weapon_type 追加/覆盖）。
+const BUILTIN_WEAPON_TYPES: Array[String] = ["AR", "FT", "GL", "HG", "MG", "MT", "RG", "RL", "SG", "SMG", "SR"]
 
 # kind -> 期望的 class_name（用于类型校验）
 const KIND_CLASS := {
@@ -74,11 +76,14 @@ var _unlocked_applied: bool = false
 var _mod_translations: Dictionary = {}
 # [{locale, display_name, font_map, glyph_ranges, display_font}]（BASE_LANGUAGES + mod 注册/覆盖）
 var _languages: Array = []
+# 武器类型注册表：code -> { "name": String, "icon_path": String }（内置 seed + mod 注册/覆盖）
+var _weapon_types: Dictionary = {}
 
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(MODS_DIR)
 	_languages = _base_languages_copy()
+	_seed_weapon_types()
 	_build_reserved_ids()
 	_load_order()
 	_process_pending_uninstalls()
@@ -1151,8 +1156,8 @@ func _register_synthesized_shop_card(mod_id: String, overrides: Array, pc, id: S
 		push_warning("[ModManager] 通用商店卡合成注册失败：%s" % id)
 
 
-# 由 PlayerCard 生成 CharacterCard：名字/武器/立绘可直接映射，武器类型名+图标取自 PlayerCard.weapon_type
-# （图标统一从 res://ui/weapon/<type>_icon.png 取）；学校/社团等无来源字段留空。
+# 由 PlayerCard 生成 CharacterCard：名字/武器/立绘可直接映射；武器类型只存 code，
+# 名称与图标在商店显示期由武器类型注册表解析（内置 11 + mod 注册）。学校/社团等无来源字段留空。
 func _synthesize_shop_card(pc, id: String) -> CharacterCard:
 	if pc == null:
 		return null
@@ -1167,21 +1172,70 @@ func _synthesize_shop_card(pc, id: String) -> CharacterCard:
 		card.name_2 = full_name.substr(sp + 1)
 	card.character_sprite_path = str(pc.get("sprite_path"))
 	card.weapon_name = str(pc.get("weapon"))
-	var wt := str(pc.get("weapon_type"))
-	card.weapon_type_name = wt
-	card.weapon_icon = _shop_weapon_icon(wt)
+	# 类型名/图标延迟到商店显示期由注册表解析（mod 的 entry 注册晚于扫描）。
+	card.weapon_type_name = str(pc.get("weapon_type"))
 	card.cost = DEFAULT_SHOP_CHARACTER_COST
 	return card
 
 
-# 武器类型 -> 图标（缺失/未设返回 null）。
-func _shop_weapon_icon(weapon_type: String) -> Texture2D:
-	if weapon_type == "":
+# ---------------- 武器类型注册表 ----------------
+
+# 内置类型 seed（name=code，图标取内置目录）。
+func _seed_weapon_types() -> void:
+	_weapon_types.clear()
+	for code in BUILTIN_WEAPON_TYPES:
+		_weapon_types[code] = {
+			"name": code,
+			"icon_path": WEAPON_TYPE_ICON_DIR.path_join(code + "_icon.png"),
+		}
+
+
+# 注册/覆盖一个武器类型（供 ModAPI.register_weapon_type）。code 非法则拒绝。
+func register_weapon_type(code: String, icon_path: String = "", display_name: String = "") -> bool:
+	var c := code.strip_edges()
+	if not _valid_weapon_type_code(c):
+		push_warning("[ModManager] 武器类型注册被拒（非法 code）：%s" % code)
+		return false
+	_weapon_types[c] = {
+		"name": display_name if display_name != "" else c,
+		"icon_path": icon_path,
+	}
+	return true
+
+
+# code 仅允许字母/数字/下划线/短横线（防路径穿越与注入）。
+func _valid_weapon_type_code(code: String) -> bool:
+	if code == "":
+		return false
+	for i in code.length():
+		var ch := code[i]
+		if not (ch == "_" or ch == "-" or (ch >= "A" and ch <= "Z") or (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9")):
+			return false
+	return true
+
+
+# 武器类型显示名（未注册回退原 code）。
+func get_weapon_type_name(code: String) -> String:
+	var rec = _weapon_types.get(code, null)
+	if rec == null:
+		return code
+	return str(rec.get("name", code))
+
+
+# 武器类型图标（未注册或无图标文件返回 null）。
+func get_weapon_type_icon(code: String) -> Texture2D:
+	var rec = _weapon_types.get(code, null)
+	if rec == null:
 		return null
-	var path := WEAPON_TYPE_ICON_DIR.path_join(weapon_type + "_icon.png")
-	if not ResourceLoader.exists(path):
+	var path := str(rec.get("icon_path", ""))
+	if path == "" or not ResourceLoader.exists(path):
 		return null
 	return load(path) as Texture2D
+
+
+# 已注册武器类型列表（内置 + mod）。
+func get_weapon_types() -> Array:
+	return _weapon_types.keys()
 
 
 func list_mods() -> Array:

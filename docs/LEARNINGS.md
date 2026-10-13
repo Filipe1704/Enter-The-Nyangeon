@@ -2122,5 +2122,12 @@
 ### [Mod] unlock_mode=shop 缺 shop_characters 时用 PlayerCard 合成通用商店卡
 - Evidence / 证据: `script/mod_manager.gd:_validate_shop_unlocks/_register_synthesized_shop_card/_synthesize_shop_card/_shop_weapon_icon`（`DEFAULT_SHOP_CHARACTER_COST=6`、`WEAPON_TYPE_ICON_DIR="res://ui/weapon"`）；`resources/player/player.gd`（新增 `@export_enum(...) weapon_type`）；22 份 `resources/player/*.tres` 补齐 `weapon_type`；`ui/character_shop_card.gd:add_character`（空 `group` 保护）。`ui/character_shop_card.tscn` 本身即原版风格且数据驱动，故商店侧只需数据。
 - Notes / 说明: 原本 shop 角色缺 `defs/shop_characters/<id>.tres` 仅 `push_warning`，角色永远无法购买。现改为在 `_scan_mod` 之后（该 mod 角色/商店条目均已注册）用其 `PlayerCard` 合成 `CharacterCard` 并经 `_register_res`（走 id 治理）注册进 `shop_characters`，`ui/shop_menu.gd` 既有 `get_content("shop_characters")` 循环自动收录。字段映射：`name` 末空格拆 `name_1/2`、`sprite_path`→`character_sprite_path`、`weapon`→`weapon_name`、`weapon_type`→`weapon_type_name`+`weapon_icon`（`ui/weapon/<type>_icon.png`，缺失为 null）、`cost=6`、`group=""`。`weapon_type` 取值 AR/FT/GL/HG/MG/MT/RG/RL/SG/SMG/SR；本体 18 份取自同名商店卡，无商店卡的 aris/midori/momoi/yuzu 按武器表现（RG/SR/AR/GL，user 裁定）。合成卡 `group` 为空，`add_character` 必须跳过空串，否则写入 `PlayerData.group` 空项。
+- SUPERSEDED / 已被替代: 2026-10-13 本轮同日的实现已被下方「武器类型可下拉+手输」条目替换——`_shop_weapon_icon` 已移除，`player.gd` 由 `@export_enum` 改 `PROPERTY_HINT_ENUM_SUGGESTION`，合成卡不再在扫描期解析图标而改为显示期解析。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-13
+
+### [Mod] 武器类型可下拉+手输：全局注册表 + 商店显示期解析
+- Evidence / 证据: `resources/player/player.gd`（`@export_custom(PROPERTY_HINT_ENUM_SUGGESTION, "AR,FT,GL,HG,MG,MT,RG,RL,SG,SMG,SR") var weapon_type`）；`script/mod_manager.gd`（`_weapon_types`/`_seed_weapon_types`/`register_weapon_type`/`get_weapon_type_name`/`get_weapon_type_icon`/`get_weapon_types`，`BUILTIN_WEAPON_TYPES`，`API_VERSION=2`）；`script/mod_api.gd`（`register_weapon_type`/`get_weapon_type_name`/`get_weapon_type_icon`，`VERSION=2`）；`ui/character_shop_card.gd:get_card`。
+- Notes / 说明: ①「下拉 + 手输」用 Godot 原生 `PROPERTY_HINT_ENUM_SUGGESTION`（`@export_custom`）——`@export_enum` 只能下拉、不能输入（`core/object/property_info.h` 列有 `PROPERTY_HINT_ENUM_SUGGESTION`）。② `_scan_content()`（`mod_manager.gd:87`）早于 `_run_entry_scripts`（`:90`），mod 在 entry 里注册的类型扫描期不可见 → 合成商店卡只存 `weapon_type` code，名称/图标延迟到 `character_shop_card.get_card()` 用注册表解析（卡片自带非空优先）。③ `register_weapon_type` 的 code 仅允许字母/数字/下划线/短横线（防路径穿越），图标只从“已注册 `icon_path`”加载；内置图标目录固定 `res://ui/weapon/<code>_icon.png`。④ 未知类型：名称回退原 code、图标 null，不崩。⑤ 编辑器 inspection：`@export_custom` 不做语法校验，但 hint 简单无碍。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
