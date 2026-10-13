@@ -861,7 +861,14 @@ value_label_path = NodePath("../Value")
 [node name="Value" type="Label" parent="Scroll/Content/Sounds/RowMaster" unique_id=1183085382]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
 
 [node name="RowSFX" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=1457527729]
@@ -900,7 +907,14 @@ value_label_path = NodePath("../Value")
 [node name="Value" type="Label" parent="Scroll/Content/Sounds/RowSFX" unique_id=1584193751]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
 
 [node name="RowBGM" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=256167151]
@@ -939,7 +953,14 @@ value_label_path = NodePath("../Value")
 [node name="Value" type="Label" parent="Scroll/Content/Sounds/RowBGM" unique_id=791131219]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
 
 [node name="RowVOICE" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=1428377212]
@@ -978,7 +999,14 @@ value_label_path = NodePath("../Value")
 [node name="Value" type="Label" parent="Scroll/Content/Sounds/RowVOICE" unique_id=419456301]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
 
 [node name="MobileNotice" parent="." unique_id=1003255570 instance=ExtResource("8_mnotice")]
