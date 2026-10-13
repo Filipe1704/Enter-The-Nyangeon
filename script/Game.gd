@@ -20,7 +20,7 @@ var vsync_mode: bool
 # 渲染帧率上限（设置项）：滑条档位 → FPS_CHOICES；索引 0 = 无限制。
 # 启用 2D 物理插值后，帧率不再需要对齐物理 60Hz；此项仅用于性能/功耗取舍。
 const FPS_CHOICES: Array[int] = [0, 60, 75, 90, 120, 144]
-var max_fps_index: int = 0
+var max_fps_index: int = 1
 
 # 伤害数字频率上限（设置项）：0=关 / 1=低(≈2.5Hz) / 2=中(≈3.3Hz) / 3=高(≈5Hz) / 4=最高(≈10Hz,默认)。
 # 实际频率 = max(该上限, FPS 自适应档)，即自适应只在此基础上再降、不会更密。
@@ -47,7 +47,7 @@ var one_hit_kill: bool = false
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	load_config()
-	# 帧率上限由设置项（max_fps_index）决定：桌面默认无限制、移动端默认 60；
+	# 帧率上限由设置项（max_fps_index）决定：全平台默认 60（索引 1），0=无限制；
 	# 启用 2D 物理插值后高刷下不再需要强制对齐物理 60Hz。
 	apply_max_fps()
 	load_playerdata()
@@ -302,7 +302,7 @@ func load_config():
 	shake_screen = config.get_value("game", "shake_screen", true)
 	resolution = config.get_value("game", "resolution", 0)
 	vsync_mode = config.get_value("game", "vsync_mode", true)
-	max_fps_index = int(config.get_value("game", "max_fps_index", 1 if OS.has_feature("mobile") else 0))
+	max_fps_index = int(config.get_value("game", "max_fps_index", 1))
 	game_language = config.get_value("game", "game_language", "zh_CN")
 	damage_text_freq = config.get_value("game", "damage_text_freq", 4)
 	effect_freq = config.get_value("game", "effect_freq", 4)

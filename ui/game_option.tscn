@@ -1,14 +1,14 @@
 [gd_scene format=3 uid="uid://fw7vqomk7irr"]
 
 [ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="1_gaaxb"]
-[ext_resource type="Script" path="res://script/game_option.gd" id="1_rlbay"]
+[ext_resource type="Script" uid="uid://b18otgy83q75q" path="res://script/game_option.gd" id="1_rlbay"]
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="2_rlbay"]
 [ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="3_1qnnq"]
 [ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="4_458px"]
 [ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="5_eirbp"]
 [ext_resource type="PackedScene" path="res://ui/damage_freq_slider.tscn" id="6_dns6n"]
 [ext_resource type="PackedScene" uid="uid://tbfd3m2k42hn" path="res://ui/volume_slider.tscn" id="7_v1ycl"]
-[ext_resource type="PackedScene" path="res://ui/mobile_notice.tscn" id="8_mnotice"]
+[ext_resource type="PackedScene" uid="uid://c0wckt17iueow" path="res://ui/mobile_notice.tscn" id="8_mnotice"]
 
 [sub_resource type="Animation" id="Animation_26t6y"]
 length = 0.001
@@ -318,7 +318,6 @@ option_id = "option_game"
 libraries/ = SubResource("AnimationLibrary_y35uc")
 
 [node name="Scroll" type="ScrollContainer" parent="." unique_id=796350807]
-follow_focus = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -329,8 +328,8 @@ offset_right = 4.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
+follow_focus = true
 horizontal_scroll_mode = 0
-vertical_scroll_mode = 1
 script = ExtResource("1_gaaxb")
 
 [node name="Content" type="VBoxContainer" parent="Scroll" unique_id=1755129325]
@@ -616,6 +615,54 @@ color = Color(0.815686, 0.701961, 0.0235294, 1)
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync" unique_id=202520950]
 libraries/ = SubResource("AnimationLibrary_tb017")
 
+[node name="RowMaxFps" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1810000001]
+layout_mode = 2
+offset_transform_enabled = true
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000002]
+custom_minimum_size = Vector2(170, 22)
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 15
+text = "option_max_fps"
+horizontal_alignment = 2
+script = ExtResource("4_458px")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 125.0
+min_font_size = 7
+
+[node name="MaxFps" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000003 instance=ExtResource("6_dns6n")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 5.0
+
+[node name="MaxFpsValue" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000004]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 20)
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 12
+text = "Unlimited"
+horizontal_alignment = 2
+
 [node name="RowDamageFreq" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=202279312]
 layout_mode = 2
 offset_transform_enabled = true
@@ -757,54 +804,6 @@ theme_override_font_sizes/font_size = 12
 text = "100%"
 horizontal_alignment = 2
 
-[node name="RowMaxFps" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1810000001]
-layout_mode = 2
-offset_transform_enabled = true
-mouse_filter = 2
-theme_override_constants/separation = 8
-
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000002]
-custom_minimum_size = Vector2(170, 22)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "option_max_fps"
-horizontal_alignment = 2
-script = ExtResource("4_458px")
-base_font_size = 15
-base_size_y = 22.0
-base_size_x = 125.0
-min_font_size = 7
-
-[node name="MaxFps" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000003 instance=ExtResource("6_dns6n")]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 5.0
-
-[node name="MaxFpsValue" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000004]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 20)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 12
-text = "Unlimited"
-horizontal_alignment = 2
-
 [node name="Sounds" type="VBoxContainer" parent="Scroll/Content" unique_id=1880424996]
 layout_mode = 2
 mouse_filter = 2
@@ -859,7 +858,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowMaster"]
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowMaster" unique_id=1183085382]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
@@ -898,7 +897,7 @@ size_flags_vertical = 4
 bus = &"SFX"
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowSFX"]
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowSFX" unique_id=1584193751]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
@@ -937,7 +936,7 @@ size_flags_vertical = 4
 bus = &"BGM"
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowBGM"]
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowBGM" unique_id=791131219]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
@@ -976,11 +975,12 @@ size_flags_vertical = 4
 bus = &"VOICE"
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowVOICE"]
+[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowVOICE" unique_id=419456301]
 custom_minimum_size = Vector2(48, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 horizontal_alignment = 2
 
-[node name="MobileNotice" parent="." instance=ExtResource("8_mnotice")]
+[node name="MobileNotice" parent="." unique_id=1003255570 instance=ExtResource("8_mnotice")]
 unique_name_in_owner = true
+layout_mode = 0
