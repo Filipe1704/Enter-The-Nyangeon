@@ -26,6 +26,7 @@
 - 内置 `csv_translation` importer：`.import` 中 `importer="csv_translation"`, `type="Translation"`, `dest_files` 每语言一个 `.translation`。
 - 参数：`compress=true`, `delimiter=0`(逗号), `unescape_keys=false`, `unescape_translations=true`。
 - 生成物 `<name>.<locale>.translation` 已提交，并在 `project.godot:208` 的 `locale/translations` 注册。
+- ⚠️ 重导入会重写该 CSV **全部** locale 的 `.translation`。仅改部分语言列时，未改动 locale 也可能出现**无内容变化的字节抖动**（`OptimizedTranslation` 序列化差异，2026-10-13 实测 `en`/`vi_VN`）；提交前还原这些抖动，**只提交实义变化的 locale**。
 
 ### 2.3 代码/scene 引用方式
 - **无** 自动翻译键系统；`script/auto_text.gd` / `auto_text_box.gd` 是**字体自动适配**工具（调用 `atr(text)`），不是翻译器。
@@ -117,6 +118,8 @@ layer N = bit `1<<(N-1)`：
 - 改本地化 CSV 后**必须 reimport** 并确认编码。
 - 改 `.tscn`/`.tres` 优先用编辑器或 MCP 工具，避免破坏 `uid`/`ext_resource` 引用。
 - 改动结构性内容后同步更新 `docs/`（见 `AGENTS.md` 知识库维护约定）。
+- **不提交** `project.godot` 中 godot_ai 插件相关改动（`_mcp_game_helper` autoload 的增删/移位）——属本地开发工具状态（见 `AGENTS.md`「本地文件与在制品」）。
+- `mod_sdk/mobile_hotfix/` 为**未拍板在制品**：不提交、不并入；待用户「结案」后移除。
 
 ## 10. Mod package / Mod 包约定
 

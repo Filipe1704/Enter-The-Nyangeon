@@ -2093,3 +2093,9 @@
 - Validation / 验证: 无 MOD 渲染专项 39 项通过；最终带本机 MOD 副本的难度页渲染专项 41 项通过，包含新增的收起状态检查。本机 MOD 包保持原样。
 - Source / 来源: user + test
 - Date / 日期: 2026-10-11
+
+### [Localization] 重导入会重写该 CSV 全部 locale 的 `.translation`；只改一列时未改动 locale 也会出现字节抖动
+- Evidence / 证据: 2026-10-13 合入 PR #5（仅改 5 个 CSV 的 `pt` 列，en/vi 列经解析 0 改动）后，`scan` 重建 `.translation`：`ETN_item_localization.en.translation` 与 `.vi_VN.translation` 无内容变化但字节不同（en 25744→25744、vi_VN 34830→34838），`zh_CN` 未变，仅 `pt` 为实义变化。
+- Notes / 说明: `OptimizedTranslation` 为 hash/bucket 序列化，同内容在不同导入批次可能产生不同字节（引擎版本/写入顺序差异）。只改某一 locale 列时，提交范围应**只含该 locale 的 `.translation`**，把其余 locale 的抖动用 `git checkout --` 还原，避免无意义二进制 diff。改 CSV 的完整流程：`scan`（或重聚焦编辑器）→ 生成 `.translation` → 抽样校验 → 只提交受影响 locale（`reimport` 可能静默不生效，见上方 2026-09-25 条目；游戏运行中需先 `project_manage(stop)`）。
+- Source / 来源: test
+- Date / 日期: 2026-10-13

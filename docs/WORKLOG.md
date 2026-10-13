@@ -220,3 +220,13 @@
 - Systems / 影响系统: 选人 UI（社团卡 / 角色卡 `PlayerCardBox`）、主菜单解锁动态重建、联机选人覆盖层。
 - Docs synced / 文档同步: `docs/SYSTEMS.md` §社团卡、`docs/ARCHITECTURE.md` 社团卡段、`docs/CONVENTIONS.md` 社团卡段、`docs/MOD_TESTING.md` 功能回归、`docs/LEARNINGS.md` 新增 `[Mod] 通用「MOD」社团卡按 4 个/卡自动续卡` 条目；`mod_sdk/README.md` §14、`mod_sdk/CHARACTER_GUIDE.md` §3.9、`mod_sdk/coop_mod/README.md` 社团扩展接口。
 - Verified / 验证: 临时 `test_run` 用例——`Object.set()` 写入 typed `Array[String]` 的 `members` 成功、`set_page()` 标签为 `MOD` / `MOD 2`；5 个改动脚本（含两份 coop 副本）`CACHE_MODE_IGNORE` 加载均编译通过；临时测试文件已删除。两份 coop 副本逐行一致。
+
+---
+
+## 2026-10-13 — 在制品登记：mod_sdk/mobile_hotfix
+- Files / 涉及文件: `mod_sdk/mobile_hotfix/`（未跟踪）
+- Summary / 改动摘要: 登记为调试中的在制品，未拍板。
+- Reason / 原因: 用户 2026-10-13 明确该目录仍在调试、未定案，暂不提交亦不移除。
+- Systems / 影响系统: 无运行时改动（未并入构建）。
+- Docs synced / 文档同步: `AGENTS.md`「本地文件与在制品」、`docs/CONVENTIONS.md` §9。
+- Open / 待办: 待用户明确「结案」后移除该目录。
