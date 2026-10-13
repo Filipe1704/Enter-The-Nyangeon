@@ -2093,3 +2093,9 @@
 - Validation / 验证: 无 MOD 渲染专项 39 项通过；最终带本机 MOD 副本的难度页渲染专项 41 项通过，包含新增的收起状态检查。本机 MOD 包保持原样。
 - Source / 来源: user + test
 - Date / 日期: 2026-10-11
+
+### [Android] 自适应图标必须按安全圆校验，不能只检查方形留白
+- Evidence / 证据: `android/icons/launcher_foreground.svg:2`、`android/icons/launcher_monochrome.svg:2`、`export_presets.cfg:137`；维护规则见 `docs/CONVENTIONS.md` §6.1。
+- Notes / 说明: 432×432 图层的安全区为居中、直径 264 px 的圆，位于同尺寸方形角落的猫耳仍可能被裁切。隔离 APK 中实际导出的前景及单色层最远像素半径约 127.47 px，低于安全半径 132 px；后续调整需要重新校验完整主体。
+- Source / 来源: test
+- Date / 日期: 2026-10-13

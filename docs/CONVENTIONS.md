@@ -96,6 +96,14 @@ layer N = bit `1<<(N-1)`：
 - 文件日志开启：`user://logs/ETN_debug.log`（最多 20 份）。
 - 设计分辨率 640×360，`stretch/mode="canvas_items"`。
 
+### 6.1 Android launcher icons / Android 启动器图标
+
+- `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
+- `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
+- 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
+- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成，随源资源提交。
+- 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
+
 ## 7. Shaders / 着色器（`shaders/`）
 
 20 个 `shader_type canvas_item;` + `funcs.gdshaderinc`（共享函数）+ `erotion_shader.tres`。

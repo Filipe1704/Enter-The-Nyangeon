@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" fill="#28303e"/>
+  <g transform="translate(24 22) scale(4)">
+    <path fill="#000000" d="M6 4h6v3h-6z M24 4h6v3h-6z M12 7h3v3h-3z M21 7h3v3h-3z M6 7h3v6h-3z M15 10h6v3h-6z M27 7h3v6h-3z M3 13h3v17h-3z M30 13h3v17h-3z M6 30h24v3h-24z"/>
+    <path fill="#4dd2a1" d="M12 4h3v3h-3z M15 7h3v3h-3z M30 4h3v9h-3z M9 19h3v3h-3z M9 22h6v3h-6z M33 13h3v17h-3z M30 30h3v3h-3z"/>
+    <path fill="#e44e87" d="M21 4h3v3h-3z M18 7h3v3h-3z M3 4h3v9h-3z M21 19h3v3h-3z M21 22h6v3h-6z M0 13h3v17h-3z M3 30h3v3h-3z"/>
+    <path fill="#ffffff" d="M9 7h3v6h-3z M21 10h3v3h-3z M6 13h21v6h-21z M12 19h9v3h-9z M24 19h3v3h-3z M6 19h3v6h-3z M15 22h6v3h-6z M6 25h21v2h-21z M9 27h15v3h-15z"/>
+    <path fill="#dedede" d="M12 10h3v3h-3z M24 7h3v6h-3z M27 13h3v14h-3z M6 27h3v3h-3z M24 27h6v3h-6z"/>
+  </g>
+</svg>
