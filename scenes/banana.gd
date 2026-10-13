@@ -6,12 +6,14 @@ extends Node2D
 var is_idle:int = 1
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	self.visible = false
 	self.global_position = Vector2.ZERO
 	animation_player.play("RESET")
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	self.visible = true
 	animation_player.play("new_animation")

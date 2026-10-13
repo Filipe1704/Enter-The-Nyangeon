@@ -44,6 +44,8 @@ func setup(p_net_id: int, p_owner_peer_id: int, p_is_local_owner: bool) -> void:
 	if summoned == null:
 		push_error("[etn_coop] CoopSummonedProxy 必须挂在召唤物节点下")
 		return
+	# 远程镜像由本代理的 snapshot buffer 自行插值；关闭 Godot 物理插值避免二次插值
+	summoned.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	summoned_body = summoned as CharacterBody2D
 	has_velocity_property = summoned_body == null and summoned.get("velocity") != null
 	has_idle_state = summoned.get("is_idle") != null

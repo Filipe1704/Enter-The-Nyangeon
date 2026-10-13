@@ -757,6 +757,54 @@ theme_override_font_sizes/font_size = 12
 text = "100%"
 horizontal_alignment = 2
 
+[node name="RowMaxFps" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1810000001]
+layout_mode = 2
+offset_transform_enabled = true
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000002]
+custom_minimum_size = Vector2(170, 22)
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 15
+text = "option_max_fps"
+horizontal_alignment = 2
+script = ExtResource("4_458px")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 125.0
+min_font_size = 7
+
+[node name="MaxFps" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000003 instance=ExtResource("6_dns6n")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 5.0
+
+[node name="MaxFpsValue" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000004]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 20)
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 12
+text = "Unlimited"
+horizontal_alignment = 2
+
 [node name="Sounds" type="VBoxContainer" parent="Scroll/Content" unique_id=1880424996]
 layout_mode = 2
 mouse_filter = 2

@@ -11,11 +11,13 @@ func _ready():
 	PoolManager.add_pool(pool_id,self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	self.visible = false
 	self.global_position = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	self.visible = true
 

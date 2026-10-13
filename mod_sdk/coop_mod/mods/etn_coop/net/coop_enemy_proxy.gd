@@ -44,6 +44,8 @@ func setup(p_net_id: int, server_owned: bool) -> void:
 	if enemy == null:
 		push_error("[etn_coop] CoopEnemyProxy 必须挂在敌人节点上")
 		return
+	# 远程镜像由本代理的 snapshot buffer 自行插值；关闭 Godot 物理插值避免二次插值
+	enemy.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	enemy_body = enemy as CharacterBody2D
 	enemy_stats = _resolve_stats(enemy)
 	has_velocity_property = enemy_body == null and enemy.get("velocity") != null

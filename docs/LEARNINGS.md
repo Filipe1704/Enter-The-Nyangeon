@@ -2099,3 +2099,9 @@
 - Notes / 说明: `OptimizedTranslation` 为 hash/bucket 序列化，同内容在不同导入批次可能产生不同字节（引擎版本/写入顺序差异）。只改某一 locale 列时，提交范围应**只含该 locale 的 `.translation`**，把其余 locale 的抖动用 `git checkout --` 还原，避免无意义二进制 diff。改 CSV 的完整流程：`scan`（或重聚焦编辑器）→ 生成 `.translation` → 抽样校验 → 只提交受影响 locale（`reimport` 可能静默不生效，见上方 2026-09-25 条目；游戏运行中需先 `project_manage(stop)`）。
 - Source / 来源: test
 - Date / 日期: 2026-10-13
+
+### [Render] 2D 物理插值开启后：逐帧 `_process` 驱动的节点须关插值，传送/复用点须 `reset_physics_interpolation()`
+- Evidence / 证据: `project.godot` `[physics] common/physics_interpolation=true`；`scenes/game_camera/gamecamera.tscn`、`camera_2d.tscn` 的 Camera2D `physics_interpolation_mode = 2`(OFF)；`script/player.gd` 的 `halo` 设 OFF；池化基类 `script/player_bullet.gd`、`script/entity_ENEMY.gd`、`scenes/item/coin.gd` 等的 `active_state()`/`idle_state()` 顶部 `reset_physics_interpolation()`；`script/map_bounds.gd` 拉回后 reset；coop 镜像 `coop_enemy_proxy.gd`/`coop_summoned_proxy.gd` 关插值、`coop_visual_sync.gd`/`coop_net.gd` 出生点 reset。依据 issue #4（Naitrate，高刷显示器角色/摄像机抖动）。
+- Notes / 说明: 高刷屏下渲染帧率 > 物理 60Hz 时，物理体按 60Hz 跳步、而相机在 `_process` 每帧跟随 → 相对抖动。开启插值让物理体在 tick 间平滑，但：① 位置在 `_process` 每帧赋值的节点（相机、逐帧 lerp 的视觉子节点）会与内插叠加 → 必须 `physics_interpolation_mode = OFF`（相机建议配 `position_smoothing` 由引擎在 `_process` 平滑）；② 对象池复用/传送时若不理会，会从旧坐标插值「拉丝」一帧 → 在最终定位后 `reset_physics_interpolation()`；③ 在 `_physics_process` 内移动的节点**不要**每 tick reset（会抵消内插）；④ 迁移期：新增需要逐帧 `_process` 定位的视觉节点应主动设 OFF，新增池化/传送点应补 reset。移动端原先硬编码 `Engine.max_fps = 60` 的 workaround 已由「帧率上限设置」取代。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-13

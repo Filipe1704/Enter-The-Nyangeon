@@ -12,6 +12,7 @@ func _ready():
 	PoolManager.add_pool("floor_paint",self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	if GameEvents.global_time_count.is_connected(time_count):
 		GameEvents.global_time_count.disconnect(time_count)
@@ -22,6 +23,7 @@ func clear_pool():
 	PoolManager.erase_pool("floor_paint")
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	if !GameEvents.global_time_count.is_connected(time_count):
 		GameEvents.global_time_count.connect(time_count)

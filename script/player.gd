@@ -96,6 +96,8 @@ func _ready():
 	if long_hair == true:
 		GameEvents.screen_changed.connect(hair_line_changed)
 	invincible_frame.timeout.connect(_on_invincible_frame_end)
+	# halo 在 _process 里逐帧 lerp，属纯视觉渲染帧驱动；关闭物理插值避免二次插值
+	halo.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 
 func reset_control_flags():
 	# 回合边界复位控制开关，防止 can_control/can_move/player_stop 被覆盖层或异常路径残留锁死。

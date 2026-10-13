@@ -39,6 +39,7 @@ func _ready():
 	is_on_ready()
 
 func idle_state():
+	reset_physics_interpolation()
 	GameEvents.emit_explosion_quantity(enemy_group.size(), self)
 	add_damage_data()
 	is_idle = 1
@@ -62,6 +63,7 @@ func deactivate_silent():
 	collision_shape_2d.set_deferred("disabled", true)
 
 func active_state():
+	reset_physics_interpolation()
 	if is_ready == false:
 		return
 	is_idle = 0

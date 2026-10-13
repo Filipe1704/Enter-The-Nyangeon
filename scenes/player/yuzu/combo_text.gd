@@ -6,6 +6,7 @@ extends Node2D
 @onready var animation_player_3 = $AnimationPlayer3
 
 func idle_state():
+	reset_physics_interpolation()
 	animation_player.play("RESET")
 	animation_player_3.play("RESET")
 	self.visible = false

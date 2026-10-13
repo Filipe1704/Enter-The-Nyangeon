@@ -20,6 +20,7 @@ func _ready():
 	PoolManager.add_pool(bullet_id, self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	self.visible = false
 	self.global_position = Vector2.ZERO
@@ -39,6 +40,7 @@ func setup(target_position: Vector2, damage: float, kb: int, range_local: float,
 	})
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	self.visible = true
 	animation_player.play("new_animation")

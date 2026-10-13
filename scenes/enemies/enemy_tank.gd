@@ -72,6 +72,7 @@ func _ready():
 	PoolManager.add_pool(pool_id, self)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	_target_cache = null
 	_target_cache_frame = -1
@@ -92,6 +93,7 @@ func idle_state():
 	set_physics_process(false)
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	_target_cache = null
 	_target_cache_frame = -1

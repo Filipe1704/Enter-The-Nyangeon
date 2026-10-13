@@ -48,12 +48,14 @@ func _ready():
 	area_exited.connect(_on_area_exited)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	self.visible = false
 	global_position = Vector2.ZERO
 	collision_shape_2d.set_deferred("disabled", true)
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	# 每次激活清远端驱动标记：远端克隆待状态到达后吸附到拥有者轨迹。
 	_net_remote_driven = false

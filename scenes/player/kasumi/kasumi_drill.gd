@@ -53,6 +53,7 @@ func _ready() -> void:
 	reset_lv()
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	if !body_group.is_empty():
 		body_group.clear()
@@ -64,6 +65,7 @@ func idle_state():
 	self.global_position = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	if !body_group.is_empty():
 		body_group.clear()

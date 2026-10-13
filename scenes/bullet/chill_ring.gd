@@ -20,12 +20,14 @@ func _ready():
 	idle_state()
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	visible = false
 	global_position = Vector2.ZERO
 	hit_box.set_deferred("monitoring", false)
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	visible = true
 	animation_player.play("new_animation")

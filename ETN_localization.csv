@@ -137,3 +137,5 @@ mod_uninstall_ok,已卸载 %s（重启后完全移除）,Uninstalled %s (removed
 mod_uninstall_fail,卸载失败 %s,Uninstall failed %s,Falha ao desinstalar: %s,Gỡ cài đặt thất bại %s
 mod_uninstall_pending,文件被占用 将在下次启动时删除,File in use; deleted on next launch,Arquivo em uso; será excluído na próxima inicialização,Tệp đang dùng; sẽ xóa ở lần khởi động sau
 mod_cancel,取消,Cancel,Cancelar,Hủy
+option_max_fps,帧率上限,Max Frame Rate,Limite de FPS,Giới hạn FPS
+fps_unlimited,无限制,Unlimited,Ilimitado,Không giới hạn

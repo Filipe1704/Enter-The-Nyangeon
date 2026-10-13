@@ -1,7 +1,7 @@
-[gd_scene load_steps=9 format=3 uid="uid://d1gmjbadbxsjp"]
+[gd_scene format=3 uid="uid://d1gmjbadbxsjp"]
 
-[ext_resource type="Script" path="res://scenes/game_camera/gamecamera.gd" id="1_seclc"]
-[ext_resource type="Shader" path="res://shaders/gamecamera.gdshader" id="2_xibj8"]
+[ext_resource type="Script" uid="uid://c0hjqtm12gb0i" path="res://scenes/game_camera/gamecamera.gd" id="1_seclc"]
+[ext_resource type="Shader" uid="uid://c4ugc7fgqwpyl" path="res://shaders/gamecamera.gdshader" id="2_xibj8"]
 
 [sub_resource type="Gradient" id="Gradient_fu31w"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -18,7 +18,7 @@ metadata/_snap_enabled = true
 resource_local_to_scene = true
 shader = ExtResource("2_xibj8")
 shader_parameter/cutoff = 1.0
-shader_parameter/smooth_size = null
+shader_parameter/smooth_size = 0.0
 shader_parameter/mask = SubResource("GradientTexture2D_21cxb")
 
 [sub_resource type="Animation" id="Animation_nwo8y"]
@@ -52,19 +52,20 @@ tracks/0/keys = {
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_xfoxn"]
 _data = {
-"RESET": SubResource("Animation_nwo8y"),
-"new_animation": SubResource("Animation_wi2q0")
+&"RESET": SubResource("Animation_nwo8y"),
+&"new_animation": SubResource("Animation_wi2q0")
 }
 
-[node name="Camera2D" type="Camera2D" groups=["PlayerCamera"]]
+[node name="Camera2D" type="Camera2D" unique_id=165655606 groups=["PlayerCamera"]]
+physics_interpolation_mode = 2
 position_smoothing_enabled = true
 position_smoothing_speed = 10.0
 script = ExtResource("1_seclc")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1919929359]
 layer = 2
 
-[node name="ColorRect" type="ColorRect" parent="CanvasLayer"]
+[node name="ColorRect" type="ColorRect" parent="CanvasLayer" unique_id=1303157737]
 show_behind_parent = true
 z_index = 1
 z_as_relative = false
@@ -77,7 +78,5 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="CanvasLayer"]
-libraries = {
-"": SubResource("AnimationLibrary_xfoxn")
-}
+[node name="AnimationPlayer" type="AnimationPlayer" parent="CanvasLayer" unique_id=1472190348]
+libraries/ = SubResource("AnimationLibrary_xfoxn")

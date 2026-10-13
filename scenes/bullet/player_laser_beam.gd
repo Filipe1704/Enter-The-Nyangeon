@@ -126,6 +126,7 @@ func follow(muzzle_global: Vector2, aim_angle: float, delta: float) -> void:
 
 
 func active_state() -> void:
+	reset_physics_interpolation()
 	is_idle = 0
 	enabled = true
 	visible = true
@@ -157,6 +158,7 @@ func _read_thickness_scale() -> float:
 
 
 func idle_state() -> void:
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	is_idle = 1

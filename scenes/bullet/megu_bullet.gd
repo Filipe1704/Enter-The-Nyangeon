@@ -16,11 +16,13 @@ func _ready():
 	super._ready()
 
 func idle_state():
+	reset_physics_interpolation()
 	super.idle_state()
 	gpu_particles_2d.emitting = false
 	gpu_particles_2d_2.emitting = false
 
 func active_state():
+	reset_physics_interpolation()
 	if is_ready == false:
 		return
 	super.active_state()

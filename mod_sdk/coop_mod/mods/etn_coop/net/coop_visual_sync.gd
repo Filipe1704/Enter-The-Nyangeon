@@ -67,6 +67,7 @@ func spawn_visual_bullet(tree: SceneTree, scene_path: String, position: Vector2,
 	bullet.global_position = position
 	bullet.global_rotation = rotation
 	bullet.scale = bullet_scale
+	bullet.reset_physics_interpolation()
 	if bullet.get("speed") != null:
 		bullet.speed = speed
 	if bullet.get("kill_time") != null:
@@ -203,6 +204,7 @@ func spawn_visual_effect(tree: SceneTree, scene_path: String, position: Vector2,
 	if effect is Node2D:
 		(effect as Node2D).global_position = position
 		(effect as Node2D).global_rotation = rotation
+		(effect as Node2D).reset_physics_interpolation()
 	effect.scale = effect_scale
 	for k in properties.keys():
 		effect.set(str(k), properties[k])

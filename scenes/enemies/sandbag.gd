@@ -55,6 +55,7 @@ func _ready():
 	#set_physics_process(false)
 
 func active_state():
+	reset_physics_interpolation()
 	super.active_state()
 	#is_idle = 0
 	#if !GameEvents.global_time_count.is_connected(time_count):

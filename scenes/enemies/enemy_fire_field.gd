@@ -30,6 +30,7 @@ func _ready() -> void:
 	GameEvents.round_upgrade.connect(round_clear)
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	if GameEvents.global_time_count.is_connected(time_count):
 		GameEvents.global_time_count.disconnect(time_count)
@@ -41,6 +42,7 @@ func idle_state():
 	set_physics_process(false)
 
 func active_state():
+	reset_physics_interpolation()
 	is_idle = 0
 	if !GameEvents.global_time_count.is_connected(time_count):
 		GameEvents.global_time_count.connect(time_count)

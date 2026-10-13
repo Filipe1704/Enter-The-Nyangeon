@@ -16,6 +16,7 @@ func _ready() -> void:
 	set_physics_process(false)
 
 func idle_state() -> void:
+	reset_physics_interpolation()
 	progress = 0.0
 	lap = 0.0
 	set_physics_process(false)
@@ -23,6 +24,7 @@ func idle_state() -> void:
 		enemy_body.route_target = null
 
 func active_state() -> void:
+	reset_physics_interpolation()
 	lap = 0.0
 	_apply_position()
 	set_physics_process(true)

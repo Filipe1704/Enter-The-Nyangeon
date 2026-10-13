@@ -28,6 +28,7 @@ func _ready() -> void:
 	idle_state()
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	if GameEvents.global_time_count.is_connected(time_count):
 		GameEvents.global_time_count.disconnect(time_count)
@@ -39,6 +40,7 @@ func idle_state():
 	hit_box.set_deferred("monitoring", false)
 
 func active_state():
+	reset_physics_interpolation()
 	if is_ready == false:
 		return
 	is_idle = 0

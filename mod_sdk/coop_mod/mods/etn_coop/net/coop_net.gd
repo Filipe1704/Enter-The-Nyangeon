@@ -4419,6 +4419,7 @@ func _place_and_refresh_local_player() -> void:
 		if p != null and is_instance_valid(p):
 			if not player_scene_by_peer.is_empty():
 				p.global_position = _spawn_position_for_peer(multiplayer.get_unique_id())
+				p.reset_physics_interpolation()
 			PlayerData.player = p
 			_ensure_local_proxy(p)
 			_attach_name_tag(p, multiplayer.get_unique_id())
@@ -4519,6 +4520,7 @@ func spawn_remote_player(peer_id: int, scene_path: String) -> void:
 	if p.is_in_group("Follow"):
 		p.remove_from_group("Follow")
 	p.global_position = _spawn_position_for_peer(peer_id)
+	p.reset_physics_interpolation()
 	_attach_player_proxy(p, peer_id)
 	_attach_name_tag(p, peer_id)
 	_rebuild_peer_item_visuals(peer_id)

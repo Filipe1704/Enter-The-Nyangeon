@@ -113,11 +113,13 @@ func _on_network_boss_event(event_name: String, data: Dictionary) -> void:
 	_net_visual_replaying = false
 
 func idle_state():
+	reset_physics_interpolation()
 	super.idle_state()
 	boss_hp.game_ui_visible(false)
 	decision_timer.stop()
 
 func active_state():
+	reset_physics_interpolation()
 	super.active_state()
 	weapon_halted = false
 	boss_enter_anim()

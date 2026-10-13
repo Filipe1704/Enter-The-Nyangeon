@@ -101,6 +101,7 @@ func apply_penetrate_dealt():
 	damage_data.on_damage_dealt.append(cb)
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	is_idle = 1
@@ -126,6 +127,7 @@ func idle_state():
 		line_2.reset()
 
 func active_state():
+	reset_physics_interpolation()
 	
 	if is_ready == false:
 		return

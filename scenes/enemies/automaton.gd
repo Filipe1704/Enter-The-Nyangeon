@@ -44,6 +44,7 @@ var aim: int = 0
 @onready var gun = $Graphics/Gun
 
 func active_state():
+	reset_physics_interpolation()
 	super.active_state()
 	can_shoot = false
 	aim_end = false

@@ -50,6 +50,7 @@ func is_on_ready():
 	active_state()
 
 func idle_state():
+	reset_physics_interpolation()
 	if is_idle == 0:
 		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
 	add_explosion()
@@ -78,6 +79,7 @@ func visual_idle_state():
 	self.velocity = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	
 	if is_ready == false:
 		return

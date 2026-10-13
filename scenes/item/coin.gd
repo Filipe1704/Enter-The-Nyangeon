@@ -33,6 +33,7 @@ func is_ready():
 	active_state()
 
 func idle_state():
+	reset_physics_interpolation()
 	is_idle = 1
 	self.visible = false
 	self.global_position = Vector2.ZERO
@@ -45,6 +46,7 @@ func idle_state():
 	CoinManager.unregister(self)
 
 func active_state():
+	reset_physics_interpolation()
 	if on_ready == false:
 		return
 	is_idle = 0

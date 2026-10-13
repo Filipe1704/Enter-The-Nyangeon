@@ -35,6 +35,7 @@ func bind(summon: Summoned) -> void:
 
 
 func idle_state() -> void:
+	reset_physics_interpolation()
 	is_idle = 1
 	visible = false
 	if target != null and is_instance_valid(target) \

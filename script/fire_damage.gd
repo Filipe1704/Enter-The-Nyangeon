@@ -24,6 +24,7 @@ func _ready():
 	active_state()
 
 func idle_state():
+	reset_physics_interpolation()
 	add_damage_data()
 	body_group.clear()
 	is_idle = 1
@@ -32,6 +33,7 @@ func idle_state():
 	global_position = Vector2.ZERO
 
 func active_state():
+	reset_physics_interpolation()
 	if is_on_ready == false:
 		return
 	is_idle = 0
