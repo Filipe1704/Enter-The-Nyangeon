@@ -27,11 +27,14 @@ var game_support: SupportCard:
 func restore_progress(entries: Dictionary, selected_id: String) -> void:
 	support_data = SceneData.support_progress(entries)
 	for id in support_data:
-		var card: SupportCard = null
-		for candidate in support_pool:
-			if candidate != null and candidate.support_id == id:
-				card = candidate
-				break
+		# 优先当前 Mod 注册资源（同 ID 覆盖版支援以 manifest `overrides` 声明覆盖本体）；
+		# 未注册时才回退本体 support_pool，避免池顺序把本体版本排在覆盖版之前。
+		var card: SupportCard = ModManager.get_resource("supports", id)
+		if card == null:
+			for candidate in support_pool:
+				if candidate != null and candidate.support_id == id:
+					card = candidate
+					break
 		support_data[id]["resource"] = card
 	var selected = support_data.get(selected_id, {}).get("resource")
 	game_support = selected if selected is SupportCard else null_support

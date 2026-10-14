@@ -69,6 +69,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 ### 1.7 SupportData
 - `@export support_pool: Array[SupportCard]`, `null_support: SupportCard`, `exp_curve: Curve`, `support_ui`。
 - `game_add_support()` 把 `support_pack` 实例化进组 `"PlayerRoot"`（并注入 `ins.support_card`）、UI 进 `"GameUI".support_box`（`support_data.gd:59-74`）。被动数值不再在此写入，改由 `SupportCharacter._apply_passive_boost()` 按存档 `LV` + `pa_value` 计算（见 `SYSTEMS.md` §5.6）。⚠️ `game_support` 初值可为 `null`（非 `null_support`）；`game_add_support()` 对 `null`/`"null"` 早退，读档与 `reset_game_support()`、`support_select_ui.check_data()` 负责把 `null` 归一为 `null_support`。
+- **同 ID 覆盖解析（2026-10-14）**：`restore_progress()` 解析每个支援 id 时优先 `ModManager.get_resource("supports", id)`（当前生效的 Mod 注册资源，含以 manifest `overrides` 声明的同 ID 覆盖版），未注册才回退 `support_pool` 扫描；本体与 Mod 同 ID 支援可并存，池顺序不决定覆盖优先级。
 - 存档委托 `Game.save_playerdata()`。
 
 ### 1.8 ExtraDamage

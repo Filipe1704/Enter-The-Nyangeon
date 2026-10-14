@@ -97,6 +97,7 @@
 - 普通伤害 `_resolve_damage` 顺序：承伤倍率 → `enemy_damage_calculating` 前置数值阶段 → 本地 `enemy_damage_taken` 关联 proc → DamageData modifiers → 组件倍率。真实伤害跳过承伤及前置修饰；两种路径都消费暂存倍率。前置阶段追加的临时 modifier 在命中末恢复，避免穿透复用累积。
 - 扣血仍包含一击必杀、溢出伤害事件、HP 修改、伤害反馈、on_damage_dealt、死亡/击杀归属；击退与策反继续在本体处理。`enemy_damage_taken` 仍发生在本地扣血之前，溢出/死亡事件使用后置数值，订阅者不要假设两者一致。
 - **联机数值契约（2026-10-14，COOP-008 已修）**：公开 `resolve_damage` 只计算本次命中，不扣血、不运行结算 proc 或 on_damage_dealt。客机 `_prepare_enemy_hit` 在预测扣血与生命周期之前计算 `resolved_damage`；根敌人、自管理子弹和独立部件统一发送。房主通过第四参数接纳该值，不重复应用承伤/自己的被动，但仍检查死亡、无敌、阵营并扣实际 HP；归属 proc 在权威结束后只回到攻击者。目标血量/距离等使用客机命中时快照，沿用好友房可信数值模型。
+- **目标承伤镜像契约（2026-10-14）**：房主 resolved 路径不再自行乘目标承伤（`global_hurt_damage`）或本机被动，客机 `resolved_damage` 依赖其对**目标受击者**的本地快照；因此任何修改目标 `global_hurt_damage`/`damage_multiplier` 的来源（debuff、道具、`BuffAura` 等）**必须经 buff 镜像同步到客机**，否则客机求值与房主实际扣血不一致。新增此类来源时须确认已走镜像通道。
 - Hina 距离闭包保持子弹内求值；Kotori、Tsurugi、Utaha、Momoi 的数值增伤及近战藏品迁到前置阶段。Momoi 的施加燃烧仍留在原 proc，避免预计算产生双重副作用；Mint 在命中瞬间写入倍率，由同一数值路径消费。
 - 版本：2026-10-14 用户要求发布版本恢复为本体 v0.5.1.3 / 官方 Mod 0.1.10，尚未提交上游的协议变更统一为 v4；原标 v0.5.1.4 / 0.1.12 / 协议 v5 的修复保留。本体与 Mod 需配套更新，无前置接口的旧本体停止注入。证据：`health_component.gd:31,213,222`、`GameEvents.gd:97,333`、`coop_net.gd:_prepare_enemy_hit/_server_enemy_hit/_server_enemy_part_hit`。守卫：`run_damage_contract_checks.py` 与联机 `damage` 实际双端场景。
 
@@ -281,6 +282,7 @@
 
 ### 5.6 Support — 支援角色
 - **持久化边界（2026-10-14）**：v3 保存支援 ID/LV/exp 与 selected_support_id；运行期 support_data 仍可附 resource 供 UI 使用，但写盘剥离它。缺/停用 Mod 时保持进度与选择、显示空支援，重新启用后恢复；旧 Resource 存档在 Mod 挂载后迁移，缺依赖时采用局部占位加载器。实现与验证见 ARCHITECTURE §2 及 `tests/run_support_persistence_checks.py`。
+- **同 ID 覆盖解析（2026-10-14）**：`SupportData.restore_progress` 解析每个支援 id 时优先 `ModManager.get_resource("supports", id)`（含以 manifest `overrides` 声明的同 ID 覆盖版），未注册才回退 `support_pool`；本体与 Mod 同 ID 支援可并存，池顺序不决定覆盖优先级。
 - 数据：`SupportCard`（`resources/support/support_card.gd`）定义被动（`ability_id`：PlayerData 变量名 + `pa_value: Curve` 等级曲线）与主动（`ex_cost`、`support_pack`）。
 - 装配：`SupportData.game_add_support()`（`script/support_data.gd:59-74`）实例化 `support_pack` 到 `"PlayerRoot"` 并注入 `ins.support_card`，UI 挂 `"GameUI".support_box`；被动数值不再由 `SupportData` 写入。⚠️ `game_support` 可为 `null`（全新档/从未选过支援时初值为 `null` 而非 `null_support`），`game_add_support()` 对 `null` 与 `support_id == "null"` 一律早退；正常流程由 `reset_game_support()`/`Game.load_playerdata()`/`support_select_ui.check_data()` 把 `null` 归一为 `null_support`，避免 HUD 出现空卡与结算 Nil 访问。
 - **`SupportCharacter`**（`script/support_character.gd`，`extends Node2D`）：`support_pack` 根基类。`_ready()` 调 `_apply_passive_boost()`（读存档 `support_data[id].LV` → `pa_value.sample(lv/100)` → `PlayerData.set(ability_id, …)` + `update_player_ability()`）与虚函数 `_special_effect()`。

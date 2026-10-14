@@ -41,6 +41,10 @@
 - 交互名单包含按钮、输入框、滚动容器及滚动条。关闭菜单撤销鼠标及键盘焦点，重开恢复原始 mouse_filter / focus_mode；导航只纳入可见且未禁用的控件。
 - 切页或释放菜单不结束提供者会话。菜单缓存每个提供者的准备、失败及游戏连接状态，切页或切换语言后恢复显示；迟到的 offline 通知不覆盖准备或失败结果。
 
+## Damage Contract / 伤害契约
+
+联机伤害由**攻击归属端求值**：客机用命中时自身构筑与目标快照计算 `resolved_damage` 交给房主，房主只做存活/无敌/阵营门控与真实扣血。因此**任何修改敌人受击者 `global_hurt_damage` / `damage_multiplier` 的来源（debuff、道具、光环等）必须经 buff 镜像同步到客机**，否则客机求值将与房主权威结算不一致。新增此类来源时须确认其已通过官方 buff 镜像通道（`_remote_apply_enemy_buff` 等）复制到客机。
+
 ## Validation / 验证
 
 `python tests/run_coop_extension_contract_checks.py` 使用临时最小工程验证注册表，再只安装官方源码 PCK，用通用测试提供者验证实际菜单。覆盖 21 项生命周期契约和 17 项菜单/状态检查，不安装任何附属 Mod。
