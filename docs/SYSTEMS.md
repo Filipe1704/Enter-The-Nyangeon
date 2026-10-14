@@ -309,7 +309,7 @@
 
 ### 5.8 断线重连（联机，mod `mods/etn_coop` + 中继服务端，2026-10-08）
 
-- **传输断线边界（2026-10-14）**：`net/coop_enet_peer.gd` 为原生 ENet 的薄适配器，汇总一次 poll 的连接事件后再通知 SceneMultiplayer；发送检查底层 ENetPacketPeer 仍为 CONNECTED，避免同 poll 多端退出时向已无通道的 peer 发引擎成员通知或玩法广播。保持原生通道/可靠性及 server relay；前置伤害契约与本批其他尚未提交上游的协议变更统一纳入 v4（原计划 v5）。`coop_relay_peer.gd` 清理已断开 sender 的排队包、拒绝晚到旧包，同 poll 复用 ID 时先断后连。真实同时断开及 Relay 队列守卫、三端重连严格通过；不靠扩大错误白名单。中继发送超水位现在首次即断开慢端，不再跳过可靠帧后继续连接。
+- **传输断线边界（2026-10-14）**：`net/coop_enet_peer.gd` 为原生 ENet 的薄适配器，汇总一次 poll 的连接事件后再通知 SceneMultiplayer；发送检查底层 ENetPacketPeer 仍为 CONNECTED，避免同 poll 多端退出时向已无通道的 peer 发引擎成员通知或玩法广播。保持原生通道/可靠性及 server relay；前置伤害契约与本批其他尚未提交上游的协议变更统一纳入 v4（原计划 v5）。`coop_relay_peer.gd` 清理已断开 sender 的排队包、拒绝晚到旧包，同 poll 复用 ID 时先断后连。真实同时断开及 Relay 队列守卫、三端重连严格通过；不靠扩大错误白名单。中继发送超水位改为分级背压：软水位（256 KiB）先给宽限（默认 5s）并继续写可靠帧，硬水位（默认 4 MiB）或宽限超时再断开慢端，仍不跳过可靠帧。
 
 - **身份**：客户端 `coop_settings.ensure_client_token()`（UUID 持久化 `profile/client_token`）；LAN/Relay 加入帧带 token，host 记 `_peer_token`/`_token_peer`。
 - **host 宽限**：`_on_peer_disconnected` 对已握手且有 token 的 peer 进入 `REJOIN_GRACE_MSEC=45s` 宽限——保留 `player_by_peer_id`/`player_scene_by_peer`/`player_name_by_peer`/`team_stats`/`support_*`/`down_peer_ids` 等与镜像（冻结 `player_stop`），超时 `_cleanup_peer`。宽限内 `_check_team_game_over` 直接 return（防其余人倒地误结束）。

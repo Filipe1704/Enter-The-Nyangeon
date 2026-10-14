@@ -2283,6 +2283,7 @@
 - Source / 来源: test
 - Date / 日期: 2026-10-14
 - SUPERSEDED: 2026-10-14 首次超水位改为明确断开慢端，保留非阻塞广播；2 项背压回归先红后绿，不再容忍跳帧。（来源：test）
+- SUPERSEDED: 2026-10-14 进一步改为分级水位：软水位（256 KiB）给宽限（默认 5s）继续写可靠帧，硬水位（默认 4 MiB）或宽限超时再断开慢端；仍禁止跳帧。证据：`mod_sdk/coop_mod/server/relay_server.py:28-30,172-205`、`tests/test_relay_limits.py`。（来源：user + code）
 
 ### [Mod] 依赖校验必须覆盖冲突过滤后的最终集合
 - Evidence / 证据: `script/mod_manager.gd:272-340`；本地审计记录（未入本次提交）；AUD-MOD-002。
