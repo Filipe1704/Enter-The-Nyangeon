@@ -1,4 +1,4 @@
-"""从当前官方 Mod 源码打包，在隔离 user:// 中检查 LAN/Relay 双端道具动态与外观唯一性。"""
+"""从当前官方 Mod 源码打包，在隔离 user:// 中检查 LAN/Relay 双端道具显示或菜刀伤害一致性。"""
 import argparse
 from pathlib import Path
 import subprocess
@@ -96,6 +96,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--godot", default=str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe"))
     parser.add_argument("--pack", type=Path, help="仅用于验证回归能捕获旧构建；默认每次从当前源码打包")
+    parser.add_argument("--damage", action="store_true", help="检查客机菜刀同次命中的双端伤害数字与权威扣血")
     parser.add_argument("--log-dir", type=Path, default=REPO / ".godot/coop_item_visual_checks")
     parser.add_argument("--cases", nargs="+", choices=["items", "relay_items"], default=["items", "relay_items"])
     args = parser.parse_args()
@@ -149,7 +150,8 @@ def main():
                     env = prepare(args.godot, shared / role, [(BASE, pack)])
                     log = logs / f"{case}_{role}.log"
                     handle = log.open("w", encoding="utf-8")
-                    command = [args.godot, "--headless", "--path", str(REPO), "--script", "res://tests/coop_item_visual_checks.gd", "--",
+                    script = "coop_knife_damage_checks.gd" if args.damage else "coop_item_visual_checks.gd"
+                    command = [args.godot, "--headless", "--path", str(REPO), "--script", "res://tests/" + script, "--",
                                f"--role={role}", f"--mode={case}", f"--directory={shared.as_posix()}", f"--port={port}"]
                     if relay_url:
                         command.append("--relay-url=" + relay_url)

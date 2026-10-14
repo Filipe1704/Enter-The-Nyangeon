@@ -90,6 +90,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - 玩家同步：各端在 `first_round_add` 时交换 roster，互相生成对方角色（移出 `Player` 组、加入 `RemotePlayer`），挂 `CoopPlayerProxy`（禁用输入/相机/UI/碰撞/信号、按快照插值位置/朝向/动画/血量）；本机以 ~20Hz 上报状态，经服务端转发。
 - 敌人同步（服务端权威）：host 在 `on_enemy_spawned` 登记 net_id 并广播；client 生成镜像（挂 `CoopEnemyProxy`，禁物理、按快照插值位置/速度/血量）；host 以 ~8Hz 发快照；死亡经 `is_dead` → despawn 广播；client 镜像不本地判死。
 - 敌人伤害权威：client 的子弹命中经 `enemy_damage_interceptor` 转交 host（序列化 DamageData 字段），host 结算并快照回传；client 不本地结算（镜像血量只来自快照）。
+- **菜刀伤害数字一致（2026-10-15）**：客机预测识别 `TRUE_DAMAGE`，血条预测只应用一次承伤倍率；主机飘字读取结算后的命中伤害，记分仍按有效扣血计算，避免菜刀斩杀在两端显示为 `99999` 与剩余生命值。`python tests/run_coop_item_visual_checks.py --damage` 验证 LAN/Relay 同次命中的数字、斩杀、沙袋回血与记分。
 - 子弹广播：任意端的本地弹道经 `on_projectile_spawned` 按帧批量广播（scene/位置/朝向/缩放/速度/kill_time）；其它端用 `CoopVisualSync` 生成**纯视觉弹**（从本体池移除、清零碰撞、禁伤害、自带 kill_time 回池）；`on_projectile_despawned` 广播**提前终止**（撞墙/命中）让对方立即消失，`ended` 集合防迟到复活。
 - 爆炸/特效广播：`on_projectile_spawned` 中**无 velocity** 的作用域走特效通道（scene/位置/朝向/缩放/所属组 + **白名单属性** `explosion_range/damage_mult/range_mult/scale_mult/is_crit/color/modulate/bullet_scale`），对方生成不池化、超时释放的纯视觉特效（禁伤害）。
 - 敌人→玩家伤害：client 的**敌方视觉弹**对本地玩家开放"伤害洞"（置 `enemy_bullet` 层 + monitorable、合成 enemy DamageData），玩家 HurtBox 正常结算；镜像敌人物理/AI 停用，不会二次开火。

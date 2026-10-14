@@ -1930,7 +1930,7 @@ func _gate_projectile_self_hit(bullet: Node, hb) -> bool:
 	data.owner_peer = multiplayer.get_unique_id()
 	var net_id: int = int(enemy.get_meta("net_id"))
 	# 即时预测：闪白+飘字+镜像血条下调 + 预测死亡（不等 host 回传）
-	var predicted: int = _get_predicted_enemy_damage(enemy, data.base_damage)
+	var predicted: int = _get_predicted_enemy_damage(enemy, data.base_damage, data.flags.has(GameTags.TRUE_DAMAGE))
 	_replay_hit_feedback(enemy, data, predicted, false)
 	_predict_enemy_death(enemy, predicted, net_id)
 	# 本地回放命中闭包（子弹生命周期 + player.damage_dealt；host 转发伤害无闭包，不会重复）
@@ -2139,7 +2139,7 @@ func _intercept_enemy_damage(damage_data, owner) -> bool:
 		return false
 	var net_id: int = int(owner.get_meta("net_id"))
 	d.owner_peer = multiplayer.get_unique_id()
-	var predicted: int = _get_predicted_enemy_damage(owner, d.base_damage)
+	var predicted: int = _get_predicted_enemy_damage(owner, d.base_damage, d.flags.has(GameTags.TRUE_DAMAGE))
 	_replay_hit_feedback(owner, d, predicted, false)
 	_predict_enemy_death(owner, predicted, net_id)
 	# 本地回放命中闭包（如 poison_ring 的 apply_buff 在此闭包内；host 转发伤害无闭包，不会重复）
@@ -2166,7 +2166,7 @@ func _handle_part_hit(part: Node, data) -> void:
 	if not _has_peer():
 		return
 	d.owner_peer = multiplayer.get_unique_id()
-	var predicted: int = _get_predicted_enemy_damage(part, d.base_damage)
+	var predicted: int = _get_predicted_enemy_damage(part, d.base_damage, d.flags.has(GameTags.TRUE_DAMAGE))
 	_replay_hit_feedback(part, d, predicted, false)
 	var pstats = part.get("stats")
 	if pstats != null:
@@ -5905,11 +5905,15 @@ func _server_enemy_hit(net_id: int, cfg: Dictionary, victim_pos: Vector2) -> voi
 	last_attacker_by_net_id[net_id] = attacker
 	# 抑制本体自然表现（飘字/闪白），由 mod 按来源频率统一回放（host 侧客机命中 = 远程来源）
 	var hp_before: int = int(enemy.stats.hp) if enemy.get("stats") != null else 0
+	# 命中数字须取结算后的伤害，不可用 HP 差替代（过量伤害会被生命下限截断）。
+	# suppress_feedback 仍会运行 on_damage_dealt；追加本地采样回调，不改本体或客户端发来的数值。
+	var hit_amount: Array[int] = [0]
+	data.on_damage_dealt.append(func(_target, amount): hit_amount[0] = int(amount))
 	component.take_damage(data, true, true)
 	var hp_after: int = int(enemy.stats.hp) if enemy.get("stats") != null else 0
-	var actual: int = maxi(0, hp_before - hp_after)
+	var actual: int = hit_amount[0]
 	if actual > 0:
-		_add_team_damage(attacker, actual)
+		_add_team_damage(attacker, maxi(0, hp_before - hp_after))
 		var killed: bool = hp_before > 0 and hp_after <= 0
 		_replay_hit_feedback(enemy, data, actual, true)
 		rpc("_remote_hit_feedback", net_id, actual, safe_cfg, attacker, true)
@@ -8489,12 +8493,12 @@ func _replay_hit_feedback(enemy: Node, data: DamageData, actual_damage: int, is_
 
 # ---------------- 敌人命中预测（对齐联机版） ----------------
 
-func _get_predicted_enemy_damage(enemy: Node, damage: int) -> int:
+func _get_predicted_enemy_damage(enemy: Node, damage: int, true_damage: bool = false) -> int:
 	if damage <= 0:
 		return 0
 	var stats = enemy.get("stats") if enemy != null and is_instance_valid(enemy) else null
 	var scaled: float = float(maxi(1, damage))
-	if stats != null and stats.get("global_hurt_damage") != null:
+	if not true_damage and stats != null and stats.get("global_hurt_damage") != null:
 		scaled *= maxf(0.001, float(stats.get("global_hurt_damage")))
 	return maxi(1, int(scaled))
 
@@ -8529,7 +8533,8 @@ func _predict_enemy_death(enemy: Node, damage: int, net_id: int) -> void:
 	var stats = enemy.get("stats")
 	if stats == null:
 		return
-	var predicted_damage: int = _get_predicted_enemy_damage(enemy, damage)
+	# 调用者已算好本次预测伤害；再次套承伤倍率会造成血条双重减伤/易伤。
+	var predicted_damage: int = maxi(0, damage)
 	var predicted_hp: int = 0
 	var proxy = enemy_proxy_by_net_id.get(net_id)
 	if proxy != null and is_instance_valid(proxy) and proxy.has_method("note_predicted_damage") and proxy.get("enemy_stats") != null:

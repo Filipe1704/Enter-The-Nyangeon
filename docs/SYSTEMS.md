@@ -98,13 +98,14 @@
 - `_take_damage_internal`（`:57-179`）：
   - `is_invincible` 直接返回。
   - 友方 → 仅 `apply_conversion_power`（若有 `convert_power`）后返回。
-  - `raw_damage = base_damage * PlayerData.player.stats.dot_damage`。
+  - `raw_damage = base_damage`；仅非 TRUE_DAMAGE 的 CONVERTED 来源额外乘当前玩家的 `stats.dot_damage`。
   - 若 `source_type.has(CONVERTED)` 且非 TRUE_DAMAGE：近战乘 `PlayerData.kick_damage_mult`，逐击 roll 暴击（`:71-85`）。
   - 治疗分支：`final=max(1,raw)`，emit `enemy_heal_taken`，跑 modifier，`stats.hp += final`。
   - 伤害分支（`:105-157`）：`final=max(1, raw * stats.global_hurt_damage)`；`TRUE_DAMAGE` 跳过该乘数；emit `enemy_damage_taken`；跑 `damage_modifier`；非 TRUE 时应用并重置 `damage_multiplier`；`final>stats.hp` → emit `enemy_over_kill_damage`；`stats.hp -= final`；`damage_taken.emit`；闪白/受击音；`on_damage_dealt`；`stats.hp<=0` → emit `enemy_damage_taken_dead`。
   - 击退：方向默认 `(owner.pos - dmg.hit_box_center).normalized()`；`KNOCKBACK_ATTRACT` 反向；力度 `force * resist_factor * melee_mult`。
 - 🚩 **顺序**：`emit_enemy_damage_taken` 在 modifier / `damage_multiplier` / hp 扣减**之前**，但 `enemy_over_kill_damage` 用**后置**值 —— 订阅者不可假设二者一致。
 - 🚩 `damage_multiplier` 仅在 `!TRUE_DAMAGE` 时重置（`:130-132`），TRUE_DAMAGE 会漏掉重置，残留到下一次非真实伤害。
+- **客机菜刀伤害数字一致性（mod，2026-10-15）**：`coop_net.gd:_get_predicted_enemy_damage` 根据 `TRUE_DAMAGE` 跳过承伤倍率，`_predict_enemy_death` 直接消费已计算的伤害，不能再次乘承伤倍率。`_server_enemy_hit` 在权威 `DamageData.on_damage_dealt` 上采集结算后的命中伤害，用于飘字与归属端 proc；记分仍使用有效 HP 差。命中伤害与 HP 差并不等价：菜刀斩杀 `99999`、目标剩余 `50` 时，两端都显示 `99999`，实际只扣 `50`。沙袋的 `on_dead()` 经 `Enemy._on_is_dead` 延迟调用回血，跨帧比较 HP 会混入回血，测试须记录命中瞬间的 HP。`suppress_feedback=true` 只抑制自然表现和 gameplay 信号，不会跳过 `on_damage_dealt`。回归 `tests/coop_knife_damage_checks.gd`（`python tests/run_coop_item_visual_checks.py --damage`）覆盖 LAN/Relay 的正常命中、减伤/易伤、斩杀、普通过量伤害及沙袋回血，并检查同击只显示一次与记分不膨胀。
 
 ### 2.4 玩家血量 — `script/player_health_component.gd`
 - `is_invincible` 早退；`base_damage<=0` 时改走“仅击退”分支（有 `knockback_force` 则只结算击退，不扣血 / 不吃 `hurt_invalid` / 不进无敌帧 / 不触发 `on_hit_effects`）；正常伤害下 `hurt_invalid>0` 消耗一次免疫并显示 "IMMUNE!"（`:67-78`）。
