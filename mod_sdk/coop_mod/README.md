@@ -320,6 +320,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 ### 视觉清单（`net/coop_item_visuals.gd`）
 - **A 常驻图标**：follow 15 / hat 8 / rail 6 / muzzle 4（id→`<id>_icon.tscn`），挂到**镜像子树内**的对应标记（follow 因镜像 Follow 已移出全局组，按字段查找）。实例化后 `_sanitize_groups` 把图标内嵌挂点移出全局组。
 - **内部视觉 7**：`cathedral_candle/energy_supplement/ginseng_doll/kitchen_knife/spiked_shell/life_jacket/little_kei`，`set_script(null)` + 递归剥玩法（Area2D/CollisionShape2D/Timer/Label），`net/coop_visual_driver.gd` 做最小位置驱动。
+- **动态显示同步（2026-10-14）**：菜刀随远端瞄准旋转，世界原点也是合法目标；小小凯伊同步绕行/范围/朝向，救生衣、人形参、特制营养剂同步触发动画和护盾状态。视觉副本使用独立材质/动画库并过滤玩法轨道。
+- **外观唯一性与重建**：按 peer + item_id 复用外观；动态快照可补建缺失副本，镜像重建后恢复缓存。现有房主迁移路径同时迁移道具缓存，不引入其他会话恢复改动。
+- **兼容与道具回归**：协议 v4，双方需配套更新，Mod 发布版本仍为 `0.1.10`。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 检查 LAN/Relay 双端道具显示及重复外观。
 - **持久身体**：`utaha_turret`（已由召唤同步覆盖）；`shiroko_drone`/`robotic_vacuum_cleaner` 经 `_hook_visual_roots` 检测后接入召唤通道（`PERSISTENT_BODY_SCENES` + `_register_persistent_body`），仅视觉镜像 + 变换同步。
 - **B 生成型**：`_hook_visual_roots` 扩到 `EquipLayer/FloorLayer`；`player_bullet_launcher` 跳过。
 

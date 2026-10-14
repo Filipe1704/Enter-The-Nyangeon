@@ -14,6 +14,7 @@ const SummonedProxyScript := preload("res://mods/etn_coop/net/coop_summoned_prox
 const SettingsScript := preload("res://mods/etn_coop/net/coop_settings.gd")
 const NameTagScript := preload("res://mods/etn_coop/net/coop_name_tag.gd")
 const ItemVisuals := preload("res://mods/etn_coop/net/coop_item_visuals.gd")
+const ItemState := preload("res://mods/etn_coop/net/coop_item_state.gd")
 const MotionDownScript := preload("res://mods/etn_coop/ui/motion_down_screen.gd")
 const ReconnectOverlayScript := preload("res://mods/etn_coop/ui/coop_reconnect_overlay.gd")
 const SnapshotBuffer := preload("res://mods/etn_coop/net/coop_snapshot_buffer.gd")
@@ -27,7 +28,7 @@ const LOBBY_SCENE: String = "res://scenes/main/test_room.tscn"
 const DEFAULT_BATTLE_SCENE: String = "res://scenes/main/main.tscn"
 const MENU_SCENE: String = "res://scenes/main/menu_screen.tscn"
 # 协议/版本握手：不一致直接拒绝。RPC 契约变更时必须递增 PROTOCOL_VERSION。
-const PROTOCOL_VERSION: int = 3
+const PROTOCOL_VERSION: int = 4
 const MOD_VERSION: String = "0.1.10"
 const HELLO_TIMEOUT_MSEC: int = 30000
 # 客机：发出 _client_hello 后等待 _hello_accept 的上限；超时视为握手失败（旧房主/版本不匹配）
@@ -1092,7 +1093,7 @@ func _migrate_peer_state(old_id: int, new_id: int) -> void:
 	for d in [player_scene_by_peer, selected_player_scene_by_peer, player_name_by_peer,
 			support_by_peer, support_mods_by_peer, down_peer_ids, _rescue_progress,
 			_rescue_rescuer_count, player_by_peer_id, player_proxy_by_peer_id, scene_ready_peers,
-			_support_buffed_peers]:
+			_support_buffed_peers, item_ids_by_peer, item_visual_by_peer, item_states_by_peer]:
 		if d.has(old_id):
 			d[new_id] = d[old_id]
 			d.erase(old_id)
@@ -3900,6 +3901,7 @@ func _replace_player_for_peer(peer_id: int, path: String, position: Vector2) -> 
 
 var item_visual_by_peer: Dictionary = {}   # owner_peer -> Array[Node]
 var item_ids_by_peer: Dictionary = {}      # owner_peer -> Array[String]（镜像重生后据此重建视觉）
+var item_states_by_peer: Dictionary = {}   # owner_peer -> 内部道具最近一次显示快照
 
 func _on_local_ability_upgrade_added(upgrade, _current_upgrade) -> void:
 	if not is_lan_game or upgrade == null:
@@ -3912,27 +3914,59 @@ func _on_local_ability_upgrade_added(upgrade, _current_upgrade) -> void:
 # 视觉清单在 CoopItemVisuals（本体无 upgrade→视觉 数据源，故枚举）。
 @rpc("any_peer", "call_remote", "reliable")
 func _remote_item_visual(owner_peer: int, item_id: String) -> void:
+	var visual := _ensure_item_visual(owner_peer, item_id)
+	if visual != null:
+		_apply_cached_item_state(owner_peer, item_id, visual)
+
+
+func _ensure_item_visual(owner_peer: int, item_id: String) -> Node:
 	if owner_peer == multiplayer.get_unique_id():
-		return
-	if not _is_safe_item_id(item_id):
-		return
+		return null
+	if not _is_safe_item_id(item_id) or (ItemVisuals.mount_for(item_id) == "" and not ItemVisuals.is_internal(item_id)):
+		return null
+	if not player_scene_by_peer.has(owner_peer) and not player_by_peer_id.has(owner_peer):
+		return null
+	# 登记早于镜像创建，避免入场/补生期间丢掉已收到的道具。
+	if not item_ids_by_peer.has(owner_peer):
+		item_ids_by_peer[owner_peer] = []
+	if not item_ids_by_peer[owner_peer].has(item_id):
+		item_ids_by_peer[owner_peer].append(item_id)
+	for existing in item_visual_by_peer.get(owner_peer, []):
+		if is_instance_valid(existing) and existing.get_meta("coop_item_id", "") == item_id:
+			return existing
 	var mirror = player_by_peer_id.get(owner_peer)
 	if mirror == null or not is_instance_valid(mirror):
-		return
+		return null
 	var visual: Node = ItemVisuals.build_icon(get_tree(), mirror, item_id)
 	if visual == null:
 		visual = ItemVisuals.build_internal_visual(mirror, item_id)
 	if visual == null:
 		print("[etn_coop] item-visual peer=%d id=%s none" % [owner_peer, item_id])
-		return
+		return null
 	print("[etn_coop] item-visual peer=%d id=%s node=%s" % [owner_peer, item_id, visual.name])
-	if not item_ids_by_peer.has(owner_peer):
-		item_ids_by_peer[owner_peer] = []
-	if not item_ids_by_peer[owner_peer].has(item_id):
-		item_ids_by_peer[owner_peer].append(item_id)
+	visual.set_meta("coop_item_id", item_id)
 	if not item_visual_by_peer.has(owner_peer):
 		item_visual_by_peer[owner_peer] = []
 	item_visual_by_peer[owner_peer].append(visual)
+	return visual
+
+
+func _apply_cached_item_state(peer_id: int, item_id: String, visual: Node) -> void:
+	var state: Dictionary = item_states_by_peer.get(peer_id, {}).get(item_id, {})
+	var driver := visual.get_node_or_null("CoopVisualDriver")
+	if driver != null and not state.is_empty():
+		driver.apply_state(state)
+
+
+func _apply_item_states(peer_id: int, states: Dictionary) -> void:
+	if peer_id == multiplayer.get_unique_id():
+		return
+	item_states_by_peer[peer_id] = ItemState.sanitize(states)
+	# 持续快照也能补建错过获取消息的动态道具；丢包由下次快照恢复。
+	for id in item_states_by_peer[peer_id]:
+		var visual := _ensure_item_visual(peer_id, id)
+		if visual != null:
+			_apply_cached_item_state(peer_id, id, visual)
 
 
 func _clear_item_visuals() -> void:
@@ -3953,6 +3987,7 @@ func _clear_peer_item_visuals(peer_id: int) -> void:
 	if mirror != null and is_instance_valid(mirror):
 		mirror.remove_meta("coop_last_follow_icon")
 	item_ids_by_peer.erase(peer_id)
+	item_states_by_peer.erase(peer_id)
 	var arr = item_visual_by_peer.get(peer_id)
 	if arr == null:
 		return
@@ -3981,11 +4016,9 @@ func _rebuild_peer_item_visuals(peer_id: int) -> void:
 	if mirror.has_meta("coop_last_follow_icon"):
 		mirror.remove_meta("coop_last_follow_icon")
 	for id in ids:
-		var visual: Node = ItemVisuals.build_icon(get_tree(), mirror, str(id))
-		if visual == null:
-			visual = ItemVisuals.build_internal_visual(mirror, str(id))
+		var visual := _ensure_item_visual(peer_id, str(id))
 		if visual != null:
-			item_visual_by_peer[peer_id].append(visual)
+			_apply_cached_item_state(peer_id, str(id), visual)
 
 
 # 重置/换角色后重建所有远端 peer 的道具视觉：不依赖镜像是否被 reset_clear_unit 释放，
@@ -4244,6 +4277,7 @@ func _reset_player_sync() -> void:
 	next_summoned_net_id = 1
 	_clear_item_visuals()
 	item_ids_by_peer.clear()
+	item_states_by_peer.clear()
 	_reset_ako_state()
 	_hide_motion_down()
 	_visual_roots_hooked.clear()
@@ -4600,7 +4634,7 @@ func _send_local_player_state() -> void:
 	elif p.get("velocity") != null and (p.velocity as Vector2).length() > 5.0:
 		state = 1
 	var look: Vector2 = p.global_position + Vector2.RIGHT
-	if p.get("crosshair_pos") != null and p.crosshair_pos != Vector2.ZERO:
+	if p.get("crosshair_pos") is Vector2:
 		look = p.crosshair_pos
 	var hp: int = int(p.stats.hp)
 	var max_hp: int = int(p.stats.max_hp)
@@ -4619,10 +4653,11 @@ func _send_local_player_state() -> void:
 		var h = p.call("get_network_heading_direction")
 		if h is Vector2:
 			heading = h
+	var items: Dictionary = ItemState.capture(p)
 	if multiplayer.is_server():
-		rpc("_apply_player_state", multiplayer.get_unique_id(), pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp)
+		rpc("_apply_player_state", multiplayer.get_unique_id(), pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp, items)
 	else:
-		rpc_id(1, "_server_receive_player_state", pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp)
+		rpc_id(1, "_server_receive_player_state", pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp, items)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -4668,7 +4703,7 @@ func _server_receive_player_state(
 	position: Vector2, velocity: Vector2, look_position: Vector2,
 	hp: int, ammo: int, sprite_y: float = -17.0, state: int = 0,
 	character_state: int = 0, heading: Vector2 = Vector2.ZERO, max_hp: int = -1,
-	t_hp: int = 0, max_t_hp: int = -1
+	t_hp: int = 0, max_t_hp: int = -1, items: Dictionary = {}
 ) -> void:
 	if not multiplayer.is_server():
 		return
@@ -4683,8 +4718,9 @@ func _server_receive_player_state(
 	# 镜像坐标夹回地图内（客机谎报图外坐标会拉仇恨/扰乱；MapBounds 未就绪时原样返回，安全）
 	if MapBounds != null:
 		safe[0] = MapBounds.nearest_inside(safe[0] as Vector2)
-	_apply_player_state(peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11])
-	rpc("_apply_player_state", peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11])
+	var safe_items: Dictionary = ItemState.sanitize(items)
+	_apply_player_state(peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11], safe_items)
+	rpc("_apply_player_state", peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11], safe_items)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -4692,7 +4728,7 @@ func _apply_player_state(
 	peer_id: int, position: Vector2, velocity: Vector2, look_position: Vector2,
 	hp: int, ammo: int, sprite_y: float = -17.0, state: int = 0,
 	character_state: int = 0, heading: Vector2 = Vector2.ZERO, max_hp: int = -1,
-	t_hp: int = 0, max_t_hp: int = -1
+	t_hp: int = 0, max_t_hp: int = -1, items: Dictionary = {}
 ) -> void:
 	# 客户端：收到房主的玩家状态即视为房主存活（战斗期 ~20Hz，比心跳更密）
 	if not multiplayer.is_server():
@@ -4700,6 +4736,7 @@ func _apply_player_state(
 	var proxy: Node = _get_player_proxy(peer_id)
 	if proxy != null and proxy.has_method("apply_state"):
 		proxy.apply_state(position, velocity, look_position, hp, ammo, sprite_y, state, character_state, heading, max_hp, t_hp, max_t_hp)
+	_apply_item_states(peer_id, items)
 
 
 # ---------------- 玩家 ID / 头顶名牌 ----------------

@@ -129,6 +129,7 @@ static func build_internal_visual(mirror: Node, item_id: String) -> Node:
 	var visual: Node = scene.instantiate()
 	# add_child 之前剔除 EquipItem 玩法脚本（其 _ready 会跑 _apply_effect/_setup/信号连接）
 	visual.set_script(null)
+	_prepare_visual_resources(visual)
 	_strip_gameplay(visual)
 	mirror.add_child(visual)
 	var drv: Node = DriverScript.new()
@@ -136,6 +137,28 @@ static func build_internal_visual(mirror: Node, item_id: String) -> Node:
 	visual.add_child(drv)
 	drv.call("setup", mirror, item_id, visual)
 	return visual
+
+
+# 动画副本只允许修改显示；材质/动画必须实例私有，避免串改拥有者的原场景。
+static func _prepare_visual_resources(node: Node) -> void:
+	if node is CanvasItem and node.material != null:
+		node.material = node.material.duplicate()
+	if node is AnimationPlayer:
+		var ap := node as AnimationPlayer
+		var animation_root: Node = ap.get_node(ap.root_node)
+		for library_name in ap.get_animation_library_list():
+			var library := ap.get_animation_library(library_name).duplicate(true) as AnimationLibrary
+			ap.remove_animation_library(library_name)
+			ap.add_animation_library(library_name, library)
+			for animation_name in library.get_animation_list():
+				var animation := library.get_animation(animation_name)
+				for track in range(animation.get_track_count() - 1, -1, -1):
+					var target := animation_root.get_node_or_null(NodePath(animation.track_get_path(track).get_concatenated_names()))
+					if animation.track_get_type(track) in [Animation.TYPE_METHOD, Animation.TYPE_AUDIO] \
+							or target is CollisionObject2D or target is CollisionShape2D or target is Timer or target is Label:
+						animation.remove_track(track)
+	for child in node.get_children():
+		_prepare_visual_resources(child)
 
 
 static func _ensure_marker(mirror: Node, mount: String) -> Node:
@@ -191,6 +214,7 @@ static func _strip_gameplay(node: Node) -> void:
 		if child is CollisionShape2D:
 			child.set_deferred("disabled", true)
 		if child is Timer:
+			child.autostart = false
 			child.stop()
 			child.set_process(false)
 		if child is Label:

@@ -2131,3 +2131,15 @@
 - Notes / 说明: ①「下拉 + 手输」用 Godot 原生 `PROPERTY_HINT_ENUM_SUGGESTION`（`@export_custom`）——`@export_enum` 只能下拉、不能输入（`core/object/property_info.h` 列有 `PROPERTY_HINT_ENUM_SUGGESTION`）。② `_scan_content()`（`mod_manager.gd:87`）早于 `_run_entry_scripts`（`:90`），mod 在 entry 里注册的类型扫描期不可见 → 合成商店卡只存 `weapon_type` code，名称/图标延迟到 `character_shop_card.get_card()` 用注册表解析（卡片自带非空优先）。③ `register_weapon_type` 的 code 仅允许字母/数字/下划线/短横线（防路径穿越），图标只从“已注册 `icon_path`”加载；内置图标目录固定 `res://ui/weapon/<code>_icon.png`。④ 未知类型：名称回退原 code、图标 null，不崩。⑤ 编辑器 inspection：`@export_custom` 不做语法校验，但 hint 简单无碍。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
+
+### [Git/Scope] 当前分支仅保留远端道具动态表现同步与重复外观修复
+- Evidence / 证据: 用户 2026-10-14 明确要求；本地备份分支 `backup/before-items-only-20261014`；`tests/coop_item_visual_checks.gd`。
+- Notes / 说明: 本轮以 `upstream/main` 的 `78ed5ad` 重建分支，只保留菜刀瞄准回填、内部道具显示快照/驱动、外观去重/补建/重建、必要的道具缓存迁移、协议 v4 及专用回归和说明。此前本体存档、伤害、Mod 生命周期、设置页签、中继加固、通用联机拓展及分享标签等改动保存在备份分支，不属于本分支交付范围；主线已有内容保留。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Coop/Visual] 纯视觉道具动画必须隔离资源并过滤玩法轨道
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_item_visuals.gd:_prepare_visual_resources`、`coop_visual_driver.gd:apply_state`；`tests/coop_item_visual_checks.gd:_item_visual_case`。
+- Notes / 说明: 原场景动画可能重新启用碰撞；只在生成时禁用形状不足以隔离远端伤害。复制材质与动画库后过滤方法/音频及碰撞/计时器/Label 轨道，避免 seek 改动拥有者的共享材质。远端绕行和护盾/触发动画来自拥有者快照，不能依赖已剥离的 EquipItem 脚本。
+- Source / 来源: code
+- Date / 日期: 2026-10-14

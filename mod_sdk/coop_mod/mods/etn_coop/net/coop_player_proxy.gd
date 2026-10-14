@@ -126,6 +126,8 @@ func apply_state(
 	target_position = position
 	target_velocity = velocity
 	target_look_position = look_position
+	if not is_local_player and is_instance_valid(player) and player.get("crosshair_pos") is Vector2:
+		player.crosshair_pos = look_position
 	target_sprite_y = sprite_y
 	target_state = state
 	target_character_state = character_state
