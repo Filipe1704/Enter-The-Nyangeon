@@ -21,7 +21,7 @@ func kick_start():
 			SoundManager.play_sfx("Swing1")
 			collision_shape_2d.disabled = false
 			player.kick_anim.play("kick_anim")
-			ExtensionHooks.notify(ExtensionHooks.on_player_melee, [player, "kick_anim"])
+			ExtensionHooks.notify_named("on_player_melee", [player, "kick_anim"])
 			gpu_2d.restart()
 			timer_2.start()
 		timer.start()
@@ -46,7 +46,7 @@ func apply_melee_damage_data():
 func add_damage_data():
 	if !body_group.is_empty():
 		SoundManager.play_sfx("HurtSounds2")
-		ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", global_position])
+		ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", global_position])
 		for i in body_group:
 			if i == null or not is_instance_valid(i):
 				continue

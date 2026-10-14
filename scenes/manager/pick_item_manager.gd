@@ -49,7 +49,7 @@ func coin_add():
 	coin_value = 0
 
 func add_medical_kit(spawn_position: Vector2):
-	if ExtensionHooks.intercept(ExtensionHooks.medkit_spawn_gate, [self, spawn_position]):
+	if ExtensionHooks.intercept_named("medkit_spawn_gate", [self, spawn_position]):
 		return
 	player = PlayerRef.ensure(self, player)
 	if spawn_position == Vector2.ZERO and spawn_at_player and player != null:
@@ -62,12 +62,12 @@ func add_medical_kit(spawn_position: Vector2):
 		var ins = medical_kit.instantiate()
 		ins.global_position = rand_position
 		get_tree().get_first_node_in_group("CoinRoot").add_child(ins)
-		ExtensionHooks.notify(ExtensionHooks.on_medkit_spawned, [ins])
+		ExtensionHooks.notify_named("on_medkit_spawned", [ins])
 	else:
 		var ins = medical_kit.instantiate()
 		ins.global_position = spawn_position
 		get_tree().get_first_node_in_group("CoinRoot").add_child(ins)
-		ExtensionHooks.notify(ExtensionHooks.on_medkit_spawned, [ins])
+		ExtensionHooks.notify_named("on_medkit_spawned", [ins])
 
 func medical_kit_spawn():
 	player = PlayerRef.ensure(self, player)

@@ -7,6 +7,8 @@ extends Node
 ## 跨脚本访问：const Cooper = preload(...); Cooper.instance。
 
 const TransportScript := preload("res://mods/etn_coop/net/coop_network_transport.gd")
+const ExtensionsScript := preload("res://mods/etn_coop/net/coop_extensions.gd")
+var extensions = ExtensionsScript.new()
 const PlayerProxyScript := preload("res://mods/etn_coop/net/coop_player_proxy.gd")
 const EnemyProxyScript := preload("res://mods/etn_coop/net/coop_enemy_proxy.gd")
 const VisualSyncScript := preload("res://mods/etn_coop/net/coop_visual_sync.gd")
@@ -27,7 +29,7 @@ const LOBBY_SCENE: String = "res://scenes/main/test_room.tscn"
 const DEFAULT_BATTLE_SCENE: String = "res://scenes/main/main.tscn"
 const MENU_SCENE: String = "res://scenes/main/menu_screen.tscn"
 # 协议/版本握手：不一致直接拒绝。RPC 契约变更时必须递增 PROTOCOL_VERSION。
-const PROTOCOL_VERSION: int = 3
+const PROTOCOL_VERSION: int = 4
 const MOD_VERSION: String = "0.1.10"
 const HELLO_TIMEOUT_MSEC: int = 30000
 # 客机：发出 _client_hello 后等待 _hello_accept 的上限；超时视为握手失败（旧房主/版本不匹配）
@@ -367,6 +369,23 @@ func _clear_peer_rate(peer: int) -> void:
 			_rpc_bucket.erase(k)
 
 
+# 把 old peer 的限流记录改键到 new peer：重连换 id 后配额延续，
+# 否则新 id 配额归零等于「重连即绕过限流」，旧键还会一直泄漏。
+func _migrate_peer_rate(old_id: int, new_id: int) -> void:
+	var old_prefix: String = "%d|" % old_id
+	var new_prefix: String = "%d|" % new_id
+	for k in _rpc_rate.keys():
+		var ks: String = str(k)
+		if ks.begins_with(old_prefix):
+			_rpc_rate[new_prefix + ks.substr(old_prefix.length())] = _rpc_rate[k]
+			_rpc_rate.erase(k)
+	for k in _rpc_bucket.keys():
+		var ks: String = str(k)
+		if ks.begins_with(old_prefix):
+			_rpc_bucket[new_prefix + ks.substr(old_prefix.length())] = _rpc_bucket[k]
+			_rpc_bucket.erase(k)
+
+
 # 统计某 peer 当前拥有的召唤物镜像数（用于每 peer 召唤上限）
 func _count_summons_owned_by(peer: int) -> int:
 	var n: int = 0
@@ -410,6 +429,9 @@ func _sanitize_for_authority(cfg: Dictionary) -> Dictionary:
 	if raw_damage is int or raw_damage is float:
 		dmg = clampi(int(raw_damage), 0, MAX_NET_DAMAGE)
 	out["damage"] = dmg
+	var resolved = cfg.get("resolved_damage", -1)
+	if (resolved is int or resolved is float) and is_finite(float(resolved)) and resolved >= 0:
+		out["resolved_damage"] = clampi(int(resolved), 0, MAX_NET_DAMAGE)
 	out["crit"] = bool(cfg.get("crit", false))
 	var raw_kb = cfg.get("knockback", 0)
 	var kb: float = 0.0
@@ -464,7 +486,6 @@ func _forget_enemy_net_id(net_id: int) -> void:
 	enemy_proxy_by_net_id.erase(net_id)
 	_enemy_snap_cache.erase(net_id)
 	_enemy_snap_next_tick.erase(net_id)
-	_enemy_pos_history.erase(net_id)
 	last_attacker_by_net_id.erase(net_id)
 
 
@@ -599,16 +620,18 @@ var _credited_pyroxenes: Dictionary = {}  # 已结算青辉石的 share key（ne
 const CHAT_LOG_MAX: int = 200
 const CHAT_TEXT_MAX: int = 120
 var chat_log: Array = []          # 元素 {peer_id:int, name:String, text:String}
-# 命中轻量校验：host 记录敌人位置历史（回滚合理性），保持客户端权威、仅拦明显异常
-const HIT_VALIDATE_MAX_DIST: float = 2400.0
-const HIT_VALIDATE_TOL: float = 200.0
-const HIT_HISTORY_MAX: int = 16
-var _enemy_pos_history: Dictionary = {}       # net_id -> Array[{t,p}]
+# 命中校验只保留「目标存活」这一玩法正确性检查；位置回滚与超距属反作弊，
+# 已按好友房默认可信的信任模型移除（见 docs/LEARNINGS.md「联机信任模型」）。
 var net_hits_accepted: int = 0
 var net_hits_rejected: int = 0
 
 # ---------------- 子弹/视觉同步状态 ----------------
 const BULLET_BATCH_LIMIT: int = 128
+# 单帧待发纯表现队列上限：洪泛（Boss 弹幕/连环爆炸）时丢弃新条目，
+# 避免发送侧无限堆积抢占带宽（接收侧另有令牌桶限流）。
+const PENDING_VISUAL_MAX: int = 256
+const PENDING_VISUAL_RELIABLE_MAX: int = 512   # 关键投射物，容量放宽但仍封顶
+const PENDING_EFFECT_MAX: int = 256
 var _visual = VisualSyncScript.new()
 var _pending_visual: Array = []
 var _pending_visual_reliable: Array = []   # 一次性关键投射物（打 coop_reliable_visual meta 的）
@@ -748,6 +771,12 @@ var team_game_over_forced: bool = false
 var boss_events_received: int = 0
 # 升级页点「继续」后本机是否已把过场推进到黑屏并保持（true → 本体跳过前半封面，只播后半揭示）
 var _round_upgrade_hold: bool = false
+var _round_upgrade_cover_ready := false
+var _session_generation := 0
+# install_hooks 幂等守卫：重复调用（测试/热重载）会让 40+ 钩子与 22 个 GameEvents 回调翻倍
+var _hooks_installed: bool = false
+var coin_multiplier_by_peer: Dictionary = {}
+var _last_sent_coin_multiplier := -1.0
 # 支援 EX 光环：本机光环已转交 buff 的远端玩家（peer_id -> buff.resource_path）
 var _support_buffed_peers: Dictionary = {}
 # 远端支援 EX 光环视觉代理（owner_peer -> Node）
@@ -784,6 +813,8 @@ var _ako_chain_visuals: Dictionary = {}    # "peer|index" -> {"node", "owner", "
 
 
 func _ready() -> void:
+	add_child(extensions)
+	extensions.setup(self)
 	# 网络管理器常驻：选人阶段会全局暂停世界，本节点需在暂停下继续处理 RPC/握手
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	settings.load_settings()
@@ -819,6 +850,8 @@ func _notification(what: int) -> void:
 			if transport != null or is_lan_game or is_relay:
 				close_connection(true)
 		NOTIFICATION_EXIT_TREE, NOTIFICATION_PREDELETE:
+			if is_instance_valid(extensions):
+				extensions.close()
 			# 退出期只做最小释放：不跑完整复位（避免 emit/queue_free 等在销毁路径上的副作用）
 			if transport != null and transport.peer != null:
 				transport.peer.close()
@@ -831,6 +864,11 @@ func _notification(what: int) -> void:
 func _on_peer_connected(id: int) -> void:
 	print("[etn_coop] peer connected: %d (total=%d)" % [id, multiplayer.get_peers().size()])
 	if not multiplayer.is_server():
+		return
+	# 未握手连接限流：正常连接会很快被 _client_hello 清出 _pending_hello，
+	# 若已积压到房间容量，说明有人在占位不发 hello → 直接断开新连接，避免挤占 ENet 槽
+	if _pending_hello.size() >= MAX_PLAYERS:
+		_kick_peer_deferred(id)
 		return
 	# 等版本/协议握手通过后再接入（见 _client_hello / _accept_peer）
 	_pending_hello[id] = Time.get_ticks_msec()
@@ -907,6 +945,7 @@ func _on_rejoin_settled() -> void:
 		print("[etn_coop] rejoin settled -> release deferred round_end")
 		GameEvents.emit_round_end()
 	_maybe_finish_round_upgrade()
+	_maybe_finish_select()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -927,6 +966,7 @@ func _cleanup_peer(id: int) -> void:
 	player_scene_by_peer.erase(id)
 	scene_ready_peers.erase(id)
 	lobby_ready_by_peer.erase(id)
+	coin_multiplier_by_peer.erase(id)
 	support_by_peer.erase(id)
 	support_mods_by_peer.erase(id)
 	_support_buffed_peers.erase(id)
@@ -1048,13 +1088,33 @@ func _client_hello(proto: int, mod_ver: String, game_ver: String, token: String 
 		_kick_peer_deferred(sender)
 		return
 	token = token.substr(0, 64)
+	var old_id: int = _old_peer_for_rejoin(sender, token)
+	# 选人开始后只允许原身份恢复，不能把新加入者计入本局屏障。
+	if old_id <= 0 and _flow_phase in [FlowPhase.SELECT, FlowPhase.ALL_READY, FlowPhase.BATTLE]:
+		_pending_hello.erase(sender)
+		rpc_id(sender, "_hello_reject", "session_started")
+		_kick_peer_deferred(sender)
+		return
 	_pending_hello.erase(sender)
 	_handshaked_peers[sender] = true
-	var old_id: int = _old_peer_for_rejoin(sender, token)
-	if old_id > 0 and old_id != sender:
-		_migrate_peer_state(old_id, sender)
-	elif old_id == sender:
-		_reconnecting_peers.erase(sender)
+	if old_id > 0:
+		if old_id != sender:
+			_migrate_peer_state(old_id, sender)
+		else:
+			_reconnecting_peers.erase(sender)
+		var restored: Dictionary = {
+			"name": player_name_by_peer.get(sender, ""),
+			"support": support_by_peer.get(sender, ""),
+			"support_mods": support_mods_by_peer.get(sender, {}),
+			"down": down_peer_ids.get(sender, false),
+			"items": item_ids_by_peer.get(sender, []),
+		}
+		rpc("_remote_peer_rejoined", old_id, sender, player_scene_by_peer, restored)
+		# 其他客机的断线清理已释放该玩家的召唤物，必须补生而非只改房主的归属表。
+		for other in multiplayer.get_peers():
+			if other != sender:
+				_send_existing_summons_to_peer(int(other))
+		_broadcast_rescue_progress()
 	if token != "":
 		_peer_token[sender] = token
 		_token_peer[token] = sender
@@ -1087,12 +1147,18 @@ func _old_peer_for_rejoin(sender: int, token: String) -> int:
 
 # host：把旧 peer_id 的全部状态迁移到重连后的新 peer_id（方案 B：新 id + host 迁移）。
 func _migrate_peer_state(old_id: int, new_id: int) -> void:
+	if old_id == new_id:
+		return
 	print("[etn_coop] migrate peer state %d -> %d" % [old_id, new_id])
+	# 限流记录随 peer 迁移：否则重连换 id 后配额归零（等于绕过限流），旧键还会泄漏
+	_migrate_peer_rate(old_id, new_id)
 	# 1:1 字典键迁移
 	for d in [player_scene_by_peer, selected_player_scene_by_peer, player_name_by_peer,
 			support_by_peer, support_mods_by_peer, down_peer_ids, _rescue_progress,
 			_rescue_rescuer_count, player_by_peer_id, player_proxy_by_peer_id, scene_ready_peers,
-			_support_buffed_peers]:
+			_support_buffed_peers, _support_auras, round_upgrade_ready_peers,
+			select_ready_by_peer, lobby_ready_by_peer, coin_multiplier_by_peer,
+			item_ids_by_peer, item_visual_by_peer]:
 		if d.has(old_id):
 			d[new_id] = d[old_id]
 			d.erase(old_id)
@@ -1107,6 +1173,12 @@ func _migrate_peer_state(old_id: int, new_id: int) -> void:
 	for net_id in summoned_owner_by_net_id.keys():
 		if int(summoned_owner_by_net_id[net_id]) == old_id:
 			summoned_owner_by_net_id[net_id] = new_id
+			var summoned = summoned_by_net_id.get(net_id)
+			if summoned != null and is_instance_valid(summoned):
+				summoned.set_meta("owner_peer_id", new_id)
+			var summon_proxy = summoned_proxy_by_net_id.get(net_id)
+			if summon_proxy != null and is_instance_valid(summon_proxy):
+				summon_proxy.set("owner_peer_id", new_id)
 	# 镜像 proxy 改绑新 id
 	var proxy = player_proxy_by_peer_id.get(new_id)
 	if proxy != null and is_instance_valid(proxy):
@@ -1119,6 +1191,23 @@ func _migrate_peer_state(old_id: int, new_id: int) -> void:
 	_handshaked_peers.erase(old_id)
 	if _peer_token.has(old_id):
 		_peer_token.erase(old_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_peer_rejoined(old_id: int, new_id: int, roster: Dictionary, restored: Dictionary = {}) -> void:
+	if multiplayer.is_server():
+		return
+	_migrate_peer_state(old_id, new_id)
+	player_name_by_peer[new_id] = str(restored.get("name", ""))
+	support_by_peer[new_id] = str(restored.get("support", ""))
+	support_mods_by_peer[new_id] = restored.get("support_mods", {}).duplicate()
+	if bool(restored.get("down", false)):
+		down_peer_ids[new_id] = true
+	else:
+		down_peer_ids.erase(new_id)
+	item_ids_by_peer[new_id] = restored.get("items", []).duplicate()
+	_client_sync_roster(roster)
+	_remote_player_down_changed(new_id, bool(restored.get("down", false)))
 
 
 # 版本比较：忽略 `-test` 等后缀，仅比数字段（测试版/正式版同号视为同版本、可互通）。
@@ -1152,8 +1241,9 @@ func _hello_reject(reason: String = "") -> void:
 	_hello_sent_msec = 0
 	_hello_acked = false
 	_relay_connect_in_flight = false
-	connection_status_changed.emit("coop_status_host_version_old")
-	_show_session_closed_notice("coop_version_mismatch")
+	var notice: String = "coop_session_started" if reason == "session_started" else "coop_version_mismatch"
+	connection_status_changed.emit("coop_session_started" if reason == "session_started" else "coop_status_host_version_old")
+	_show_session_closed_notice(notice)
 	if _reconnecting:
 		_abort_reconnect_to_menu()
 		return
@@ -1202,8 +1292,10 @@ func _server_sender_ok() -> bool:
 
 # 延迟踢除：给可靠 reject 包留出送达时间（立即 disconnect 会丢包）
 func _kick_peer_deferred(id: int) -> void:
+	var generation: int = _session_generation
+	var source_peer = multiplayer.multiplayer_peer
 	await get_tree().create_timer(0.5).timeout
-	if multiplayer.multiplayer_peer == null:
+	if generation != _session_generation or multiplayer.multiplayer_peer != source_peer or source_peer == null:
 		return
 	var peer = multiplayer.multiplayer_peer
 	if peer != null and peer.has_method("disconnect_peer"):
@@ -1319,6 +1411,10 @@ func dev_freeze_probe() -> Dictionary:
 
 # 仅 LAN 主机播报；其它情形停止
 func _update_lan_advertise() -> void:
+	if extensions.is_active():
+		if _discovery != null:
+			_discovery.call("advertise_stop")
+		return
 	if _discovery == null:
 		return
 	if is_lan_game and not is_relay and multiplayer.is_server() and multiplayer.multiplayer_peer != null:
@@ -1486,11 +1582,12 @@ func _schedule_host_left_return() -> void:
 # 房主离开统一入口：解除暂停 → 提示 → 过场 → 回主菜单（LAN/Relay 通用）
 func _handle_host_left() -> void:
 	var tree := get_tree()
+	var generation: int = _session_generation
 	if tree == null:
 		return
 	# 等一帧脱离 multiplayer 信号回调栈，避免在 poll 内释放传输崩溃
 	await tree.process_frame
-	if get_tree() == null:
+	if get_tree() == null or generation != _session_generation:
 		return
 	print("[etn_coop] host session closed -> return to menu")
 	# 解除选人/升级/暂停菜单造成的暂停与受控（否则转场后仍卡住）
@@ -1498,11 +1595,14 @@ func _handle_host_left() -> void:
 	tree.paused = false
 	# 立即清理传输与 run state，避免继续向已消失的房主发包
 	close_connection(true)
+	generation = _session_generation
 	_show_session_closed_notice()
 	# 让提示停留一会儿再转场（create_timer 默认 process_always，暂停下也会到期）
 	await tree.create_timer(1.5).timeout
+	if generation != _session_generation:
+		return
 	await _play_scene_transition_start()
-	if get_tree() == null:
+	if get_tree() == null or generation != _session_generation:
 		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	GameEvents.change_scene(MENU_SCENE, "")
@@ -1539,6 +1639,8 @@ func _begin_reconnect() -> void:
 
 # 仅释放传输，不复位 run state（重连期间必须保留本地场景/升级/金币）。
 func _release_transport_for_reconnect() -> void:
+	if not _reconnecting:
+		return
 	if transport != null and transport.peer != null:
 		transport.peer.close()
 	transport = null
@@ -1599,6 +1701,9 @@ func _finish_reconnect() -> void:
 	_reconnect_attempt = 0
 	_show_reconnect_overlay(false)
 	_freeze_local_player_for_reconnect(false)
+	_last_sent_coin_multiplier = -1.0
+	if _round_upgrade_hold and _round_upgrade_cover_ready:
+		_report_round_upgrade_ready()
 	print("[etn_coop] reconnected")
 	connection_status_changed.emit("coop_status_reconnected")
 
@@ -1703,6 +1808,9 @@ func _enemy_spawn_count_scale(round_num: int, max_round: float) -> float:
 # ---------------- 钩子接线 ----------------
 
 func install_hooks() -> void:
+	if _hooks_installed:
+		return
+	_hooks_installed = true
 	ExtensionHooks.change_scene_gate = Callable(self, "_gate_change_scene")
 	ExtensionHooks.first_round_start_gate = Callable(self, "_gate_first_round")
 	ExtensionHooks.enemy_damage_interceptor = Callable(self, "_intercept_enemy_damage")
@@ -1929,15 +2037,16 @@ func _gate_projectile_self_hit(bullet: Node, hb) -> bool:
 	data.owner_peer = multiplayer.get_unique_id()
 	var net_id: int = int(enemy.get_meta("net_id"))
 	# 即时预测：闪白+飘字+镜像血条下调 + 预测死亡（不等 host 回传）
-	var predicted: int = _get_predicted_enemy_damage(enemy, data.base_damage)
+	var hit_cfg: Dictionary = _prepare_enemy_hit(enemy, data)
+	var predicted: int = int(hit_cfg.get("resolved_damage", 0))
 	_replay_hit_feedback(enemy, data, predicted, false)
 	_predict_enemy_death(enemy, predicted, net_id)
 	# 本地回放命中闭包（子弹生命周期 + player.damage_dealt；host 转发伤害无闭包，不会重复）
 	for cb in data.on_damage_dealt:
 		if cb is Callable:
-			cb.call(enemy, data.base_damage)
+			cb.call(enemy, predicted)
 	var victim_pos: Vector2 = (enemy as Node2D).global_position if enemy is Node2D else Vector2.ZERO
-	rpc_id(1, "_server_enemy_hit", net_id, _damage_to_dict(data), victim_pos)
+	rpc_id(1, "_server_enemy_hit", net_id, hit_cfg, victim_pos)
 	return true
 
 
@@ -2138,16 +2247,17 @@ func _intercept_enemy_damage(damage_data, owner) -> bool:
 		return false
 	var net_id: int = int(owner.get_meta("net_id"))
 	d.owner_peer = multiplayer.get_unique_id()
-	var predicted: int = _get_predicted_enemy_damage(owner, d.base_damage)
+	var hit_cfg: Dictionary = _prepare_enemy_hit(owner, d)
+	var predicted: int = int(hit_cfg.get("resolved_damage", 0))
 	_replay_hit_feedback(owner, d, predicted, false)
 	_predict_enemy_death(owner, predicted, net_id)
 	# 本地回放命中闭包（如 poison_ring 的 apply_buff 在此闭包内；host 转发伤害无闭包，不会重复）
 	for cb in d.on_damage_dealt:
 		if cb is Callable:
-			cb.call(owner, d.base_damage)
+			cb.call(owner, predicted)
 	# 附带客户端视角的受害者位置，供 host 做轻量回滚合理性校验
 	var victim_pos: Vector2 = (owner as Node2D).global_position if owner is Node2D else Vector2.ZERO
-	rpc_id(1, "_server_enemy_hit", net_id, _damage_to_dict(d), victim_pos)
+	rpc_id(1, "_server_enemy_hit", net_id, hit_cfg, victim_pos)
 	return true
 
 
@@ -2165,7 +2275,8 @@ func _handle_part_hit(part: Node, data) -> void:
 	if not _has_peer():
 		return
 	d.owner_peer = multiplayer.get_unique_id()
-	var predicted: int = _get_predicted_enemy_damage(part, d.base_damage)
+	var hit_cfg: Dictionary = _prepare_enemy_hit(part, d)
+	var predicted: int = int(hit_cfg.get("resolved_damage", 0))
 	_replay_hit_feedback(part, d, predicted, false)
 	var pstats = part.get("stats")
 	if pstats != null:
@@ -2181,8 +2292,8 @@ func _handle_part_hit(part: Node, data) -> void:
 				part.call("idle_state")
 	for cb in d.on_damage_dealt:
 		if cb is Callable:
-			cb.call(part, d.base_damage)
-	rpc_id(1, "_server_enemy_part_hit", int(part.get_meta("coop_owner_net_id")), int(part.get_meta("coop_part_index", -1)), _damage_to_dict(d))
+			cb.call(part, predicted)
+	rpc_id(1, "_server_enemy_part_hit", int(part.get_meta("coop_owner_net_id")), int(part.get_meta("coop_part_index", -1)), hit_cfg)
 
 
 # host：把客机对部件的命中应用到真实部件的 HealthComponent（不抑制 → host 原生闪白/受击音 + damage_taken）
@@ -2204,11 +2315,12 @@ func _server_enemy_part_hit(net_id: int, part_index: int, cfg: Dictionary) -> vo
 	var component: Node = _health_component_of(part)
 	if component == null or not component.has_method("take_damage"):
 		return
-	var d: DamageData = DamageData.fill(null, _sanitize_for_authority(cfg))
+	var safe_cfg: Dictionary = _sanitize_for_authority(cfg)
+	var d: DamageData = DamageData.fill(null, safe_cfg)
 	if d == null:
 		return
 	d.owner_peer = multiplayer.get_remote_sender_id()
-	component.take_damage(d, true, false)
+	component.take_damage(d, true, false, int(safe_cfg.get("resolved_damage", -1)))
 
 
 # host：连接敌人各部件的 damage_taken → 广播部件 hp（host 自身 + 客机转发的唯一广播点）
@@ -2326,12 +2438,13 @@ func _gate_coin_pickup(coin, player, coin_mult) -> bool:
 		return false
 	if coin == null or player == null or coin.get("coin") == null:
 		return false
-	var value: int = int(ceil(float(coin.coin) * float(coin_mult)))
+	var value: int = _coin_value(int(coin.coin), float(coin_mult))
 	var pos: Vector2 = coin.global_position
 	var net_id: int = int(coin.get_meta("net_id")) if coin.has_meta("net_id") else -1
 	if multiplayer.is_server():
 		_do_shared_coin_pickup(net_id, value, pos, coin)
 	else:
+		_sync_coin_multiplier(float(coin_mult))
 		rpc_id(1, "_server_pickup_coin", net_id, value, pos)
 	return true
 
@@ -2383,6 +2496,7 @@ func _leave_session_local() -> void:
 func _on_round_start() -> void:
 	round_upgrade_ready_peers.clear()
 	_round_upgrade_hold = false
+	_round_upgrade_cover_ready = false
 	_credited_pyroxenes.clear()
 	_clear_round_visuals()
 
@@ -2874,6 +2988,7 @@ func _gate_round_upgrade_end() -> bool:
 	# （保证所有端封面都完成再统一放后半，同时消除 gate 内同步重入 force_round_upgrade_end）
 	if not _round_upgrade_hold:
 		_round_upgrade_hold = true
+		_round_upgrade_cover_ready = false
 		var t = _transition()
 		if t != null and t.has_method("play_left_start"):
 			t.call("play_left_start")
@@ -2893,6 +3008,7 @@ func _gate_round_upgrade_cover_hold() -> bool:
 # 本体已消费「已封面」状态（在本体播后半揭示前回调），此处复位以便下一回合正常
 func _on_round_upgrade_cover_consumed() -> void:
 	_round_upgrade_hold = false
+	_round_upgrade_cover_ready = false
 
 
 # 全员就绪 / 收到 host 广播的推进 → 隐藏等待层（此时屏幕仍被过场深色板盖住，随后本体揭示）
@@ -2903,10 +3019,20 @@ func _on_round_upgrade_end_local() -> void:
 
 # 等前半过场到黑屏（left_end_start 在 t=0.5 发出），再显示等待层并上报本机就绪
 func _cover_then_report_ready() -> void:
+	var generation: int = _session_generation
 	var t = _transition()
 	if t != null:
 		await t.left_end_start
-	if not is_lan_game or not _round_upgrade_hold:
+	if generation != _session_generation or not is_lan_game or not _round_upgrade_hold:
+		return
+	_round_upgrade_cover_ready = true
+	_report_round_upgrade_ready()
+
+
+func _report_round_upgrade_ready() -> void:
+	if not _net_connected() or not _round_upgrade_hold or not _round_upgrade_cover_ready:
+		return
+	if not multiplayer.is_server() and not _hello_acked:
 		return
 	round_wait_show.emit()
 	var pid: int = multiplayer.get_unique_id()
@@ -2943,7 +3069,7 @@ func _on_projectile_spawned(bullet: Node, _owner: Node, _source_faction: int) ->
 		# 含 network_get_beam_state 的持续光束（player_laser_beam）登记进跟随通道
 		if bullet.has_method("network_get_beam_state"):
 			_follow_nodes[effect_id] = bullet
-		_pending_effects.append({
+		_queue_effect({
 			"s": scene_path,
 			"p": bullet.global_position,
 			"r": bullet.global_rotation,
@@ -2984,10 +3110,7 @@ func _on_projectile_spawned(bullet: Node, _owner: Node, _source_faction: int) ->
 		"m": "active_state",
 	}
 	# 一次性关键投射物（由生成方打 coop_reliable_visual meta）→ 可靠通道
-	if bullet.has_meta("coop_reliable_visual"):
-		_pending_visual_reliable.append(entry)
-	else:
-		_pending_visual.append(entry)
+	_queue_visual(entry, bullet.has_meta("coop_reliable_visual"))
 
 
 func _root_group_of(node: Node) -> String:
@@ -3099,7 +3222,7 @@ func _on_any_projectile_hit(bullet: Node, _hit_body: Node) -> void:
 		scene_path = "res://scenes/bullet/bullet_smoke_2.tscn"
 	else:
 		return
-	_pending_effects.append({
+	_queue_effect({
 		"s": scene_path,
 		"p": bullet.global_position,
 		"r": 0.0,
@@ -3115,7 +3238,7 @@ func _on_explosion_effect(position: Vector2, is_big: bool) -> void:
 	if not is_lan_game:
 		return
 	var scene_path: String = "res://script/explosion.tscn" if is_big else "res://script/small_explosion.tscn"
-	_pending_effects.append({
+	_queue_effect({
 		"s": scene_path,
 		"p": position,
 		"r": 0.0,
@@ -3872,7 +3995,8 @@ func _replace_player_for_peer(peer_id: int, path: String, position: Vector2) -> 
 		p.set_meta("peer_id", peer_id)
 		root.add_child(p)
 		if p is Node2D:
-			(p as Node2D).global_position = position
+			# 与玩家状态同步路径一致地夹回地图内，避免换人/重连用图外坐标瞬移
+			(p as Node2D).global_position = MapBounds.nearest_inside(position)
 		player_scene_by_peer[peer_id] = path
 		_ensure_local_proxy(p)
 		_attach_name_tag(p, peer_id)
@@ -4105,7 +4229,15 @@ func _on_visual_root_child_entered(child: Node) -> void:
 	if not is_lan_game:
 		return
 	# 延迟一帧：等 ProjectileSpawner 的 _on_projectile_spawned 打完 _coop_ps_broadcast 标记再判定
-	_maybe_broadcast_visual_node.call_deferred(child)
+	_maybe_broadcast_visual_id.call_deferred(child.get_instance_id(), _session_generation)
+
+
+func _maybe_broadcast_visual_id(instance_id: int, generation: int) -> void:
+	if generation != _session_generation:
+		return
+	var child := instance_from_id(instance_id) as Node
+	if child != null and is_instance_valid(child) and child.is_inside_tree():
+		_maybe_broadcast_visual_node(child)
 
 func _layer_group_of(par: Node) -> String:
 	for grp in ["SELayer", "ForegroundLayer", "BulletRoot", "EquipLayer", "FloorLayer", "PlayerRoot", "CoinRoot"]:
@@ -4293,6 +4425,9 @@ func _reset_run_state() -> void:
 	round_upgrade_ready_peers.clear()
 	_round_upgrade_hold = false
 	round_wait_hide.emit()
+	_round_upgrade_cover_ready = false
+	coin_multiplier_by_peer.clear()
+	_last_sent_coin_multiplier = -1.0
 	_set_select_pause(false)
 	_respawn_token += 1
 	_diag_pending.clear()
@@ -4334,7 +4469,11 @@ func _reset_run_state() -> void:
 
 # 返回标题后延迟关闭连接（先让 return_to_menu/断线包发出，再释放 ENet/端口）
 func _close_transport_soon() -> void:
+	var generation: int = _session_generation
+	var source_peer = multiplayer.multiplayer_peer
 	await get_tree().create_timer(0.3).timeout
+	if generation != _session_generation or multiplayer.multiplayer_peer != source_peer:
+		return
 	if transport != null or is_lan_game or is_relay:
 		close_connection(true)
 
@@ -4603,6 +4742,7 @@ func _send_local_player_state() -> void:
 	if p.get("crosshair_pos") != null and p.crosshair_pos != Vector2.ZERO:
 		look = p.crosshair_pos
 	var hp: int = int(p.stats.hp)
+	_sync_coin_multiplier(float(p.stats.coin_mult))
 	var max_hp: int = int(p.stats.max_hp)
 	var t_hp: int = int(p.stats.t_hp)
 	var max_t_hp: int = int(p.stats.max_t_hp)
@@ -5585,7 +5725,6 @@ func _send_enemy_snapshot() -> void:
 			hp = int(enemy.stats.hp)
 		var pos: Vector2 = enemy.global_position
 		var vel: Vector2 = enemy.velocity if enemy.get("velocity") != null else Vector2.ZERO
-		_record_enemy_pos(net_id, now, pos)
 		var st: int = -1
 		var sm = enemy.get("state_machine")
 		if sm != null and is_instance_valid(sm):
@@ -5684,9 +5823,17 @@ func _reset_enemy_sync() -> void:
 	_snapshot_timer = 0.0
 	_enemy_snap_cache.clear()
 	last_attacker_by_net_id.clear()
-	_enemy_pos_history.clear()
 	net_hits_accepted = 0
 	net_hits_rejected = 0
+
+
+# 采集发生在预测扣血/命中闭包之前，避免满血条件、距离与对象池状态被后续动作改变。
+func _prepare_enemy_hit(enemy: Node, data: DamageData) -> Dictionary:
+	var component: Node = _health_component_of(enemy)
+	var resolved: int = int(component.resolve_damage(data)) if component != null else 0
+	var cfg: Dictionary = _damage_to_dict(data)
+	cfg["resolved_damage"] = resolved
+	return cfg
 
 
 func _damage_to_dict(d: DamageData) -> Dictionary:
@@ -5854,10 +6001,8 @@ func _server_enemy_hit(net_id: int, cfg: Dictionary, victim_pos: Vector2) -> voi
 	if component == null or not component.has_method("take_damage"):
 		return
 	var attacker: int = multiplayer.get_remote_sender_id()
-	# 客户端视角受害者位置非有限（NaN/INF）→ 视为未同步，跳过回滚合理性校验而不误伤合法命中
-	if not (is_finite(victim_pos.x) and is_finite(victim_pos.y)):
-		victim_pos = Vector2.ZERO
-	# 轻量合理性校验（保持客户端权威，仅拦明显异常：尸体/超距/回滚位置不符）
+	# victim_pos 仅为协议兼容保留，不再参与校验（回滚合理性校验已按信任模型移除）
+	# 轻量校验：只拦「已死亡的敌人」（玩法正确性），其余放行
 	if not _validate_enemy_hit(enemy, attacker, victim_pos):
 		net_hits_rejected += 1
 		return
@@ -5868,7 +6013,7 @@ func _server_enemy_hit(net_id: int, cfg: Dictionary, victim_pos: Vector2) -> voi
 	last_attacker_by_net_id[net_id] = attacker
 	# 抑制本体自然表现（飘字/闪白），由 mod 按来源频率统一回放（host 侧客机命中 = 远程来源）
 	var hp_before: int = int(enemy.stats.hp) if enemy.get("stats") != null else 0
-	component.take_damage(data, true, true)
+	component.take_damage(data, true, true, int(safe_cfg.get("resolved_damage", -1)))
 	var hp_after: int = int(enemy.stats.hp) if enemy.get("stats") != null else 0
 	var actual: int = maxi(0, hp_before - hp_after)
 	if actual > 0:
@@ -5881,51 +6026,28 @@ func _server_enemy_hit(net_id: int, cfg: Dictionary, victim_pos: Vector2) -> voi
 			rpc_id(attacker, "_remote_enemy_proc", net_id, actual, _damage_to_dict(data), killed, _enemy_score(enemy))
 
 
-# host 记录敌人位置历史（供命中回滚合理性校验）
-func _record_enemy_pos(net_id: int, t: int, p: Vector2) -> void:
-	var arr = _enemy_pos_history.get(net_id)
-	if arr == null:
-		arr = []
-		_enemy_pos_history[net_id] = arr
-	arr.append({"t": t, "p": p})
-	while arr.size() > HIT_HISTORY_MAX:
-		arr.remove_at(0)
-
-
-# 轻量命中校验：目标存活 + 攻击者距离 + 客户端所见位置与 host 历史轨迹相符（favor-the-shooter）
-func _validate_enemy_hit(enemy: Node, attacker: int, victim_pos: Vector2) -> bool:
-	if enemy.get("stats") != null and enemy.stats != null and int(enemy.stats.hp) <= 0 and not bool(enemy.stats.get("is_test_target")):
-		return false
-	var ap = _local_or_remote_player(attacker)
-	if ap is Node2D and enemy is Node2D:
-		if (ap as Node2D).global_position.distance_to((enemy as Node2D).global_position) > HIT_VALIDATE_MAX_DIST:
-			return false
-	# 回滚合理性：仅当客户端上报了有效位置且 host 有历史时校验（(0,0) 视为未同步 → 跳过，避免误伤）
-	if victim_pos.length_squared() > 1.0 and enemy is Node2D and enemy.has_meta("net_id"):
-		var expected: Vector2 = _enemy_expected_pos(int(enemy.get_meta("net_id")))
-		if expected != Vector2.INF and victim_pos.distance_to(expected) > HIT_VALIDATE_TOL:
-			return false
-	return true
-
-
-# 估算攻击者视角时刻该敌人的位置（host 历史中最接近 now - (rtt/2 + 插值延迟) 的点）
-func _enemy_expected_pos(net_id: int) -> Vector2:
-	var arr = _enemy_pos_history.get(net_id)
-	if arr == null or arr.is_empty():
-		return Vector2.INF
-	var interp_ms: float = SnapshotBuffer.compute_delay(ENEMY_SNAPSHOT_INTERVAL, net_rtt_ms, net_jitter_ms) * 1000.0
-	var target_t: int = Time.get_ticks_msec() - int(net_rtt_ms * 0.5 + interp_ms)
-	var best_p: Vector2 = Vector2.INF
-	var best_dt: int = 1 << 30
-	for e in arr:
-		var dt: int = absi(int(e["t"]) - target_t)
-		if dt < best_dt:
-			best_dt = dt
-			best_p = e["p"]
-	return best_p
+# 命中校验只剩「目标存活」这一玩法正确性检查；位置回滚与超距拦截属反作弊，
+# 已按好友房默认可信的信任模型移除（见 docs/LEARNINGS.md「联机信任模型」）。
+# attacker / victim_pos 保留为参数占位，避免改动 RPC 签名与协议。
+func _validate_enemy_hit(enemy: Node, _attacker: int, _victim_pos: Vector2) -> bool:
+	return not (enemy.get("stats") != null and enemy.stats != null and int(enemy.stats.hp) <= 0 and not bool(enemy.stats.get("is_test_target")))
 
 
 # ---------------- 子弹/视觉同步 ----------------
+
+# 纯表现队列入队（封顶）：超限丢弃新条目——视觉缺失可接受，优先保住带宽与帧时间。
+func _queue_visual(entry: Dictionary, reliable: bool) -> void:
+	if reliable:
+		if _pending_visual_reliable.size() < PENDING_VISUAL_RELIABLE_MAX:
+			_pending_visual_reliable.append(entry)
+	elif _pending_visual.size() < PENDING_VISUAL_MAX:
+		_pending_visual.append(entry)
+
+
+func _queue_effect(entry: Dictionary) -> void:
+	if _pending_effects.size() < PENDING_EFFECT_MAX:
+		_pending_effects.append(entry)
+
 
 func _flush_visuals() -> void:
 	if not _pending_visual.is_empty():
@@ -6808,10 +6930,10 @@ func _server_pickup_coin(net_id: int, value: int, pos: Vector2) -> void:
 	if net_id >= 0:
 		if c == null or not is_instance_valid(c):
 			return
-		value = int(c.coin)
+		value = _coin_value(int(c.coin), float(coin_multiplier_by_peer.get(multiplayer.get_remote_sender_id(), 1.0)))
 	else:
 		value = clampi(value, 0, MAX_NET_STAT)
-	if value <= 0:
+	if value < 0 or (value == 0 and net_id < 0):
 		return
 	if c != null and is_instance_valid(c) and c.has_method("idle_state"):
 		c.idle_state()
@@ -6827,6 +6949,33 @@ func _server_pickup_coin(net_id: int, value: int, pos: Vector2) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _apply_shared_coin_remote(value: int, pos: Vector2) -> void:
 	_apply_shared_coin_local(value, pos)
+
+
+func _coin_value(raw_value: int, multiplier: float) -> int:
+	if not is_finite(multiplier):
+		return 0
+	return int(ceil(minf(float(MAX_NET_STAT), maxf(0.0, float(raw_value)) * clampf(multiplier, 0.0, float(MAX_NET_STAT)))))
+
+
+func _sync_coin_multiplier(value: float) -> void:
+	if not _net_connected() or not is_finite(value):
+		return
+	value = clampf(value, 0.0, float(MAX_NET_STAT))
+	if multiplayer.is_server():
+		coin_multiplier_by_peer[multiplayer.get_unique_id()] = value
+	elif _hello_acked and value != _last_sent_coin_multiplier:
+		# 与拾取请求同为可靠 channel 0，保证新倍率先于本次拾取被房主接收。
+		rpc_id(1, "_server_coin_multiplier", value)
+		_last_sent_coin_multiplier = value
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _server_coin_multiplier(value: float) -> void:
+	if not multiplayer.is_server() or not _server_sender_ok() or not is_finite(value):
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if _rate_allow(sender, "coin_multiplier", 20):
+		coin_multiplier_by_peer[sender] = clampf(value, 0.0, float(MAX_NET_STAT))
 
 
 # ---------------- 医疗箱（medical_kit）同步 ----------------
@@ -6962,6 +7111,7 @@ func _on_medkit_taken(node: Node) -> void:
 	var net_id: int = int(node.get_meta("coop_medkit_net_id"))
 	if multiplayer.is_server():
 		if _mark_medkit_consumed(net_id):
+			_consume_local_medkit(net_id)
 			rpc("_remote_medkit_consumed", net_id)
 			_handle_ayane_on_take()
 	else:
@@ -6980,12 +7130,21 @@ func _server_medkit_taken(net_id: int) -> void:
 		return
 	if not _mark_medkit_consumed(net_id):
 		return
+	_consume_local_medkit(net_id)
 	rpc("_remote_medkit_consumed", net_id)
 	_handle_ayane_on_take()
 
 
 @rpc("authority", "call_remote", "reliable")
 func _remote_medkit_consumed(net_id: int) -> void:
+	_consume_local_medkit(net_id)
+
+
+# 本地真正移除医疗箱（host 与客机共用）：_remote_medkit_consumed 是 call_remote，
+# host 自己不会执行它，若 host 只 erase 字典，实体仍留在场上、Area2D 仍在监听，
+# 会被 host 端玩家再次拾取（重复治疗、两端分叉）。
+# consume_remote() 对本机刚拾取的箱子会因 coop_medkit_consumed meta 提前返回，不会重复演出。
+func _consume_local_medkit(net_id: int) -> void:
 	var n = medkit_by_net_id.get(net_id)
 	medkit_by_net_id.erase(net_id)
 	_medkit_consumed[net_id] = true
@@ -6993,11 +7152,11 @@ func _remote_medkit_consumed(net_id: int) -> void:
 		n.call("consume_remote")
 
 
+# 只做去重标记；实体移除交给 _consume_local_medkit（否则这里 erase 后调用方拿不到节点）
 func _mark_medkit_consumed(net_id: int) -> bool:
 	if _medkit_consumed.has(net_id):
 		return false
 	_medkit_consumed[net_id] = true
-	medkit_by_net_id.erase(net_id)
 	return true
 
 
@@ -7098,7 +7257,7 @@ func _play_coin_pickup_visual(coin_node: Node, picker_peer: int) -> void:
 # ---------------- 召唤物同步（拥有者权威） ----------------
 
 func send_summoned_state(net_id: int, position: Vector2, velocity: Vector2, rotation: float, state: int = -1, facing: int = 1) -> void:
-	if not is_lan_game:
+	if not _net_connected() or (not multiplayer.is_server() and not _hello_acked):
 		return
 	if multiplayer.is_server():
 		rpc("_summoned_state_remote", net_id, position, velocity, rotation, state, facing)
@@ -7350,6 +7509,9 @@ func _route_summoned_melee_kb(net_id: int, force: int, direction: Vector2) -> vo
 func _server_summoned_melee_kb(net_id: int, force: int, direction: Vector2) -> void:
 	if not multiplayer.is_server() or not _server_sender_ok():
 		return
+	# 归属校验：只有召唤物拥有者能对自己的召唤物生效（对齐 _server_summoned_state 的 owner 校验）
+	if int(summoned_owner_by_net_id.get(net_id, -1)) != multiplayer.get_remote_sender_id():
+		return
 	if not (is_finite(direction.x) and is_finite(direction.y)):
 		return
 	_route_summoned_melee_kb(net_id, clampi(int(force), 0, int(MAX_NET_KNOCKBACK)), direction)
@@ -7388,6 +7550,9 @@ func _route_summoned_upgrade(net_id: int, amount: int, source_id: String, overri
 @rpc("any_peer", "call_remote", "reliable")
 func _server_summoned_upgrade(net_id: int, amount: int, source_id: String, override: int) -> void:
 	if not multiplayer.is_server() or not _server_sender_ok():
+		return
+	# 归属校验：经验只能喂给调用者自己的召唤物（对齐 _server_summoned_state 的 owner 校验）
+	if int(summoned_owner_by_net_id.get(net_id, -1)) != multiplayer.get_remote_sender_id():
 		return
 	_route_summoned_upgrade(net_id, clampi(int(amount), 1, MAX_SUMMON_UPGRADE_AMOUNT),
 			str(source_id).substr(0, MAX_NET_ID_LEN), clampi(int(override), 0, MAX_NET_STAT))
@@ -7721,7 +7886,7 @@ func _remote_revived(peer_id: int, mult: float) -> void:
 
 func _all_peers_down() -> bool:
 	var expected: Array = [1]
-	for p in multiplayer.get_peers():
+	for p in _handshaked_peers:
 		expected.append(p)
 	for pid in expected:
 		if not down_peer_ids.get(pid, false):
@@ -7767,7 +7932,7 @@ func _maybe_finish_round_upgrade() -> void:
 	if not _reconnecting_peers.is_empty():
 		return
 	var expected: Array = [1]
-	for p in multiplayer.get_peers():
+	for p in _handshaked_peers:
 		expected.append(p)
 	for pid in expected:
 		if not round_upgrade_ready_peers.get(pid, false):
@@ -7867,8 +8032,12 @@ func _remote_change_scene(path: String, roster: Dictionary, level_state: Diction
 		return
 	# 离开选人/准备房前先解除暂停，保证转场与目标场景正常运行
 	_set_select_pause(false)
+	var generation: int = _session_generation
+	var source_peer = multiplayer.multiplayer_peer
 	# 复刻 host 的场景切换转场（左划开始 → 结束再真正切场景）
 	await _play_scene_transition_start()
+	if generation != _session_generation or not _net_connected() or multiplayer.multiplayer_peer != source_peer:
+		return
 	_applying_change = true
 	_reset_player_sync()
 	first_round_emitted = false
@@ -7881,6 +8050,8 @@ func _remote_change_scene(path: String, roster: Dictionary, level_state: Diction
 		GameEvents.change_scene(path, own)
 	_applying_change = false
 	await get_tree().process_frame
+	if generation != _session_generation or not _net_connected() or multiplayer.multiplayer_peer != source_peer:
+		return
 	rpc_id(1, "_client_scene_ready")
 
 
@@ -8730,6 +8901,9 @@ func _server_boss_pattern_event(net_id: int, event_data: Dictionary) -> void:
 	if not _server_sender_ok():
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
+	# 限流：boss pattern 事件本身频率低，这里只防洪泛转发（不做归属反作弊）
+	if not _rate_allow_tokens(sender, "bosspat", 10.0, 5.0):
+		return
 	var safe_data: Dictionary = _sanitize_event_data(event_data)
 	for peer in multiplayer.get_peers():
 		if peer != sender:
@@ -8803,8 +8977,11 @@ func enter_lobby() -> void:
 	_pending_scene_path = LOBBY_SCENE
 	if not multiplayer.get_peers().is_empty():
 		rpc("_remote_change_scene", LOBBY_SCENE, player_scene_by_peer, {})
+	var source_peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	var generation: int = _session_generation
 	await _play_scene_transition_start()
-	GameEvents.change_scene(LOBBY_SCENE, host_scene)
+	if generation == _session_generation and _net_connected() and multiplayer.multiplayer_peer == source_peer:
+		GameEvents.change_scene(LOBBY_SCENE, host_scene)
 
 
 # host：开始球交互后广播进入选人阶段
@@ -8927,8 +9104,10 @@ func _maybe_finish_select() -> void:
 		return
 	if _flow_phase != FlowPhase.SELECT:
 		return
+	if not _reconnecting_peers.is_empty():
+		return
 	var expected: Array = [multiplayer.get_unique_id()]
-	for p in multiplayer.get_peers():
+	for p in _handshaked_peers:
 		expected.append(int(p))
 	for p in expected:
 		if not select_ready_by_peer.has(int(p)):
@@ -8987,7 +9166,11 @@ func begin_battle(scene_path: String = "") -> void:
 		selected_player_scene_by_peer[local_id] = local_player_scene_path
 	_broadcast_roster()
 	_force_release = true
+	var generation: int = _session_generation
+	var source_peer = multiplayer.multiplayer_peer
 	await _play_scene_transition_start()
+	if generation != _session_generation or not _net_connected() or multiplayer.multiplayer_peer != source_peer:
+		return
 	GameEvents.change_scene(scene_path, local_player_scene_path)
 
 
@@ -9129,6 +9312,8 @@ func _refresh_all_ready_tags() -> void:
 func get_room_display_text() -> String:
 	if not is_lan_game:
 		return ""
+	if extensions.is_active():
+		return tr("coop_room_ip") + " " + extensions.get_share_text()
 	if is_relay:
 		if relay_room_code != "":
 			return tr("coop_room_number") + " " + relay_room_code
@@ -9154,6 +9339,8 @@ func _public_address_text() -> String:
 
 # 供剪贴板复制：LAN=IP:端口；Relay=房间码；无会话=""
 func get_room_share_text() -> String:
+	if extensions.is_active():
+		return extensions.get_share_text()
 	if not is_lan_game:
 		return ""
 	if is_relay:
@@ -9486,6 +9673,7 @@ func _build_level_catalog() -> void:
 # ---------------- 连接管理 ----------------
 
 func host_game(port: int = DEFAULT_PORT) -> bool:
+	_abort_reconnect_for_new_session()
 	close_connection()
 	transport = TransportScript.create_lan_host(port, MAX_PLAYERS)
 	if transport == null or transport.peer == null:
@@ -9505,6 +9693,7 @@ func host_game(port: int = DEFAULT_PORT) -> bool:
 
 
 func join_game(ip: String, port: int = DEFAULT_PORT) -> bool:
+	_abort_reconnect_for_new_session()
 	close_connection()
 	transport = TransportScript.create_lan_client(ip, port)
 	if transport == null or transport.peer == null:
@@ -9658,10 +9847,39 @@ func _on_relay_error(message: String) -> void:
 
 # 中继建房/加入是否仍在进行中（供 UI 禁用按钮；握手完成或失败后解除）
 func is_connect_in_flight() -> bool:
-	return _relay_connect_in_flight
+	return _relay_connect_in_flight or extensions.is_preparing()
+
+
+# 拓展及 UI 主动结束会话：取消重连也必须释放外部组网进程。
+func close_session() -> void:
+	_abort_reconnect_for_new_session()
+	close_connection()
+
+
+# 开新房/加入新局前彻底结束旧的自动重连：清重连标志与遮罩后 close_connection 才会
+# 递增 _session_generation 并 _reset_run_state。原先 host_game/join_game 直接调用
+# close_connection()，在 _reconnecting 为真时会跳过这些步骤，旧会话的异步回调仍能
+# 通过代次校验操作新会话，且 run state/重连遮罩会残留。
+func _abort_reconnect_for_new_session() -> void:
+	if not _reconnecting:
+		return
+	_reconnecting = false
+	_reconnect_attempt = 0
+	_reconnect_timer = 0.0
+	_show_reconnect_overlay(false)
+	_freeze_local_player_for_reconnect(false)
+
+
+# 外部连接设施故障仍由官方会话编排统一返回菜单。
+func return_to_menu_after_disconnect() -> void:
+	extensions.close()
+	_abort_reconnect_to_menu()
 
 
 func close_connection(silent: bool = false) -> void:
+	if not _reconnecting:
+		_session_generation += 1
+	extensions.close(_reconnecting)
 	if transport != null and transport.peer != null:
 		transport.peer.close()
 	transport = null
@@ -9685,6 +9903,27 @@ func close_connection(silent: bool = false) -> void:
 		_last_join_params.clear()
 	if not silent and not _reconnecting:
 		connection_status_changed.emit("offline")
+	if not _reconnecting:
+		_reveal_cancelled_transition.call_deferred(_session_generation)
+
+
+func _reveal_cancelled_transition(generation: int) -> void:
+	if generation != _session_generation or is_lan_game or _reconnecting or get_tree() == null:
+		return
+	var transition = _transition()
+	if transition == null:
+		return
+	if transition.get("is_left_end_start") != true:
+		var animation = transition.get("animation_player")
+		if animation == null or not animation.is_playing() or animation.current_animation != "left_start":
+			return
+		# 让原动画正常发出信号，旧协程按代次自行退出；下一帧再撤幕，避免被信号后的置位覆盖。
+		await transition.left_end_start
+		if get_tree() == null:
+			return
+		await get_tree().process_frame
+	if generation == _session_generation and not is_lan_game and not _reconnecting and is_instance_valid(transition):
+		transition.call("play_left_end")
 
 
 # ---------------- 网络诊断（HUD 用，对齐联机版） ----------------
@@ -9710,7 +9949,7 @@ func _update_network_diagnostics(delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
 	if not _diag_pending.is_empty():
 		for k in _diag_pending.keys():
-			if now - int(_diag_pending[k]) > NET_DIAG_TIMEOUT_MSEC:
+			if now - int(_diag_pending[k]["t"]) > NET_DIAG_TIMEOUT_MSEC:
 				_diag_pending.erase(k)
 				_delivery_samples.append(0.0)
 				_trim_net_samples()
@@ -9718,11 +9957,15 @@ func _update_network_diagnostics(delta: float) -> void:
 	if _diag_elapsed < NET_DIAG_INTERVAL:
 		return
 	_diag_elapsed = 0.0
-	_diag_seq += 1
-	_diag_pending[_diag_seq] = now
+	# 按 peer 分别 ping：pending 记录期望回复者，避免任一 peer 抢答伪造他人 RTT
 	if multiplayer.is_server():
-		rpc("_diag_ping", _diag_seq)
+		for peer in multiplayer.get_peers():
+			_diag_seq += 1
+			_diag_pending[_diag_seq] = {"t": now, "peer": int(peer)}
+			rpc_id(peer, "_diag_ping", _diag_seq)
 	else:
+		_diag_seq += 1
+		_diag_pending[_diag_seq] = {"t": now, "peer": 1}
 		rpc_id(1, "_diag_ping", _diag_seq)
 	net_rtt_ms = _sample_avg(_latency_samples)
 	net_jitter_ms = _sample_jitter()
@@ -9755,11 +9998,14 @@ func _diag_ping(seq: int) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _diag_pong(seq: int) -> void:
+	# 只接受本次 ping 的目标 peer 回复：否则任一 peer 猜中递增的 seq 就能污染 host 的 RTT/抖动
 	if not _diag_pending.has(seq):
 		return
-	var sent: int = int(_diag_pending[seq])
+	var rec: Dictionary = _diag_pending[seq]
+	if int(rec.get("peer", 0)) != multiplayer.get_remote_sender_id():
+		return
 	_diag_pending.erase(seq)
-	_latency_samples.append(float(Time.get_ticks_msec() - sent))
+	_latency_samples.append(float(Time.get_ticks_msec() - int(rec.get("t", 0))))
 	_delivery_samples.append(1.0)
 	_trim_net_samples()
 
@@ -9851,8 +10097,19 @@ func get_local_player() -> Node:
 
 # ---------------- 骨架调试热键 ----------------
 
+# 是否带任意 --coop-dev* 调试参数
+func _has_dev_args() -> bool:
+	for arg in OS.get_cmdline_user_args():
+		if str(arg).begins_with("--coop-dev"):
+			return true
+	return false
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	# 调试热键默认只在调试构建或显式 --coop-dev* 参数下启用，避免正式版误触开房/退房
+	if not (OS.is_debug_build() or _has_dev_args()):
 		return
 	match event.keycode:
 		KEY_F10:
@@ -9860,5 +10117,5 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F11:
 			join_game("127.0.0.1")
 		KEY_F12:
-			close_connection()
+			close_session()
 			print("[etn_coop] connection closed")

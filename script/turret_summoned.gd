@@ -165,7 +165,7 @@ func reload_ammo():
 		reload_timer.start()
 		if not animation_player.is_playing():
 			animation_player.play("reload")
-		ExtensionHooks.notify(ExtensionHooks.on_summoned_action, [self, "reload", "", "", Vector2.ZERO, 0.0, 0.0])
+		ExtensionHooks.notify_named("on_summoned_action", [self, "reload", "", "", Vector2.ZERO, 0.0, 0.0])
 
 func _shoot_bullet():
 	if player == null:
@@ -209,7 +209,7 @@ func _shoot_bullet():
 		now_shoot_flash.set_meta("coop_action_flash", true)
 	SoundManager.play_sfx("GunSounds4")
 	_shootAnim()
-	ExtensionHooks.notify(ExtensionHooks.on_summoned_action, [
+	ExtensionHooks.notify_named("on_summoned_action", [
 		self, "shoot", "GunSounds4",
 		(str(shoot_flash.resource_path) if show_flash else ""),
 		shoot.global_position, shoot_r.rotation, _recoil_duration()

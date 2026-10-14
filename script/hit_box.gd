@@ -92,4 +92,4 @@ func _runtime_self_hit(hb: HurtBox) -> bool:
 		return false
 	# 命中瞬间（携带 live bullet）通知；供需"活来源"的 proc（iori 分裂 / mint）；两端口径一致
 	GameEvents.emit_player_projectile_hit(self, hb)
-	return ExtensionHooks.intercept(ExtensionHooks.projectile_self_hit_gate, [self, hb])
+	return ExtensionHooks.intercept_named("projectile_self_hit_gate", [self, hb])

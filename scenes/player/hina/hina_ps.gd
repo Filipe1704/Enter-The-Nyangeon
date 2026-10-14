@@ -33,7 +33,7 @@ var on_reset: bool = false
 const LAN_QTE_ANIM_SLOW: float = 0.07
 
 func _is_lan() -> bool:
-	return ExtensionHooks.is_lan_session.is_valid() and bool(ExtensionHooks.is_lan_session.call())
+	return ExtensionHooks.intercept_named("is_lan_session", [])
 
 func _qte_slow_begin() -> void:
 	if _is_lan():

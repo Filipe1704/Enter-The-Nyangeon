@@ -17,7 +17,7 @@ func _ready():
 		set_process(false)
 		return
 	# 联机：把掉落广播给其它端（纯视觉；拾取增益已由 on_pyroxenes_gain 共享）
-	ExtensionHooks.notify(ExtensionHooks.on_pickup_spawned, [self])
+	ExtensionHooks.notify_named("on_pickup_spawned", [self])
 
 func _on_body_entered(body: Node2D) -> void:
 	if has_meta("remote_visual"):
@@ -60,7 +60,7 @@ func add_pyroxenes():
 		add_text(pyroxenes_num)
 	GameEvents.emit_pyroxenes_pick_up()
 	# 附带 self：mod 据此取跨端一致的 net_effect_id 做「同一颗只结算一次」去重
-	ExtensionHooks.notify(ExtensionHooks.on_pyroxenes_gain, [pyroxenes_num, self])
+	ExtensionHooks.notify_named("on_pyroxenes_gain", [pyroxenes_num, self])
 	animation_player.play("pick_up")
 	SoundManager.play_sfx("CoinSounds")
 	await animation_player.animation_finished

@@ -36,8 +36,8 @@ var _pause_locked: bool = false
 func _ready():
 	hide()
 	visibility_changed.connect(func():
-		if ExtensionHooks.pause_visibility.is_valid():
-			ExtensionHooks.notify(ExtensionHooks.pause_visibility, [visible, self])
+		if ExtensionHooks.is_hook_active("pause_visibility"):
+			ExtensionHooks.notify_named("pause_visibility", [visible, self])
 		else:
 			get_tree().paused = visible
 		)
@@ -76,7 +76,7 @@ func _input(event: InputEvent) -> void:
 			return
 		
 		# LAN：打开由 player._unhandled_input 负责；隐藏时此处直接返回，避免重复 toggle
-		if not self.visible and ExtensionHooks.is_lan_session.is_valid() and bool(ExtensionHooks.is_lan_session.call()):
+		if not self.visible and ExtensionHooks.intercept_named("is_lan_session", []):
 			return
 		
 		if on_menu_selected == true:

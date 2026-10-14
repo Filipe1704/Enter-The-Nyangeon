@@ -36,6 +36,7 @@ const PING_COLOR_POOR := Color(1.0, 0.3, 0.25, 1.0)
 @onready var _upgrade_btn: TextureButton = %UpgradeChatButton
 @onready var _upgrade_ping: Label = %UpgradePingLabel
 
+var _ensure_timer: float = 0.0  # 按钮挂载/显隐节流：避免每帧 get_local_player + get_node_or_null
 var _is_open: bool = false
 var _composing: bool = false   # true=输入态（聚焦/占用控件）；false=peek（自动显示）
 var _orig_bg_alpha: float = 0.9411765
@@ -108,8 +109,12 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	_ensure_button()
-	_ensure_upgrade_button()
+	# 按钮挂载/显隐节流到 0.2s：节点查找与本地玩家解析不需要每帧精度
+	_ensure_timer -= delta
+	if _ensure_timer <= 0.0:
+		_ensure_timer = 0.2
+		_ensure_button()
+		_ensure_upgrade_button()
 	_refresh_pings(delta)
 	# 本地玩家被释放（场景切换/换人/回菜单）时收起
 	if _is_open:

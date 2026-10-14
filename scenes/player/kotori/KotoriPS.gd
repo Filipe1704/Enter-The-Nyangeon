@@ -37,7 +37,7 @@ func _ready():
 	GameEvents.player_ammo_reload.connect(reload_reset)
 	GameEvents.round_upgrade.connect(preheat_reset)
 	GameEvents.round_start.connect(preheat_reset)
-	GameEvents.enemy_damage_taken.connect(add_max_hp_damage)
+	GameEvents.enemy_damage_calculating.connect(add_max_hp_damage)
 	PlayerData.set_player.connect(set_playerdata)
 	GameEvents.player_gun_shoot.connect(gatling_speed_buff_add)
 	GameEvents.player_ps_upgrade.connect(ps_upgrade)
@@ -68,8 +68,8 @@ func set_playerdata():
 func add_max_hp_damage(_final_damage: int, damage_data: DamageData, _body_path: NodePath):
 	if damage_data.damage_type.has(GameTags.BULLET_DAMAGE):
 		damage_data.damage_modifier.append(func(_victim: Node, actual_damage: float):
-			var damage_mult = max(1, (stats.max_hp + stats.t_hp) * damage_mult)
-			return actual_damage + damage_mult
+			var bonus = max(1, (stats.max_hp + stats.t_hp) * damage_mult)
+			return actual_damage + bonus
 		)
 	#enemy_body.hurt_damage += max(1, (stats.max_hp + stats.t_hp) * damage_mult)
 

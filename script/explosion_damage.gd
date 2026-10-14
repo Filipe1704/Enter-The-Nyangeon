@@ -99,7 +99,7 @@ func is_explosion():
 	ins.active_state()
 	GameEvents.emit_explosion_damage(self.global_position, 10 * explosion_range)
 	SoundManager.play_sfx("ExplosionSounds")
-	ExtensionHooks.notify(ExtensionHooks.on_explosion_effect, [global_position, true])
+	ExtensionHooks.notify_named("on_explosion_effect", [global_position, true])
 
 func is_small_explosion():
 	
@@ -115,7 +115,7 @@ func is_small_explosion():
 	ins.active_state()
 	GameEvents.emit_explosion_damage(self.global_position, 10 * explosion_range)
 	SoundManager.play_sfx("ExplosionSounds")
-	ExtensionHooks.notify(ExtensionHooks.on_explosion_effect, [global_position, false])
+	ExtensionHooks.notify_named("on_explosion_effect", [global_position, false])
 
 func add_damage_data():
 	if enemy_group.is_empty():

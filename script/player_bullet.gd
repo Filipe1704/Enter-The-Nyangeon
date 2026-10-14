@@ -103,7 +103,7 @@ func apply_penetrate_dealt():
 func idle_state():
 	reset_physics_interpolation()
 	if is_idle == 0:
-		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
+		ExtensionHooks.notify_named("on_projectile_despawned", [self])
 	is_idle = 1
 	set_physics_process(false)
 	if GameEvents.global_time_count.is_connected(_on_bullet_kill_timer_timeout):

@@ -133,6 +133,14 @@ func _poll() -> void:
 		else:
 			_on_data(packet)
 
+	_flush_peer_events()
+
+
+func _flush_peer_events() -> void:
+	# 同一次 poll 可包含旧连接断开及同 ID 重连：先移除旧身份，再接入新身份。
+	for peer_id in _peers_to_disconnect:
+		emit_signal("peer_disconnected", peer_id)
+	_peers_to_disconnect.clear()
 	for peer_id in _peers_to_connect:
 		if not _admitted.has(peer_id):
 			_admitted[peer_id] = true
@@ -140,11 +148,6 @@ func _poll() -> void:
 				print("[etn_coop][relay] admit peer=%d" % peer_id)
 			emit_signal("peer_connected", peer_id)
 	_peers_to_connect.clear()
-
-	for peer_id in _peers_to_disconnect:
-		emit_signal("peer_disconnected", peer_id)
-	_peers_to_disconnect.clear()
-
 
 func _on_control(text: String) -> void:
 	var data = JSON.parse_string(text)
@@ -183,6 +186,8 @@ func _on_control(text: String) -> void:
 			# 否则不会发 _client_hello → 房主不 _accept_peer → 不进入准备房。服务端 peers 未含 host 时补上。
 			if _unique_id != 1 and not _pending_peers.has(1):
 				_pending_peers.append(1)
+			if _unique_id != 1 and not _known_peers.has(1):
+				_known_peers[1] = "host"
 			for peer_id in _pending_peers:
 				_queue_peer(int(peer_id))
 			_pending_peers.clear()
@@ -199,8 +204,12 @@ func _on_control(text: String) -> void:
 		"peer_disconnected":
 			var disconnected_peer_id := int(data.get("peer_id", 0))
 			_known_peers.erase(disconnected_peer_id)
+			# SceneMultiplayer 会在 _poll 返回后才取包；不能先移除 sender 再交付旧包。
+			_incoming = _incoming.filter(func(packet): return int(packet.peer) != disconnected_peer_id)
+			_peers_to_connect.erase(disconnected_peer_id)
+			if _admitted.has(disconnected_peer_id) and not _peers_to_disconnect.has(disconnected_peer_id):
+				_peers_to_disconnect.append(disconnected_peer_id)
 			_admitted.erase(disconnected_peer_id)
-			_peers_to_disconnect.append(disconnected_peer_id)
 			if disconnected_peer_id == 1 and _unique_id != 1:
 				_status = MultiplayerPeer.CONNECTION_DISCONNECTED
 		"error":
@@ -219,7 +228,10 @@ func _on_data(packet: PackedByteArray) -> void:
 	if packet.size() < 4:
 		return
 	var source := packet.decode_s32(0)
-	# 收到谁的数据就接入谁（房主无需依赖服务端 join 通知）；_poll 在引擎 drain 前统一 emit。
+	# 服务端在允许转发前已发送 peer_pending/join_prepared。晚到的旧连接数据
+	# 不能凭二进制包重新接入；同 ID 的新连接必须先有明确的控制帧。
+	if not _known_peers.has(source):
+		return
 	_queue_peer(source)
 	var payload := packet.slice(4)
 	_incoming.append({

@@ -62,7 +62,7 @@ func active_state():
 		can_pick = true
 		pick_up = true
 	GameEvents.emit_enemy_coin_drops(self)
-	ExtensionHooks.notify(ExtensionHooks.on_coin_spawned, [self, coin])
+	ExtensionHooks.notify_named("on_coin_spawned", [self, coin])
 
 func auto_pick():
 	can_pick = true
@@ -118,7 +118,7 @@ func add_coin():
 	add_end = true
 	player = p
 	var coin_value: int = ceil(coin * p.stats.coin_mult)
-	if ExtensionHooks.intercept(ExtensionHooks.coin_pickup_gate, [self, p, p.stats.coin_mult]):
+	if ExtensionHooks.intercept_named("coin_pickup_gate", [self, p, p.stats.coin_mult]):
 		return
 	p.coin_sounds.play()
 	p.stats.coin += coin_value

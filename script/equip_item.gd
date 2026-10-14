@@ -77,7 +77,13 @@ func attach_hat_icon(icon_scene: PackedScene) -> bool:
 
 # 挂载图标到跟随点（占用第一个空闲 Follow）
 func attach_follow_icon(icon_scene: PackedScene) -> bool:
+	var local_player := player
+	if local_player == null:
+		return false
 	for follow in get_tree().get_nodes_in_group("Follow"):
+		# 联机镜像同样可能保留 Follow 组；只占用道具拥有者的挂点。
+		if not local_player.is_ancestor_of(follow):
+			continue
 		if follow.get("follow_use") == false:
 			var icon := icon_scene.instantiate()
 			get_tree().get_first_node_in_group("PlayerRoot").add_child(icon)

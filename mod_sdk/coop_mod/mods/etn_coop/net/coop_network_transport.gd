@@ -6,6 +6,7 @@ extends RefCounted
 enum Mode { OFFLINE, LAN, RELAY }
 
 const RelayPeerScript := preload("res://mods/etn_coop/net/coop_relay_peer.gd")
+const ENetPeerScript := preload("res://mods/etn_coop/net/coop_enet_peer.gd")
 const HOST_ROLE: String = "host"
 const CLIENT_ROLE: String = "client"
 
@@ -17,7 +18,7 @@ var relay_room_code: String = ""
 
 static func create_lan_host(port: int, max_players: int):
 	var t = new()
-	var enet := ENetMultiplayerPeer.new()
+	var enet = ENetPeerScript.new()
 	var err := enet.create_server(port, max_players)
 	if err != OK:
 		t.status_message = "Host failed: %s" % err
@@ -29,7 +30,7 @@ static func create_lan_host(port: int, max_players: int):
 
 static func create_lan_client(ip: String, port: int):
 	var t = new()
-	var enet := ENetMultiplayerPeer.new()
+	var enet = ENetPeerScript.new()
 	var err := enet.create_client(ip, port)
 	if err != OK:
 		t.status_message = "Join failed: %s" % err

@@ -80,7 +80,7 @@ func apply_melee_damage_data():
 func add_damage_data():
 	if !body_group.is_empty():
 		SoundManager.play_sfx("HurtSounds2")
-		ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", global_position])
+		ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", global_position])
 		for i in body_group:
 			if i == null or not is_instance_valid(i):
 				continue

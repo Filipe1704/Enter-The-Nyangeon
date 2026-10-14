@@ -59,7 +59,7 @@ func place_field():
 	field.field_damage = max(1, damage_value)
 	field.global_position = doll.global_position
 	field.active_state()
-	ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [field])
+	ExtensionHooks.notify_named("on_visual_activated", [field])
 
 # 内置池：优先取空闲火场；满上限则循环复用最旧的并强制复位。
 func get_field() -> Node:

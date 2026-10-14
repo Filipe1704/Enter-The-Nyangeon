@@ -125,9 +125,44 @@ func notify(cb: Callable, args: Array = []) -> void:
 	if cb.is_valid():
 		cb.callv(args)
 
+
+# ---------------- 命名调用入口（本体调用点统一使用） ----------------
+# hook_name 必须与上方声明的 Callable 字段同名。语义：
+#   1) 先跑 add_hook 登记的命名回调（按 priority；接管类任一返回 true 即短路）；
+#   2) 再跑字段直接赋值（保留「直接赋值即覆盖」的既有语义与零回归）。
+# 字段名拼错会在运行期立刻 push_error，而不是静默失效。
+
+func intercept_named(hook_name: StringName, args: Array = []) -> bool:
+	if run_hooks(hook_name, args):
+		return true
+	return intercept(_slot_of(hook_name), args)
+
+
+func notify_named(hook_name: StringName, args: Array = []) -> void:
+	notify_hooks(hook_name, args)
+	notify(_slot_of(hook_name), args)
+
+
+# 槽名 → 字段值；未声明的名字（拼写错误）给开发期错误并返回空 Callable。
+func _slot_of(hook_name: StringName) -> Callable:
+	var v = get(hook_name)
+	if v is Callable:
+		return v
+	push_error("[ExtensionHooks] 未知钩子槽：%s（须为 extension_hooks.gd 中声明的 Callable 字段）" % hook_name)
+	return Callable()
+
+
+# 该槽是否有注入（命名钩子或字段赋值）——供「注入才覆盖默认值」的查询式用法。
+# 注意：enemy_spawn_stat_scale / enemy_spawn_count_scale 返回数值，属覆盖语义，不参与命名链式。
+func is_hook_active(hook_name: StringName) -> bool:
+	if has_hook(hook_name):
+		return true
+	return _slot_of(hook_name).is_valid()
+
+
 # ---------------- 命名链式钩子 ----------------
-# 多个 mod 需要挂钩同一扩展点时用 add_hook/remove_hook，避免直接赋值互相覆盖。
-# 直接给上面的 Callable 字段赋值仍是「覆盖」语义（保留零回归）。
+# 多个 mod 需要挂钩同一扩展点时用 add_hook/remove_hook：命名回调与字段赋值可共存，
+# 本体调用点走 intercept_named/notify_named（先命名回调，后字段值）；直接给字段赋值仍是「覆盖」语义。
 
 var _hooks: Dictionary = {}
 

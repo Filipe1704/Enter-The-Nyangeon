@@ -157,7 +157,7 @@ var usable_coin: int:
 			if hp <= 0:
 				var stats_owner: Node = get_parent()
 				if stats_owner != null and stats_owner.is_in_group("Player") \
-						and ExtensionHooks.intercept(ExtensionHooks.player_death_gate, [stats_owner]):
+						and ExtensionHooks.intercept_named("player_death_gate", [stats_owner]):
 					return
 				if life_num > 0:
 					PlayerData.life_num_add -= 1

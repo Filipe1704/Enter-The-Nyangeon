@@ -210,7 +210,7 @@ func add_damage_data():
 				continue
 			if now_cd <= 0:
 				SoundManager.play_sfx("HurtSounds2")
-				ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", global_position])
+				ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", global_position])
 				freeze_frame()
 				apply_melee_damage_data()
 				if hit_box.damage_data.is_crit == true:

@@ -1,6 +1,5 @@
 [gd_scene format=3 uid="uid://b47lqo0ibtxbt"]
 
-[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="1_hwm2q"]
 [ext_resource type="Script" uid="uid://dgtoimidj60ok" path="res://ui/option.gd" id="1_ye063"]
 [ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="2_43twi"]
 [ext_resource type="PackedScene" uid="uid://fw7vqomk7irr" path="res://ui/game_option.tscn" id="2_evgqw"]
@@ -197,52 +196,16 @@ layout_mode = 2
 [node name="Game" parent="Node2D/option_button_box/VBoxContainer" unique_id=34050120 instance=ExtResource("5_evgqw")]
 layout_mode = 2
 button_id = "option_game"
-
-[node name="option_game" type="Label" parent="Node2D/option_button_box/VBoxContainer/Game" unique_id=1014121525]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("1_hwm2q")
-theme_override_font_sizes/font_size = 19
 text = "GAME"
 
 [node name="Controls" parent="Node2D/option_button_box/VBoxContainer" unique_id=1298314490 instance=ExtResource("5_evgqw")]
 layout_mode = 2
 button_id = "option_controls"
-
-[node name="option_controls" type="Label" parent="Node2D/option_button_box/VBoxContainer/Controls" unique_id=481088825]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("1_hwm2q")
-theme_override_font_sizes/font_size = 19
 text = "CONTROLS"
 
 [node name="Mod" parent="Node2D/option_button_box/VBoxContainer" unique_id=1300843777 instance=ExtResource("5_evgqw")]
 layout_mode = 2
 button_id = "option_mod"
-
-[node name="option_mod" type="Label" parent="Node2D/option_button_box/VBoxContainer/Mod" unique_id=211840416]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("1_hwm2q")
-theme_override_font_sizes/font_size = 19
 text = "MOD"
 
 [node name="Label" type="Label" parent="Node2D" unique_id=1933588260]

@@ -101,7 +101,7 @@ func _on_reset_pressed() -> void:
 	GameEvents.emit_test_room_button_close()
 	Transition.play_left_start()
 	await Transition.left_end_start
-	if not ExtensionHooks.intercept(ExtensionHooks.local_player_change_gate, [now_player_path, Vector2.ZERO]):
+	if not ExtensionHooks.intercept_named("local_player_change_gate", [now_player_path, Vector2.ZERO]):
 		var player = get_tree().get_first_node_in_group("Player")
 		if player != null:
 			player.queue_free()

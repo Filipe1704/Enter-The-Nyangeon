@@ -79,7 +79,7 @@ func _audience_ok(buff: Buff) -> bool:
 	return buff.audience == Faction.of_entity(body)
 
 func apply_buff(buff: Buff, value: Array, source_id: String = "", applier_stats: Dictionary = {}, applier_peer: int = 0):
-	if ExtensionHooks.intercept(ExtensionHooks.enemy_buff_apply_gate, [self, buff, value, source_id]):
+	if ExtensionHooks.intercept_named("enemy_buff_apply_gate", [self, buff, value, source_id]):
 		return
 	if not _can_apply():
 		return
@@ -132,7 +132,7 @@ func apply_buff(buff: Buff, value: Array, source_id: String = "", applier_stats:
 	_apply_ability(entry, 1)
 	buff_applied.emit(buff, current_buff)
 	# 联机：host 侧把 host 发起的敌人 buff 广播（客户机镜像应用）
-	ExtensionHooks.notify(ExtensionHooks.on_enemy_buff_applied, [self, buff, value, source_id, applier_stats, applier_peer])
+	ExtensionHooks.notify_named("on_enemy_buff_applied", [self, buff, value, source_id, applier_stats, applier_peer])
 
 # ---------------- 来源独立上限 ----------------
 # 覆写返回 true 后，层数按来源（道具）分别累计：每个来源各自有上限，
@@ -446,7 +446,7 @@ func _remove_buff_entry(id: String):
 	_deactivate_component(entry)
 	_clear_card(entry)
 	_on_entry_removed(id)
-	ExtensionHooks.notify(ExtensionHooks.on_enemy_buff_removed, [body, id])
+	ExtensionHooks.notify_named("on_enemy_buff_removed", [body, id])
 	current_buff.erase(id)
 	buff_expired.emit(entry["resource"])
 

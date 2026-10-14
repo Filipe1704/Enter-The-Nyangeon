@@ -114,7 +114,7 @@ func spawn_enemy_body(enemy: EnemyCard):
 			enemy_body.body_part[i].stats.max_hp_mult = hp_final
 			enemy_body.body_part[i].stats.update_body_ability()
 			enemy_body.body_part[i].active_state()
-	ExtensionHooks.notify(ExtensionHooks.on_enemy_spawned, [enemy_body, str(enemy.body.resource_path)])
+	ExtensionHooks.notify_named("on_enemy_spawned", [enemy_body, str(enemy.body.resource_path)])
 
 func on_round_end():
 	can_spawn = false

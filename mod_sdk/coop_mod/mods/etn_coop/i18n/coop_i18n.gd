@@ -6,6 +6,9 @@ extends RefCounted
 const LOCALES: Array[String] = ["zh_CN", "en", "pt", "vi_VN"]
 
 const MESSAGES: Dictionary = {
+	"coop_status_extension_preparing": {"zh_CN": "正在准备组网…", "en": "Preparing network…", "pt": "Preparando a rede…", "vi_VN": "Đang chuẩn bị mạng…"},
+	"coop_status_extension_ready": {"zh_CN": "组网已就绪，正在建立游戏连接", "en": "Network ready; establishing game connection", "pt": "Rede pronta; conectando ao jogo", "vi_VN": "Mạng sẵn sàng; đang kết nối trò chơi"},
+	"coop_status_extension_failed": {"zh_CN": "组网失败，请检查连接设置", "en": "Network setup failed; check connection settings", "pt": "Falha na rede; verifique as configurações", "vi_VN": "Thiết lập mạng thất bại; kiểm tra cài đặt"},
 	"coop_title": {"zh_CN": "联机", "en": "CO-OP", "pt": "CO-OP", "vi_VN": "CO-OP"},
 	"coop_mode_lan": {"zh_CN": "局域网", "en": "LAN", "pt": "LAN", "vi_VN": "LAN"},
 	"coop_mode_lan_label": {"zh_CN": "公网/局域网", "en": "Internet/LAN", "pt": "Internet/LAN", "vi_VN": "Internet/LAN"},
@@ -46,6 +49,7 @@ const MESSAGES: Dictionary = {
 	"coop_lan_no_rooms": {"zh_CN": "未发现房间", "en": "No rooms found", "pt": "Nenhuma sala encontrada", "vi_VN": "Không tìm thấy phòng"},
 	# 版本/协议握手
 	"coop_version_mismatch": {"zh_CN": "版本不一致，无法联机", "en": "Version mismatch, cannot join", "pt": "Versão incompatível", "vi_VN": "Phiên bản không khớp"},
+	"coop_session_started": {"zh_CN": "本局已开始选人，请等待下一局后加入", "en": "Selection has started. Please join the next game.", "pt": "A seleção começou. Entre na próxima partida.", "vi_VN": "Đã bắt đầu chọn nhân vật. Hãy tham gia ván tiếp theo."},
 	"coop_status_host_version_old": {"zh_CN": "房主版本过旧，请让对方更新联机 mod", "en": "Host version is outdated; ask them to update the coop mod", "pt": "Versão do host desatualizada; peça para atualizar", "vi_VN": "Chủ phòng cũ; hãy nhờ họ cập nhật mod"},
 	"coop_status_handshake_timeout": {"zh_CN": "联机握手超时，可能版本不匹配", "en": "Handshake timed out (possible version mismatch)", "pt": "Tempo de handshake esgotado (versão incompatível?)", "vi_VN": "Quá hạn bắt tay (có thể lệch phiên bản)"},
 	# 实时战绩面板
@@ -168,7 +172,13 @@ const MESSAGES: Dictionary = {
 }
 
 
+static var _installed: bool = false
+
+
 static func install() -> void:
+	if _installed:
+		return
+	_installed = true
 	for loc in LOCALES:
 		var t := Translation.new()
 		t.locale = loc
@@ -176,4 +186,6 @@ static func install() -> void:
 			var entry: Dictionary = MESSAGES[key]
 			var text: String = str(entry.get(loc, entry.get("en", "")))
 			t.add_message(StringName(key), StringName(text))
-		TranslationServer.add_translation(t)
+		# 经 ModAPI 注册（ModManager 记账，便于统一管理与后续回收）；异常情况下退回直接注册
+		if not ModAPI.register_translation(t):
+			TranslationServer.add_translation(t)

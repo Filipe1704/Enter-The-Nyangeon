@@ -92,19 +92,13 @@
 
 ### 2.3 HealthComponent 结算（敌方）
 `script/health_component.gd`：
-- `_ready` 连接 `hurt_box.hit_received → take_damage`。
-- `_is_friendly_fire`：非治疗友方=非敌对；**治疗的友方判定相反**。
-- `take_damage` 维护 `_hit_depth`，深度归零后 drain `pending_extra` 队列（`:31-36`）。
-- `_take_damage_internal`（`:57-179`）：
-  - `is_invincible` 直接返回。
-  - 友方 → 仅 `apply_conversion_power`（若有 `convert_power`）后返回。
-  - `raw_damage = base_damage * PlayerData.player.stats.dot_damage`。
-  - 若 `source_type.has(CONVERTED)` 且非 TRUE_DAMAGE：近战乘 `PlayerData.kick_damage_mult`，逐击 roll 暴击（`:71-85`）。
-  - 治疗分支：`final=max(1,raw)`，emit `enemy_heal_taken`，跑 modifier，`stats.hp += final`。
-  - 伤害分支（`:105-157`）：`final=max(1, raw * stats.global_hurt_damage)`；`TRUE_DAMAGE` 跳过该乘数；emit `enemy_damage_taken`；跑 `damage_modifier`；非 TRUE 时应用并重置 `damage_multiplier`；`final>stats.hp` → emit `enemy_over_kill_damage`；`stats.hp -= final`；`damage_taken.emit`；闪白/受击音；`on_damage_dealt`；`stats.hp<=0` → emit `enemy_damage_taken_dead`。
-  - 击退：方向默认 `(owner.pos - dmg.hit_box_center).normalized()`；`KNOCKBACK_ATTRACT` 反向；力度 `force * resist_factor * melee_mult`。
-- 🚩 **顺序**：`emit_enemy_damage_taken` 在 modifier / `damage_multiplier` / hp 扣减**之前**，但 `enemy_over_kill_damage` 用**后置**值 —— 订阅者不可假设二者一致。
-- 🚩 `damage_multiplier` 仅在 `!TRUE_DAMAGE` 时重置（`:130-132`），TRUE_DAMAGE 会漏掉重置，残留到下一次非真实伤害。
+- `take_damage(data, bypass_hook=false, suppress_feedback=false, resolved_damage=-1)`：先经过可选 Mod interceptor，维护 `_hit_depth`，最外层结算完成后 drain 额外伤害队列。死亡、无敌与阵营门控仍在组件；友方命中可只续策反条。
+- `_raw_damage` 保留策反伤害的实时 dot/近战乘区和独立暴击；普通伤害使用构建器中已计算的 base_damage。治疗仍走原治疗、modifier、加血和回调路径。
+- 普通伤害 `_resolve_damage` 顺序：承伤倍率 → `enemy_damage_calculating` 前置数值阶段 → 本地 `enemy_damage_taken` 关联 proc → DamageData modifiers → 组件倍率。真实伤害跳过承伤及前置修饰；两种路径都消费暂存倍率。前置阶段追加的临时 modifier 在命中末恢复，避免穿透复用累积。
+- 扣血仍包含一击必杀、溢出伤害事件、HP 修改、伤害反馈、on_damage_dealt、死亡/击杀归属；击退与策反继续在本体处理。`enemy_damage_taken` 仍发生在本地扣血之前，溢出/死亡事件使用后置数值，订阅者不要假设两者一致。
+- **联机数值契约（2026-10-14，COOP-008 已修）**：公开 `resolve_damage` 只计算本次命中，不扣血、不运行结算 proc 或 on_damage_dealt。客机 `_prepare_enemy_hit` 在预测扣血与生命周期之前计算 `resolved_damage`；根敌人、自管理子弹和独立部件统一发送。房主通过第四参数接纳该值，不重复应用承伤/自己的被动，但仍检查死亡、无敌、阵营并扣实际 HP；归属 proc 在权威结束后只回到攻击者。目标血量/距离等使用客机命中时快照，沿用好友房可信数值模型。
+- Hina 距离闭包保持子弹内求值；Kotori、Tsurugi、Utaha、Momoi 的数值增伤及近战藏品迁到前置阶段。Momoi 的施加燃烧仍留在原 proc，避免预计算产生双重副作用；Mint 在命中瞬间写入倍率，由同一数值路径消费。
+- 版本：2026-10-14 用户要求发布版本恢复为本体 v0.5.1.3 / 官方 Mod 0.1.10，尚未提交上游的协议变更统一为 v4；原标 v0.5.1.4 / 0.1.12 / 协议 v5 的修复保留。本体与 Mod 需配套更新，无前置接口的旧本体停止注入。证据：`health_component.gd:31,213,222`、`GameEvents.gd:97,333`、`coop_net.gd:_prepare_enemy_hit/_server_enemy_hit/_server_enemy_part_hit`。守卫：`run_damage_contract_checks.py` 与联机 `damage` 实际双端场景。
 
 ### 2.4 玩家血量 — `script/player_health_component.gd`
 - `is_invincible` 早退；`base_damage<=0` 时改走“仅击退”分支（有 `knockback_force` 则只结算击退，不扣血 / 不吃 `hurt_invalid` / 不进无敌帧 / 不触发 `on_hit_effects`）；正常伤害下 `hurt_invalid>0` 消耗一次免疫并显示 "IMMUNE!"（`:67-78`）。
@@ -286,6 +280,7 @@
 - ⚠️ 少数 `crit_chance_bonus` 字段（三处 health component）无读者。
 
 ### 5.6 Support — 支援角色
+- **持久化边界（2026-10-14）**：v3 保存支援 ID/LV/exp 与 selected_support_id；运行期 support_data 仍可附 resource 供 UI 使用，但写盘剥离它。缺/停用 Mod 时保持进度与选择、显示空支援，重新启用后恢复；旧 Resource 存档在 Mod 挂载后迁移，缺依赖时采用局部占位加载器。实现与验证见 ARCHITECTURE §2 及 `tests/run_support_persistence_checks.py`。
 - 数据：`SupportCard`（`resources/support/support_card.gd`）定义被动（`ability_id`：PlayerData 变量名 + `pa_value: Curve` 等级曲线）与主动（`ex_cost`、`support_pack`）。
 - 装配：`SupportData.game_add_support()`（`script/support_data.gd:59-74`）实例化 `support_pack` 到 `"PlayerRoot"` 并注入 `ins.support_card`，UI 挂 `"GameUI".support_box`；被动数值不再由 `SupportData` 写入。⚠️ `game_support` 可为 `null`（全新档/从未选过支援时初值为 `null` 而非 `null_support`），`game_add_support()` 对 `null` 与 `support_id == "null"` 一律早退；正常流程由 `reset_game_support()`/`Game.load_playerdata()`/`support_select_ui.check_data()` 把 `null` 归一为 `null_support`，避免 HUD 出现空卡与结算 Nil 访问。
 - **`SupportCharacter`**（`script/support_character.gd`，`extends Node2D`）：`support_pack` 根基类。`_ready()` 调 `_apply_passive_boost()`（读存档 `support_data[id].LV` → `pa_value.sample(lv/100)` → `PlayerData.set(ability_id, …)` + `update_player_ability()`）与虚函数 `_special_effect()`。
@@ -312,6 +307,8 @@
 
 ### 5.8 断线重连（联机，mod `mods/etn_coop` + 中继服务端，2026-10-08）
 
+- **传输断线边界（2026-10-14）**：`net/coop_enet_peer.gd` 为原生 ENet 的薄适配器，汇总一次 poll 的连接事件后再通知 SceneMultiplayer；发送检查底层 ENetPacketPeer 仍为 CONNECTED，避免同 poll 多端退出时向已无通道的 peer 发引擎成员通知或玩法广播。保持原生通道/可靠性及 server relay；前置伤害契约与本批其他尚未提交上游的协议变更统一纳入 v4（原计划 v5）。`coop_relay_peer.gd` 清理已断开 sender 的排队包、拒绝晚到旧包，同 poll 复用 ID 时先断后连。真实同时断开及 Relay 队列守卫、三端重连严格通过；不靠扩大错误白名单。中继发送超水位现在首次即断开慢端，不再跳过可靠帧后继续连接。
+
 - **身份**：客户端 `coop_settings.ensure_client_token()`（UUID 持久化 `profile/client_token`）；LAN/Relay 加入帧带 token，host 记 `_peer_token`/`_token_peer`。
 - **host 宽限**：`_on_peer_disconnected` 对已握手且有 token 的 peer 进入 `REJOIN_GRACE_MSEC=45s` 宽限——保留 `player_by_peer_id`/`player_scene_by_peer`/`player_name_by_peer`/`team_stats`/`support_*`/`down_peer_ids` 等与镜像（冻结 `player_stop`），超时 `_cleanup_peer`。宽限内 `_check_team_game_over` 直接 return（防其余人倒地误结束）。
 - **重连迁移（方案 B：新 id + host 迁移）**：`_old_peer_for_rejoin(token)` 命中旧 id → `_migrate_peer_state(old,new)` 搬移所有 per-peer 字典键、`last_attacker_by_net_id`/`summoned_owner_by_net_id` 引用、镜像 proxy `peer_id`；`_accept_peer` 不再覆盖已迁移角色。ENet 由 host 分配新 id、Relay 由服务端 `next_peer_id` 分配。
@@ -319,6 +316,9 @@
 - **服务端**（`mod_sdk/coop_mod/server/relay_server.py`）：`join_room` 在容量判断前对同 token 的旧 `clients` 先 `remove_peer`（释放名额，修满房误拒 + 半开幽灵占位）并广播 `peer_disconnected(old_id)` 让 host 进宽限；`heartbeat_peers` 主动 WebSocket PING，`PEER_TIMEOUT_MSEC` 无数据即回收半开连接。
 - **回合切换冻结（掉线期间不停旧回合）**：host `_reconnecting_peers` 非空时——`_gate_round_end_emit` 暂缓本回合结束（`_deferred_round_end`）、`_maybe_finish_round_upgrade` 暂缓升级页推进；重连/超时后 `_on_rejoin_settled` 解冻（补发 `emit_round_end` / 重判升级）。重连识别后若 host 正处于升级页（`_round_upgrade_active`），补发 `_remote_round_end`+`_remote_round_upgrade`，让重连者进入升级页，不丢升级（客机 `_in_round_upgrade` 幂等；`_on_round_upgrade_end_local` 复位）。各端显示轻量等待遮罩（`wait_reconnect_show`/`wait_reconnect_hide` → `coop_round_wait` light 模式：无背景遮罩 + 小字号(12)、回合计时下方顶部居中（`LIGHT_TOP_MARGIN=44`，避开 `ui/round_timer.tscn` 顶部计时，2026-10-09 调整）+ 鼠标穿透、世界仍可操作；名字按视口宽度换行不溢出）。
 - **局限**：房主自身重连未做。详见 `LEARNINGS.md`。
+
+- **身份恢复修正（2026-10-13，官方 mod 0.1.11 / 协议 4）**：迁移包含升级/选人/准备房就绪表、金币倍率及道具视觉记录；房主向所有存活端广播旧/新身份与权威恢复状态，补回召唤物、支援选择、名字和倒地状态，LAN 换 ID 与 Relay 复用同 ID 均补发恢复；同 ID 迁移直接保持字典，召唤物节点/proxy 的 `owner_peer_id` 同步更新（`coop_net.gd:1046,1121,1167`）。客机封面完成后在恢复握手时幂等重报升级就绪（`:2995`）。正式关卡三端带召唤物/道具/倒地恢复，以及客机先继续后重连的回合屏障均有回归。
+- **准入规则（来源：user，2026-10-13）**：进入 SELECT / ALL_READY / BATTLE 后拒绝新身份，提示等待下一局；已有 token 的重连继续允许。阶段屏障只统计已握手成员，并在宽限结束后重判选人，拒绝中的传输 peer 不进入就绪人数（`coop_net.gd:1046`、`_maybe_finish_select`、`_maybe_finish_round_upgrade`）。
 
 ### 5.9 联机网络补偿调优 / 诊断（mod，2026-10-08）
 
@@ -328,6 +328,13 @@
 - **实测基线（同机两 peer，`--coop-*` headless）**：LAN RTT ~4–10ms；默认中继 `mc.yqst.top:32085` RTT ~115ms（基础 TCP RTT ~31ms）→ **中继链路/服务器转发**为主要延迟来源，mod 自身处理（LAN 回环）可忽略；插值约为固定加成。详见 `LEARNINGS.md`。
 
 ---
+
+### 5.10 官方联机通用拓展接口
+
+- 注册表 `net/coop_extensions.gd` 提供接口 v1，接收具有 prepared / failed 信号和 start / stop / diagnostics 的 Node 提供者；官方 `CoopNet` 安装端点并保持会话与玩法职责。
+- `ui/coop_menu.gd` 按可选页面工厂创建页签，与内置页面互斥；导航只纳入可见且启用的控件，关闭/重开恢复提供者原始交互设置。
+- 准备中拒绝重复启动，自动重连保留连接设施；显式退出、F12、取消及退树释放提供者。延迟失败校验代次，不关闭后续新会话。
+- 官方包可独立运行；提供者由独立 Mod 自行实现。契约见 `docs/COOP_EXTENSION_API.md`，仅官方包回归见 `tests/run_coop_extension_contract_checks.py`。
 
 ## 6. Managers / 管理器
 
@@ -414,9 +421,11 @@
 - `AbilityUpgrade` 定义升级项（id/rare/tags/weight/special_rules…）。
 - `ItemWeightManager.calculate_item_weight` = base `weight` × 稀有度权重 × 平均标签权重 × 玩家状态 × 历史 × 特殊规则 × modifiers；默认稀有度 `{0:1.0, 1:0.375, 2:0.1}`。
 - `UpgradeManager.build_pool` 用 `AliasMethod` 建池；`get_triple_choice` 取 3 个不重复选项。
+- **刷新权重（2026-10-14，AUD-LOOT-001 已修）**：refresh_mult 表示额外增益，初始/选择后为 0；刷新更新 `(1+bonus)*1.1-1`，最高稀有度权重乘 `(1+bonus)`，因此中性时不归零、每次刷新总倍率增长 10%。其他加法使用处仍把它视为额外增益。health_percent 使用浮点除法；`run_upgrade_snapshot_checks.py` 覆盖连续刷新、选择复位和非满血比例。
 - `apply_upgrade` 记录数量/顺序、镜像到 `PlayerData.current_upgrades`、实例化 `res://scenes/update_item/<id>.tscn` 到玩家、记录选择、emit `ability_upgrade_added`；`EquipItem` 基类处理装备/叠加。
 - **救生圈清弹联机（mod，2026-10-09）**：`lifebuoy.gd` 受伤触发时经新增 `ExtensionHooks.on_enemy_bullet_clear(pos, radius)` 通知 mod；mod 本机即时按半径清 `group EnemyBullet`（普通弹 `bullet_clear`、导弹 `enemy_missile_1` 无 `bullet_clear` → `idle_state`），非 host 再 `rpc_id(1, "_server_enemy_bullet_clear", pos, radius)` 请求 host 权威清理——host 清真子弹经既有 `on_projectile_despawned`(`net_visual_id`) 广播 `_despawn_visual_bullet`，各端一致消失。带 `source_faction==ENEMY_SIDE` 过滤 + `_rate_allow_tokens` + 归属校验（距发送者玩家 ≤400）；**不清**激光/狙击/爆炸 AoE（不在 `EnemyBullet` 组）。本体侧另修 `lifebuoy.tscn` 的 `Area2D.collision_mask` `65536`→`128`（恢复单机清普通弹；快照曾把 `128` 改 `65536`，而标准敌弹是 `128`）。
 - 拾取（瞬时）：`coin.gd`（池 `"coins"`，组 `PickItem`，`pick_up` 后归位并加 `coin*coin_mult`）；`pyroxenes.gd`（加 `PlayerData.player_pyroxenes`）。
+- **联机共享金币（来源：user，2026-10-13）**：按拾取者的 `coin_mult` 向上取整后共享全队；客机在可靠 channel 0 先同步有限、受范围约束的倍率，再提交拾取。房主对已知 net_id 仅使用自己的原始币值与已保存倍率计算，忽略客机上报总额；零倍率仍消费金币，重复拾取不重复结算（`coop_net.gd:6941,6954`、`_server_pickup_coin`）。倍率沿用本项目客机属性自报的信任模型，并非完整属性反作弊；房主掌握原始币值及消费去重。回归覆盖 2 倍、小数向上取整、零倍率、伪造总额与重复请求。
 - 金币掉落/合并（`CoinManager`，2026-10-02）：掉落统一走 `CoinManager.drop_coin(pos, value, pick_up)`（`entity_ENEMY._coin_drops`/`sandbag._coin_drops`）。池上限 `COIN_POOL_CAP=150`：优先复用空闲金币 → 未满则实例化 → 满额则并入 `_nearest_active()`（仅可拾取、非 `is_idle`）并通过 `coin.absorb(value, pick_up)` **累加值、不新建节点**（总值守恒）。活跃集 `_active` 由 `coin.gd` 在 `active_state()`/`idle_state()`/`_exit_tree()` 上报（仿 `PoolManager._active_enemies`）。合并目标**排除 `can_pick==false`**（抛物线/Boss 金币演出，回合末 `coin_clear_unit` 不返还其值）。**`coins` 池不进 `IDLE_LIMITS`**（`limit>=0` 时满额 `get_pool` 会静默回收活跃金币 → 丢值；故 `coins` 一律只走 `get_pool_idle` + 自管计数）。视觉缩放 `coin_scale` 改边际递减（`0.8 + 1.7*(1-exp(-coins/56.7))`，小值≈旧线性、渐近上限 2.5）。
 - 青辉石自动拾取全部金币（2026-10-02）：Boss 死生成 `coin_box`（100 枚抛物线金币，约 3s 掉完、每枚再 3s 落地）+ `pyroxenes`；拾取青辉石后 `round_timer.end_boss_round` 给 3.5s 清场缓冲。旧实现每枚金币各自连 `pyroxenes_pick_up`，**拾取信号发射之后才生成的金币收不到** → 只自动拾取已掉完的。修法：① `CoinManager` 监听 `pyroxenes_pick_up` → `auto_pick=true` + 遍历 `_active` 逐个 `auto_pick()`（含飞行中金币，置 `can_pick` 让磁吸接管）；② `coin.gd.active_state()`/`absorb()` 在 `CoinManager.auto_pick` 时置 `can_pick=true; pick_up=true`（覆盖之后生成的金币）；③ `coin_box` 监听同一信号置 `_flushed=true`，`add_coin()` 循环 `if _flushed: continue` 跳过 `await timer.timeout`，**立即补发剩余金币**（含拾取早于 `add_coin()` 的情况）；④ `round_start` 复位 `auto_pick`。逐枚 `pyroxenes_pick_up` 连接已移除（改由 `CoinManager` 单点驱动）。`game_eval` 验证：`emit_pyroxenes_pick_up()` 后 `auto_pick=true`、`box._flushed=true`、5 枚剩余同帧全生成、其后激活的金币 `can_pick && pick_up` 为真。
 - 抛物线金币联机（2026-10-07，mod `mods/etn_coop`）：`coin_box` 的 `parabola_path` 金币在 `drop()` 里 `body.active_state()` 早于 `curve` 构建，故 host `on_coin_spawned` 对父节点为 `PathFollow2D` 的 coin 延后一帧读 `parabola.curve`、转世界坐标后 `rpc("_remote_parabola_coin", net_id, points, value, pick_up)`；客机按 `coin_traj` + 墙钟沿折线驱动镜像飞行，落地才 `can_pick`（拾取仍走 `_gate_coin_pickup → host 共享`）。
@@ -459,7 +468,7 @@
 - **记分板 mod 支持（2026-10-09）**：筛选列表改为动态——角色 = `ModManager.get_base_characters()`（扫 `res://resources/player`，含分支形态如 `aris_armed`，`all_player.tres` 回退）+ `get_characters()`；模式 = `get_base_game_modes()`（扫 `res://resources/game_mode`）+ `get_content("game_modes")`（`ui/menu_box_character.gd` / `ui/menu_box_gamemode.gd`，按 id 去重）。记录解析 `ui/score_card.gd` 改为优先 `ModManager.get_resource(kind,id)`、回退本体 `res://resources/...`；**已卸载/缺失内容占位降级**：角色立绘用 `res://sprites/player_support/null_picture.png` + 显示原 id、支援回退 `null_support`、模式卡/道具卡**跳过**、关卡显示原 id；**不自动清理**旧记录（交给面板删除/清空）。
 - **深度修改（P4）**：`mod.json.entry`（Node 脚本）启动时由 `_run_entry_scripts()`（按 `_resolved_order`）实例化到 `ModManager` 下；`api_version > ModAPI.VERSION` 则跳过。mod 经 `ModAPI`（静态门面）+ `GameEvents` 挂流程；`replace_files=true` 可覆盖入口场景（`main.tscn` 等，加载晚于挂载；用覆盖型预设 `mod_sdk/ModPackReplace.preset.cfg` + `build_mod.ps1 -Preset ModPackReplace`，见 `mod_sdk/README.md` §13）。`ModAPI` 稳定接口：只读 `get_content/get_resource/get_scene/get_characters/has_upgrade/get_content_mod/get_societies/get_unclaimed_characters/get_unclaimed_unlocked_characters/list_mods/get_languages/get_card_scene/has_mod_character/is_character_locked/get_base_societies/get_base_characters/get_base_game_modes/get_order/get_content_kinds/get_weapon_type_name/get_weapon_type_icon`；写入 `register_content(kind,id,res,mod_id,scene_path?,card_scene_path?)`（经 `_register_res` 治理）、`register_weapon_type(code,icon_path?,display_name?)`（武器类型注册表，2026-10-13，`api_version` 升 2）、`add_translation(locale,key,value)`（`TranslationServer.add_translation`）、`register_language(locale,display_name,opts)`（`ModManager._languages` 注册/覆盖 + `LocaleFont.register_locale_fonts`，`languages_changed` 通知 `ui/langue_button` 重建）、`register_translation(t)` / `register_translation_resource(path)` / `register_translations_from_dir(dir)`（批量翻译 additive）。
 - **语言注册表（2026-10-09）**：`ModManager.BASE_LANGUAGES`（zh_CN/en/pt/vi_VN）+ mod `register_language` 覆盖/追加 → `get_languages()`；`ui/langue_button`（主菜单/暂停页共用）数据驱动生成下拉与触屏行，`display_font` 指定显示名字体；`script/locale_font.gd` 由单一 vi 泛化为 `_locale_fonts`/`_locale_ranges`（多 locale 映射 + 窄触发）。契约见 `mod_sdk/README.md` §15。
-- **zip 导入健壮性（2026-10-09）**：`import_zip()` 重装先递归清空 `user://mods/<id>/`；校验 zip 含 `manifest.pck`（默认 `<id>.pck`）；条目数 >2000 或累计解压 >256MB 报错并清理。`_fail_mod()` 停用时 `mods_changed.emit.call_deferred()` 通知 UI。
+- **zip 导入健壮性（2026-10-14 核对）**：`import_zip()` 已委托 `script/mod_installer.gd:4`，先验证并完整解压到隐藏暂存目录，再交换正式目录；失败恢复旧包。旧版 2026-10-09 的“重装先清空正式目录”描述已失效，事务细节见 `ARCHITECTURE.md` §1.11。校验 zip 含 `manifest.pck`（默认 `<id>.pck`）；条目数 >2000 或累计解压 >256MB 报错并清理暂存。`_fail_mod()` 仅更新运行期加载结果，不修改用户 enabled 意图，并用 `mods_changed.emit.call_deferred()` 通知 UI。
 - **补丁**（P0.5，已实现）：`patches/*.json`（loose `mods/<id>/patches/` 或 pck 内 `res://mods/<id>/patches/`）由 `script/mod_patch.gd`（`class_name ModPatch`）按 `load_order` 依次应用，对内存注册表做 `replace/add/remove/inherit`；`target`/字段不存在 → warning + skip。加载顺序由 `dependencies`/`load_order`/`conflicts` 拓扑排序（`ModManager._resolve_order`），依赖缺失/环/冲突 → 停用。
 - **管理面板描述 tooltip（2026-10-08）**：`mod.json` 增可选 `description`（直接字符串，Label 自动翻译、命中翻译键即翻译），`ModManager.list_mods()` 返回 `description`（`version`/`author` 原已返回）。`script/mod_option.gd`（`ui/mod_option.tscn`）悬停行显示跟随鼠标的 tooltip（名字 + 版本 + 作者 + 描述）；触屏点按显示、再点同一行/点列表空白隐藏、拖动排序时隐藏。命中判定用整行 `get_global_rect()`（含开关）；面板在 CanvasLayer 下无缩放，故 `get_global_mouse_position()` 与 `get_global_rect()` 同系可直接比较。
 - 打包/安装/导出设置见 `CONVENTIONS.md` §10 与 `mod_sdk/README.md`。
