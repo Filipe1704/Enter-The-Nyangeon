@@ -230,3 +230,44 @@
 - Systems / 影响系统: 无运行时改动（未并入构建）。
 - Docs synced / 文档同步: `AGENTS.md`「本地文件与在制品」、`docs/CONVENTIONS.md` §9。
 - Open / 待办: 待用户明确「结案」后移除该目录。
+
+## 2026-10-13 — 联机准入与共享金币规则确认
+- Correction / 修正: SELECT 阶段接纳新身份但不同步选人流程 → 选人开始后拒绝新加入并提示等待下一局，允许原身份重连（来源：user）。
+- Correction / 修正: 客机拾取已知网络金币仅按房主原始币值共享 → 房主使用原始币值与已同步的拾取者倍率向上取整后共享全队（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`、`i18n/coop_i18n.gd`、`tests/coop_recovery_checks.gd`。
+- Summary / 改动摘要: 记录本会话用户明确选择的两项修正规则；两项均有真实多进程回归。
+- Reason / 原因: 用户裁定选人准入和共享经济的预期行为。
+- Systems / 影响系统: 联机会话阶段、断线恢复、共享金币。
+- Docs synced / 文档同步: `docs/SYSTEMS.md` §5.8 / §8、`docs/LEARNINGS.md` 对应用户规则。
+
+## 2026-10-14 — 本地导入文件与忽略配置提交范围修正
+- Correction / 修正: soft reset 后暂存包含 `.import` 与 `.gitignore` → 忽略 `.import`，不提交 `.gitignore` 改动（来源：user）。
+- Files / 涉及文件: 本地 `.git/info/exclude`、Git 索引；`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
+- Summary / 改动摘要: 取消暂存 627 个 `.import` 与 `.gitignore`，已跟踪 `.import` 设置本地 `skip-worktree`，保留磁盘内容。
+- Docs synced / 文档同步: `docs/CONVENTIONS.md` §6.1、`docs/LEARNINGS.md` 对应 Git 条目。
+
+## 2026-10-14 — 本体与联机 Mod 发布版本回滚
+- Correction / 修正: 本体 `v0.5.1.4` / 联机 Mod `0.1.12` → 本体 `v0.5.1.3` / 联机 Mod `0.1.10`，最低本体版本声明恢复为 `v0.5.1.2-test`（来源：user）。
+- Files / 涉及文件: `script/Game.gd`、`mod_sdk/coop_mod/mods/etn_coop/mod.json`、`net/coop_net.gd`、`entry/coop_entry.gd`。
+- Summary / 改动摘要: 仅回滚发布版本标记并修正接口缺失提示；协议 v5、存档格式 v3、Android 模板版本及功能修复保留。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/LEARNINGS.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 未提交上游的联机协议统一为 v4
+- Correction / 修正: 发布版本回滚后联机协议仍为 v5 → 本批尚未提交上游的协议变更统一使用 v4（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`。
+- Summary / 改动摘要: 仅调整协议标记，保留实际 RPC 与玩法修复；发布版本及存档格式不变。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 重新划定提交范围
+- Correction / 修正: 本批提交包含独立组网拓展、设计稿及开发工具状态 → 仅重新提交本体与官方联机修复，EasyTier 联机、UI 设计草案和开发配置保留本地（来源：user）。
+- Files / 涉及文件: 本轮重新整理的源码、永久守卫及相关说明。
+- Summary / 改动摘要: 保留发行包导出隔离，拆出通用 Godot 回归工具和导出验证工具，确保被保留的检查独立于排除项；原提交与设计稿已建立本地备份。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、相关 SDK 说明。
+- Verified / 验证: 独立候选工作区通过本体/官方联机各专项及导出隔离；公共检查不依赖被排除的拓展源码和本地审计状态。
+
+## 2026-10-14 — 补交官方联机通用接入
+- Correction / 修正: 将官方通用拓展接入与独立附属包一起排除 → 官方联机 Mod 代码提交，独立 EasyTier 附属包继续不提交（来源：user）。
+- Files / 涉及文件: 官方 `net/coop_extensions.gd`、`net/coop_net.gd`、`ui/coop_menu.gd`、`i18n/coop_i18n.gd` 及官方接口回归。
+- Summary / 改动摘要: 补交通用注册、页面工厂、交互恢复、状态栏和会话生命周期；不纳入独立附属实现、设计草案与开发配置。
+- Docs synced / 文档同步: `docs/COOP_EXTENSION_API.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/PROJECT_MAP.md`、`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
+- Verified / 验证: 21 项契约与 17 项官方菜单检查通过，测试只安装官方联机包。

@@ -37,7 +37,9 @@
 
 ### 2.4 编辑规则（来自 `AGENTS.md`，务必遵守）
 - 编码 **UTF-8 with BOM**；行尾 **CRLF**；**新条目一律追加到文件末尾**；改后需在 Godot 中 reimport 重新生成 `.translation`；严禁重编码为 ANSI/GBK；每次修改后校验仍为合法 UTF-8。
-- ⚠️ 实测（2026-09-28）：`ETN_localization.csv`/`ETN_player_localization.csv`/`ETN_shop_localization.csv` 为纯 CRLF；`ETN_item_localization.csv` 仅在引号内的多行字段使用 LF（混合），`ETN_support_localization.csv` 有 2 处零散 LF。**行尾规则已定为 CRLF**（来源：user）；新增/编辑时逐文件保留既有行尾，避免整文件行尾转换。
+- 历史（2026-09-28）曾存在引号内 LF / 零散 LF，并建议保留旧行尾。**SUPERSEDED: 2026-10-13** 本轮修复 Git 属性漂移，`.gitattributes` 为 `ETN_*localization.csv` 单独声明 `text eol=crlf`，5 组源已规范 BOM/CRLF 并经 Godot 重新导入；当前以 `python tests/check_localization.py` 为格式防护。
+- 字段含 ASCII 双引号时也必须整体加引号，内部 `"` 写为 `""`；不能仅在字段含逗号时才转义。Python `csv.reader(strict=True)` 会接受某些裸引号，Godot importer 却会吞掉它们。当前检查器另做引号状态检查；本轮修正 5 处引号写法，解码后的 CSV 文案和条目顺序保持不变，2880 个翻译值经真实 importer 校验。
+
 
 ## 3. Resource `.tres` structure / 资源结构
 
@@ -93,6 +95,7 @@ layer N = bit `1<<(N-1)`：
 
 - `default_texture_filter=3`, `viewport/hdr_2d=true`, shader cache disabled（`project.godot:236-243`）。
 - 全局 UI 主题 `res://fonts/theme.tres`，`default_font_antialiasing=0`。
+- 设置左侧页签统一用 `ModAPI.create_option_tab(button_id, title, auto_translate=true)` 创建，返回未挂载的本体 `ui/option_button.tscn` 实例；加入扩展点提供的 `button_box`，并让 `button_id` 对应页面 `option_id`。文字样式集中在共享场景，标题为根节点 `text` 属性；禁止在此入口复制一套字体/描边或附加 mod 独立主题。右侧内容页样式不受此约定限制。见 `script/mod_api.gd:13`、`mod_sdk/README.md` §12.1。
 - 按语言切换字体：`vi_VN` 时**只把显示本地化文本的文字控件**换成 Roboto（数字/符号/硬编码英文/CJK 保持像素字），由 autoload `LocaleFont`（`script/locale_font.gd`）运行时按节点替换（`ARCHITECTURE.md` §1.10）。原因：像素字（`BoutiqueBitmap*`）只含 `đ/ă` 等少量越南语字形，缺 `ơ ư ộ ế…`，只能整段替换而非 fallback。判定＝文本是翻译键（`TranslationServer.translate(text) != text`）或含像素字缺失的越南语字形。
 - 文件日志开启：`user://logs/ETN_debug.log`（最多 20 份）。
 - 设计分辨率 640×360，`stretch/mode="canvas_items"`。
@@ -104,8 +107,18 @@ layer N = bit `1<<(N-1)`：
 - `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
 - `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
 - 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
-- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成，随源资源提交。
+- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成。SUPERSEDED: 2026-10-14 用户要求忽略所有 `.import`，不再随源资源提交；`.gitignore` 的本地改动也不提交。新文件用 `.git/info/exclude` 忽略，已跟踪文件用本地 `skip-worktree` 跳过，保留磁盘内容与既有跟踪关系。
 - 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
+
+### 6.1 Android launcher icons / Android 启动器图标
+
+- `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
+- `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
+- 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
+- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成。SUPERSEDED: 2026-10-14 用户要求忽略所有 `.import`，不再随源资源提交；`.gitignore` 的本地改动也不提交。新文件用 `.git/info/exclude` 忽略，已跟踪文件用本地 `skip-worktree` 跳过，保留磁盘内容与既有跟踪关系。
+- 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
+
+- **本体导出镜像边界（2026-10-14，AUD-BUILD-001 已修）**：Windows/Android/Linux/iOS 四预设统一排除 `mods/*`，开发镜像不随本体分发。`run_export_boundary_checks.py` 实际导出并读取 PCK 目录，再挂新版独立脚本验证 marker；本体目录应无 mods/**。Git 忽略不是导出排除。修改预设后若编辑器仍持有旧配置，需重新打开项目再从编辑器导出，避免旧内存配置回写。
 
 ## 7. Shaders / 着色器（`shaders/`）
 
@@ -151,6 +164,9 @@ layer N = bit `1<<(N-1)`：
 - **角色 player_card 一致性**：角色有两处 `PlayerCard` —— 选人 UI 卡（`mod_society_card` 注入注册表 card）与**战斗场景根**（`script/player.gd:12`，被 `PlayerData.get_player_base_ability()`/HUD/结算/PS 商店读取）。以 `defs/characters/<id>.tres` 注册表为真源，战斗场景根应指向**同一份** `.tres`。注册校验用 `PackedScene.get_state()` peek 根节点导出属性（**不实例化**）：缺 `scene_path` → **跳过**；根 `player_card` 空/`id` 不一致、`ps_card` 空 → **告警**；进战斗后 `ModManager` 按所选 `scene_path` **对齐** `"Player"` 组全部玩家的 `player.player_card`（索引含 branches）。`ps_card` 无法对齐，mod 必须自备。可选字段 `PlayerCard.card_scene` 指定自带选人卡。
 - **社团卡**：可选，`defs/societies/*.tscn`（或 manifest `societies`）；场景根**必须继承 `ui/mod_society_base.gd`**，设 `group_id`（带 `<modid>_` 前缀、唯一）+ `members`（`Array[String]` 角色 id），场景需含 `AnimationPlayer`。**按 mod 认领**：有自带社团 → 其角色进自带卡；无 → 进内置通用「MOD」社团卡（`ui/mod_society_card`，只收未认领且未锁定的角色）。**通用卡自动续卡**：未认领已解锁角色 >4 时，`menu_screen._setup_societies()` / `coop_select._build_societies()` 按 `MOD_PAGE_SIZE = 4` 各建一张、注入 `members` 切片（标签 `MOD`/`MOD 2`/…）；`ui/mod_society_card.gd` 现继承 `mod_society_base.gd`，可见性/填充全继承（仅加 `set_page()`）。社团显隐改由 `is_character_locked`（任一成员可显示即显示），不再靠 `PlayerData.group`。角色选择卡同样「自带 `card_scene` 优先，否则通用 `ui/mod_player_card.tscn`」。
 - **导出/真机验证**：清单见 `docs/MOD_TESTING.md`。
+
+> **官方联机拓展接口**：独立提供者声明 `dependencies: ["etn_coop"]`，使用通用接口 v1；资源留在自身命名空间，不复制官方 `CoopNet` 或替换官方资源。stop 必须幂等并撤销旧准备任务。官方通用接入属于本批提交，附属实现另行处理。契约见 `docs/COOP_EXTENSION_API.md`（2026-10-14）。
+
 
 ## 11. 范围 buff / 光环（`BuffAura`）
 
