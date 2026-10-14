@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## CoopSnapshotBuffer：远端实体快照缓冲 + 延迟插值 + 欠载外推（纯表现，无 gameplay）。
-## 用法：apply_snapshot 时 push(now_msec, pos, vel)；每帧 sample(now_msec - delay_msec) 取插值点。
+## 用法：apply_snapshot 时 push(now_msec, pos, vel[, look])；每帧 sample(now_msec - delay_msec) 取插值点。
 ## 采样规则：
 ##   - 两条快照之间 → 线性插值
 ##   - 早于第一条     → 取第一条
@@ -28,6 +28,8 @@ const DELAY_JITTER_MULT: float = 1.5
 var _t: PackedInt64Array = PackedInt64Array()
 var _pos: PackedVector2Array = PackedVector2Array()
 var _vel: PackedVector2Array = PackedVector2Array()
+# 可选的瞄准点（玩家快照用；敌人/召唤物留 Vector2.ZERO）
+var _look: PackedVector2Array = PackedVector2Array()
 var _avg_gap_ms: float = 0.0
 var _last_push_ms: int = 0
 
@@ -38,6 +40,7 @@ var teleported: bool = false
 # 最近一次 sample 的结果（避免每帧分配 Dictionary）
 var sample_pos: Vector2 = Vector2.ZERO
 var sample_vel: Vector2 = Vector2.ZERO
+var sample_look: Vector2 = Vector2.ZERO
 
 
 static func compute_delay(snapshot_interval: float, rtt_ms: float, jitter_ms: float, observed_ms: float = 0.0) -> float:
@@ -54,6 +57,7 @@ func clear() -> void:
 	_t = PackedInt64Array()
 	_pos = PackedVector2Array()
 	_vel = PackedVector2Array()
+	_look = PackedVector2Array()
 	extrapolating = false
 
 
@@ -78,7 +82,7 @@ func consume_teleport() -> bool:
 	return v
 
 
-func push(t_msec: int, p: Vector2, v: Vector2) -> void:
+func push(t_msec: int, p: Vector2, v: Vector2, look: Vector2 = Vector2.ZERO) -> void:
 	if _last_push_ms > 0:
 		var gap: int = t_msec - _last_push_ms
 		if gap > 0 and gap < 2000:
@@ -91,6 +95,7 @@ func push(t_msec: int, p: Vector2, v: Vector2) -> void:
 			if t_msec == last_t:
 				_pos[_pos.size() - 1] = p
 				_vel[_vel.size() - 1] = v
+				_look[_look.size() - 1] = look
 			return
 		if p.distance_squared_to(_pos[_pos.size() - 1]) > TELEPORT_DIST_SQUARED:
 			clear()
@@ -98,13 +103,15 @@ func push(t_msec: int, p: Vector2, v: Vector2) -> void:
 	_t.append(t_msec)
 	_pos.append(p)
 	_vel.append(v)
+	_look.append(look)
 	while _t.size() > MAX_SAMPLES:
 		_t.remove_at(0)
 		_pos.remove_at(0)
 		_vel.remove_at(0)
+		_look.remove_at(0)
 
 
-# render_msec：渲染时间戳（本地 now - delay）。命中返回 true，结果写入 sample_pos/sample_vel。
+# render_msec：渲染时间戳（本地 now - delay）。命中返回 true，结果写入 sample_pos/sample_vel/sample_look。
 func sample(render_msec: int) -> bool:
 	var n: int = _t.size()
 	if n == 0:
@@ -113,6 +120,7 @@ func sample(render_msec: int) -> bool:
 	if n == 1 or render_msec <= int(_t[0]):
 		sample_pos = _pos[0]
 		sample_vel = _vel[0]
+		sample_look = _look[0]
 		extrapolating = false
 		return true
 	var last_t: int = int(_t[n - 1])
@@ -124,10 +132,12 @@ func sample(render_msec: int) -> bool:
 			var damp: float = 1.0 - float(ahead) / float(EXTRAP_MAX_MS)
 			sample_pos = _pos[n - 1] + _vel[n - 1] * (float(ahead) / 1000.0) * damp
 			sample_vel = _vel[n - 1] * damp
+			sample_look = _look[n - 1]
 			return true
 		extrapolating = false
 		sample_pos = _pos[n - 1]
 		sample_vel = _vel[n - 1]
+		sample_look = _look[n - 1]
 		return true
 	var lo: int = n - 2
 	for i in range(n - 1):
@@ -138,5 +148,6 @@ func sample(render_msec: int) -> bool:
 	var f: float = 0.0 if span <= 0 else clampf(float(render_msec - int(_t[lo])) / float(span), 0.0, 1.0)
 	sample_pos = _pos[lo].lerp(_pos[lo + 1], f)
 	sample_vel = _vel[lo].lerp(_vel[lo + 1], f)
+	sample_look = _look[lo].lerp(_look[lo + 1], f)
 	extrapolating = false
 	return true

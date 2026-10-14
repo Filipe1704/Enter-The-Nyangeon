@@ -148,6 +148,7 @@ func _item_visual_case():
 		mark(role + aim_key + "_checked")
 		await wait_mark(other_role + aim_key + "_checked")
 		aim_index += 1
+	await _knife_smoothness_probe(player, peer, local)
 	local.little_kei._apply_effect(2)
 	await create_timer(0.2).timeout
 	var kei = _item_nodes(peer, "little_kei")[0]
@@ -195,3 +196,64 @@ func _item_visual_case():
 	local.ginseng_doll.end_damage_health()
 	mark(role + "_items_done")
 	await wait_mark(("client" if role == "host" else "host") + "_items_done")
+
+
+# 逐帧平滑度探针（2026-10-15）：拥有者准星连续扫动，按帧采样远端镜像刀刃朝向。
+# 只按快照到达更新的实现会在快照间隔内保持不动（20Hz 台阶），hold 比例可直接量化“很卡”。
+func _knife_smoothness_probe(player, peer: int, local_items: Dictionary) -> void:
+	var mirror_knives := _item_nodes(peer, "kitchen_knife")
+	if mirror_knives.is_empty():
+		check(false, "平滑度探针需要远端菜刀副本")
+		return
+	var mirror_knife: Node2D = mirror_knives[0].get_node("knife")
+	var local_knife: Node2D = local_items.kitchen_knife.get_node("knife")
+	var old_max_fps: int = Engine.max_fps
+	Engine.max_fps = 60
+	# 目标圆心取镜像自身位置：准星在镜像右侧 ±1.2rad 内往返扫动。
+	# 弧线保持在右侧可避免镜像 graphics.scale.x 翻面（翻面会让 global_rotation 折叠出 π 假跳变），
+	# 从而把「只按快照到达才更新」的台阶单独量化出来。
+	var mirror = session.player_by_peer_id[peer]
+	var center: Vector2 = mirror_knife.global_position
+	var frames := 0
+	var mirror_holds := 0
+	var local_holds := 0
+	var mirror_max_step := 0.0
+	var mirror_max_error := 0.0
+	# 预热 40 帧：让上一段静态瞄准的过渡完全消失后再取样。
+	var phase_frames := 0
+	for i in range(40):
+		var warm_u := float(phase_frames % 120) / 120.0
+		var warm_tri := 2.0 * warm_u if warm_u <= 0.5 else 2.0 * (1.0 - warm_u)
+		var warm_sweep := -1.2 + 2.4 * warm_tri
+		player.crosshair_pos = center + Vector2(cos(warm_sweep), sin(warm_sweep)) * 200.0
+		phase_frames += 1
+		await process_frame
+	var mirror_prev: float = mirror_knife.global_rotation
+	var local_prev: float = local_knife.global_rotation
+	for i in range(120):
+		var u := float(phase_frames % 120) / 120.0
+		var tri := 2.0 * u if u <= 0.5 else 2.0 * (1.0 - u)
+		var sweep := -1.2 + 2.4 * tri
+		player.crosshair_pos = center + Vector2(cos(sweep), sin(sweep)) * 200.0
+		phase_frames += 1
+		await process_frame
+		frames += 1
+		var mirror_step: float = absf(wrapf(mirror_knife.global_rotation - mirror_prev, -PI, PI))
+		var local_step: float = absf(wrapf(local_knife.global_rotation - local_prev, -PI, PI))
+		if mirror_step < 0.0005:
+			mirror_holds += 1
+		if local_step < 0.0005:
+			local_holds += 1
+		mirror_max_step = maxf(mirror_max_step, mirror_step)
+		var aim = mirror.get("crosshair_pos")
+		if aim is Vector2 and not aim.is_equal_approx(mirror_knife.global_position):
+			mirror_max_error = maxf(mirror_max_error, absf(wrapf(mirror_knife.global_rotation - mirror_knife.global_position.direction_to(aim).angle(), -PI, PI)))
+		mirror_prev = mirror_knife.global_rotation
+		local_prev = local_knife.global_rotation
+	Engine.max_fps = old_max_fps
+	var mirror_ratio := float(mirror_holds) / float(maxi(1, frames))
+	var local_ratio := float(local_holds) / float(maxi(1, frames))
+	print("KNIFE_SMOOTH role=%s frames=%d mirror_hold=%.3f owner_hold=%.3f mirror_max_step=%.4f mirror_max_error=%.4f" % [role, frames, mirror_ratio, local_ratio, mirror_max_step, mirror_max_error])
+	check(mirror_ratio <= 0.15, "远端菜刀镜像逐帧平滑（mirror_hold=%.3f）" % mirror_ratio)
+	check(mirror_max_step <= 0.15, "远端菜刀镜像无台阶跳变（max_step=%.4f）" % mirror_max_step)
+	check(mirror_max_error <= 0.2, "远端菜刀朝向对准镜像准星（max_error=%.4f）" % mirror_max_error)
