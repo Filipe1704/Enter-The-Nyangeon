@@ -46,7 +46,7 @@ func shoot_scythe():
 		now_scythe.scale = Vector2(scythe_scale ,scythe_scale)
 
 		now_scythe.active_state()
-		ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [now_scythe])
+		ExtensionHooks.notify_named("on_visual_activated", [now_scythe])
 
 	else:
 		for i in scythe_count:
@@ -74,7 +74,7 @@ func shoot_scythe():
 			) + (PI/scythe_count)
 
 			now_scythe.active_state()
-			ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [now_scythe])
+			ExtensionHooks.notify_named("on_visual_activated", [now_scythe])
 
 func go_back_num():
 	back_num -= 1

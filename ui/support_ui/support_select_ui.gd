@@ -174,6 +174,9 @@ func add_cards():
 	if !SupportData.support_data.is_empty() and test_menu == false:
 		var group = SupportData.support_data.values()
 		for i in group.size():
+			# 停用/卸载 Mod 只隐藏不可用支援，已保存等级与 ID 继续保留。
+			if not group[i].get("resource") is SupportCard:
+				continue
 			var ins = support_card.instantiate()
 			ins.shop_card = group[i]["resource"]
 			support_box.add_child(ins)

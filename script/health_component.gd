@@ -28,11 +28,11 @@ func _is_friendly_fire(damage_data: HealthChangeData) -> bool:
 		return Faction.hostile_to(damage_data.source_type, my_team)
 	return not Faction.hostile_to(damage_data.source_type, my_team)
 
-func take_damage(damage_data: HealthChangeData, bypass_hook: bool = false, suppress_feedback: bool = false):
-	if not bypass_hook and ExtensionHooks.intercept(ExtensionHooks.enemy_damage_interceptor, [damage_data, owner]):
+func take_damage(damage_data: HealthChangeData, bypass_hook: bool = false, suppress_feedback: bool = false, resolved_damage: int = -1):
+	if not bypass_hook and ExtensionHooks.intercept_named("enemy_damage_interceptor", [damage_data, owner]):
 		return
 	_hit_depth += 1
-	_take_damage_internal(damage_data, suppress_feedback)
+	_take_damage_internal(damage_data, suppress_feedback, resolved_damage)
 	_hit_depth -= 1
 	if _hit_depth == 0:
 		_drain_pending_extra()
@@ -66,46 +66,31 @@ func _drain_pending_extra() -> void:
 			continue
 		take_damage(d)
 
-func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: bool = false):
+func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: bool = false, resolved_damage: int = -1):
 	if is_invincible:
+		damage_multiplier = 1.0
 		return
 	# 已死单位拒绝后续伤害：Boss 重写 on_dead 不走 idle_state，尸体 HurtBox 仍启用时
 	# 会继续飘字/白闪/击退（总血不降），此门在伤害结算最前端统一拦掉。
 	if stats != null and stats.hp <= 0 and not stats.is_test_target:
+		damage_multiplier = 1.0
 		return
 
 	# 归属压制：本次伤害归属他人（联机客机）时，authority 端不发射本地 enemy_*_proc 全局信号；
 	# 由 mod 回传给归属端在那边发射（避免 host 道具/PS 被客机伤害误触发）
-	var suppress_proc: bool = suppress_feedback or ExtensionHooks.intercept(ExtensionHooks.enemy_proc_owner_suppress, [damage_data])
+	var suppress_proc: bool = suppress_feedback or ExtensionHooks.intercept_named("enemy_proc_owner_suppress", [damage_data])
 
 	var friendly := _is_friendly_fire(damage_data)
 	if friendly:
+		damage_multiplier = 1.0
 		# 策反旁路：命中友方（含已策反单位）跳过友伤，但仍结算策反值 → 续条
 		if damage_data.convert_power > 0 and owner != null \
 				and owner.has_method("apply_conversion_power"):
 			owner.apply_conversion_power(damage_data.convert_power)
 		return
 
-	# 策反伤害：近战乘区实时结算（每次命中取当前玩家值）+ 每次独立掷暴击
-	var raw_damage: int = damage_data.base_damage
-	var converted_hit := damage_data as DamageData
-	if converted_hit != null \
-			and converted_hit.source_type.has(GameTags.CONVERTED) \
-			and not converted_hit.flags.has(GameTags.TRUE_DAMAGE) \
-			and raw_damage > 0:
-		
-		var crit_player: Node = PlayerData.player
-		if crit_player == null or not is_instance_valid(crit_player):
-			crit_player = PlayerRef.resolve(self)
-		if crit_player != null and crit_player.get("stats") != null:
-			raw_damage *= crit_player.stats.dot_damage
-			if converted_hit.damage_type.has(GameTags.MELEE_DAMAGE):
-				raw_damage = max(1, int(round(raw_damage * PlayerData.kick_damage_mult)))
-			var is_crit_hit: bool = randf_range(0, 100) < crit_player.stats.critical_luck
-			converted_hit.is_crit = is_crit_hit
-			if is_crit_hit:
-				raw_damage = max(1, int(round(raw_damage * crit_player.stats.critical_damage)))
-	
+	var raw_damage: int = damage_data.base_damage if resolved_damage >= 0 else _raw_damage(damage_data)
+
 	if damage_data.is_heal:
 		
 		var final_damage: int = max(1, raw_damage)
@@ -125,35 +110,21 @@ func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: boo
 		
 	
 	else:
+		if raw_damage <= 0:
+			damage_multiplier = 1.0
 		if raw_damage > 0:
 			
-			## 2. 应用护甲减伤公式（土豆兄弟/挺进地牢的常见公式）
-			#var mitigated = raw_damage * (1.0 / (1.0 + stats.armor * 0.01))
-			## 或者用线性减伤： raw_damage - armor
-
-			# 3. 应用全局伤害倍率
-			
-			var final_damage: int = max(1, raw_damage)
-			# 真实伤害无视承伤率
-			
-			if !damage_data.flags.has(GameTags.TRUE_DAMAGE):
-				final_damage = max(1, raw_damage * stats.global_hurt_damage)
-			
+			var final_damage: int
 			var body_path: NodePath = owner.get_path()
-			
-			
-			
-			if not suppress_proc:
-				GameEvents.emit_enemy_damage_taken(final_damage, damage_data, body_path)
-			
-			if not damage_data.damage_modifier.is_empty() and !damage_data.flags.has(GameTags.TRUE_DAMAGE):
-				for i in damage_data.damage_modifier:
-					final_damage = i.call(owner, final_damage)
-			
-			if !damage_data.flags.has(GameTags.TRUE_DAMAGE):
-				final_damage = int(final_damage * damage_multiplier)
+			if resolved_damage >= 0:
+				# 客机已用自己的前置效果计算本次命中；host 不再重复乘目标承伤或本机被动。
+				final_damage = resolved_damage
 				damage_multiplier = 1.0
-			
+				if not suppress_proc:
+					GameEvents.emit_enemy_damage_taken(final_damage, damage_data, body_path)
+			else:
+				final_damage = _resolve_damage(damage_data, raw_damage, not suppress_proc, not suppress_proc)
+
 			# 调试作弊：一击必杀。仅对敌方阵营受击者生效
 			# （HealthComponent 也被玩家召唤物复用，必须按受击者阵营门控，避免误伤自家召唤物）
 			if Game.one_hit_kill and stats.hp > 0 \
@@ -213,3 +184,61 @@ func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: boo
 			owner.apply_conversion_power(damage_data.convert_power)
 	
 	
+
+func _raw_damage(damage_data: HealthChangeData) -> int:
+	# 策反伤害：近战乘区实时结算（每次命中取当前玩家值）+ 每次独立掷暴击
+	var raw_damage: int = damage_data.base_damage
+	var converted_hit := damage_data as DamageData
+	if converted_hit != null \
+			and converted_hit.source_type.has(GameTags.CONVERTED) \
+			and not converted_hit.flags.has(GameTags.TRUE_DAMAGE) \
+			and raw_damage > 0:
+
+		var crit_player: Node = PlayerData.player
+		if crit_player == null or not is_instance_valid(crit_player):
+			crit_player = PlayerRef.resolve(self)
+		if crit_player != null and crit_player.get("stats") != null:
+			raw_damage *= crit_player.stats.dot_damage
+			if converted_hit.damage_type.has(GameTags.MELEE_DAMAGE):
+				raw_damage = max(1, int(round(raw_damage * PlayerData.kick_damage_mult)))
+			var is_crit_hit: bool = randf_range(0, 100) < crit_player.stats.critical_luck
+			converted_hit.is_crit = is_crit_hit
+			if is_crit_hit:
+				raw_damage = max(1, int(round(raw_damage * crit_player.stats.critical_damage)))
+
+	return raw_damage
+
+# 只计算本次命中：不扣血、不发结算 proc、不执行 on_damage_dealt。
+# 客机按命中时自己的构筑及目标快照计算数值，host 仍负责存活/阵营/无敌门控与最终扣血。
+func resolve_damage(damage_data: HealthChangeData) -> int:
+	if damage_data == null or stats == null:
+		damage_multiplier = 1.0
+		return 0
+	if damage_data.is_heal or is_invincible or _is_friendly_fire(damage_data):
+		damage_multiplier = 1.0
+		return 0
+	if stats.hp <= 0 and not stats.is_test_target:
+		damage_multiplier = 1.0
+		return 0
+	return _resolve_damage(damage_data, _raw_damage(damage_data), false, true)
+
+func _resolve_damage(data: HealthChangeData, raw: int, emit_proc: bool, apply_modifiers: bool) -> int:
+	if raw <= 0:
+		damage_multiplier = 1.0
+		return 0
+	var is_true: bool = data.flags.has(GameTags.TRUE_DAMAGE)
+	var result: int = max(1, raw) if is_true else max(1, raw * stats.global_hurt_damage)
+	var original_modifiers: Array[Callable] = data.damage_modifier.duplicate()
+	var body_path: NodePath = owner.get_path() if owner != null else NodePath()
+	if apply_modifiers and not is_true:
+		GameEvents.emit_enemy_damage_calculating(result, data, body_path)
+	if emit_proc:
+		GameEvents.emit_enemy_damage_taken(result, data, body_path)
+	if not is_true:
+		for modifier in data.damage_modifier:
+			result = modifier.call(owner, result)
+		result = int(result * damage_multiplier)
+	# 订阅者临时追加的修饰只属于当前命中，不能累积到穿透弹的下个目标。
+	data.damage_modifier.assign(original_modifiers)
+	damage_multiplier = 1.0
+	return result

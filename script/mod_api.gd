@@ -6,6 +6,18 @@ class_name ModAPI
 const VERSION := 2
 
 
+# ---------------- UI ----------------
+
+# 创建未加入场景树的本体设置页签，调用方将其加入 populate_option_pages 的 button_box。
+# button_id 须与页面 option_id 相同；title 可用翻译键，硬编码标题可关闭自动翻译。
+static func create_option_tab(button_id: String, title: String, auto_translate: bool = true) -> Control:
+	var tab: Control = load("res://ui/option_button.tscn").instantiate()
+	tab.set("button_id", button_id)
+	tab.set("text", title)
+	tab.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_INHERIT if auto_translate else Node.AUTO_TRANSLATE_MODE_DISABLED
+	return tab
+
+
 # ---------------- 只读 ----------------
 
 static func get_content(kind: String) -> Array:

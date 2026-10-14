@@ -40,6 +40,8 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - **时间管理器（`Engine.time_scale` 唯一写者）**：`request_slow(id, scale, hold=0.0)`（`hold>0` 为刷新式租约，用 `Time.get_ticks_msec()` 墙钟过期；`hold==0` 为永久，直到 `end_slow`）、`end_slow(id)`、`clear_slow()`、`begin_time_block(tag)`/`end_time_block(tag)`（阻断即清空所有慢放并忽略后续请求）。`_ready` 置 `process_mode=ALWAYS`（`paused` 时也能过期/恢复），`_process` 做过期 + 检测 `get_tree().paused` 翻转；`get_tree().paused` 为真时 `_apply_time_scale` 强制 `BASE_TIME_SCALE`（**不清空** `_slow_requests`），故暂停菜单/演出不被慢放缩放，取消暂停后自动恢复未过期慢放。内部接线：`emit_camera_move(_, black_frame=true)`→block `"camera"`、`emit_camera_reset`→unblock；`emit_round_upgrade`/`emit_round_end`/`emit_game_over`/`change_scene` 调 `clear_slow()`。设计原因与坑见 §6。
 - `change_scene(path, player)`（`:163-180`）见 §5。
 
+- **前置伤害阶段（2026-10-14）**：`enemy_damage_calculating` 只用于当前命中的数值修饰，和结算关联 proc 分离；本体计算与客机预计算复用 `HealthComponent.resolve_damage/_resolve_damage`。官方联机协议 v4 发送已求值的 resolved_damage（用户要求将本批尚未提交上游的原计划 v5 合并至 v4），host 保留真实 HP/死亡/阵营/无敌门控，随后回传归属 proc；不传 Callable、不重复套 host 构筑。目标条件采用命中端快照，详见 SYSTEMS §2.3。
+
 ### 1.3 SoundManager
 - 节点：`$SFX`, `$VOICE`, `$Talk`, `$BGM/BGMPlayer`, `$BGM/AnimationPlayer`, `$SupportVoice/VoicePlayer`（`SoundManager.gd:8-13`）。
 - 方法：`play_sfx`/`play_sfx_once`/`play_loop_sfx`/`stop_sfx`, `play_support_voice`, `play_voice`, `play_talk`, `play_bgm`, `play_bgm_cut`（等 stream `finished` 后 emit `cut_finish`）, `bgm_fade_out`, `bgm_slow_fade_out`（`game_end` 时中止）, `get_volume`/`set_volume`。
@@ -52,7 +54,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - 注意：另有**未使用**的 `scenes/game_camera/transition.gd`。
 
 ### 1.5 Game
-- 生命周期：`_ready` → `process_mode = ALWAYS` → （移动端）`Engine.max_fps = 60` → `load_config()` → `load_playerdata()`（`:23-26`）。移动端限帧是为了对齐物理 60Hz、规避无 2D 物理插值时高刷屏的 judder（2026-10-03，见 `LEARNINGS.md` [Perf]）。
+- 生命周期：`_ready` → `process_mode = ALWAYS` → `load_config()` → `apply_max_fps()`（`script/Game.gd:50-57`）；读档由后置 `ModManager._ready` 在挂载/支援注册完成后同步调用（`script/mod_manager.gd:88`）。2026-10-13 开启物理插值后，原移动端硬编码 60 FPS 改为全平台可配置上限，默认 60、索引 0 为无限制；2026-10-14 核对。旧移动端对齐 60Hz 的原因保留于 `LEARNINGS.md` 历史记录。2026-10-14：2D 物理插值改为设置项（`Game.physics_interp`，默认关、运行期设 `SceneTree.physics_interpolation`，UI 在 Graphics 页 `RowPhysicsInterp`），`project.godot` 默认 `false`；逐帧 `_process` 驱动的视觉须关插值（准星/指示器等，见 `CONVENTIONS.md` §6）。
 - `_unhandled_input` 由输入设备推断 `control_mode`（0 鼠标/键盘 / 1 触屏 / 2 手柄）并 emit `game_mode_changed`：`InputEventMouseButton|InputEventKey`→0、`InputEventScreenTouch`→1、`InputEventJoypadButton|InputEventJoypadMotion(>0.5)`→2。`reset_control_mode()`（连 `round_start`）按平台复位（移动端=1、桌面=0），避免设备事件把模式永久锁死。
 
 ### 1.6 PoolManager（对象池）
@@ -67,6 +69,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 ### 1.7 SupportData
 - `@export support_pool: Array[SupportCard]`, `null_support: SupportCard`, `exp_curve: Curve`, `support_ui`。
 - `game_add_support()` 把 `support_pack` 实例化进组 `"PlayerRoot"`（并注入 `ins.support_card`）、UI 进 `"GameUI".support_box`（`support_data.gd:59-74`）。被动数值不再在此写入，改由 `SupportCharacter._apply_passive_boost()` 按存档 `LV` + `pa_value` 计算（见 `SYSTEMS.md` §5.6）。⚠️ `game_support` 初值可为 `null`（非 `null_support`）；`game_add_support()` 对 `null`/`"null"` 早退，读档与 `reset_game_support()`、`support_select_ui.check_data()` 负责把 `null` 归一为 `null_support`。
+- **同 ID 覆盖解析（2026-10-14）**：`restore_progress()` 解析每个支援 id 时优先 `ModManager.get_resource("supports", id)`（当前生效的 Mod 注册资源，含以 manifest `overrides` 声明的同 ID 覆盖版），未注册才回退 `support_pool` 扫描；本体与 Mod 同 ID 支援可并存，池顺序不决定覆盖优先级。
 - 存档委托 `Game.save_playerdata()`。
 
 ### 1.8 ExtraDamage
@@ -92,11 +95,15 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - 效果：HUD/结算/记分板/属性数值等数字不变化；属性名、对白、商店页切换、设置项等本地化文本显示为 Roboto。Roboto 与像素字度量不同，个别固定宽度 Label 仍可能溢出（靠 `auto_text.gd` 兜底）。
 
 ### 1.11 ModManager
+
+- **设置页签 UI 工厂（2026-10-13）**：`ModAPI.create_option_tab(button_id, title, auto_translate=true)` 返回未挂载的 `ui/option_button.tscn` 实例，供 `ExtensionHooks.populate_option_pages` 回调加入 `button_box`；页面仍按 `option_id` 对接。共享场景内置 `Label` 及本体文字样式，`script/option_button.gd` 的导出 `text` 同步标题，本体 GAME / CONTROLS / MOD 仅声明 id 和标题。工厂复用原有动画及输入逻辑，不接管右侧页面样式，也不重写旧 mod 注入的自定义控件。SDK COOP 示例已采用接口；已安装包需作者重新发布才生效。证据：`script/mod_api.gd:13`、`script/option_button.gd:4`、`ui/option_button.tscn`、`tests/test_ui_ux_regressions.gd:_check_settings`。
 - 职责：启动时扫描 `user://mods/`（桌面另加 exe 同目录 `mods/`）→ 按 manifest 挂载启用 pck → 用 `ResourceLoader.list_directory` 扫描 `res://mods/<id>/defs/**`（或构建期 `content_index.json`）→ 建立 `kind -> id -> 资源` 注册表 → 应用 id 治理。
 - **挂载**：`ProjectSettings.load_resource_pack(user://…, replace_files)`；内嵌基 pck 为 pack 0，`replace_files=false` 时本体优先。`replace_files=true` 时（且预设产出的 pck 含本体路径）覆盖**挂载后加载**的文件；启用时 `push_warning` 便于审计。失败仅记 error 不阻断启动。
 - **id 治理**：mod 内容 id 必须带 `<mod_id>_` 前缀；与本体/其它 mod 冲突默认拒绝（`overrides` 显式声明才允许覆盖）。
+- **导入事务（2026-10-13）**：`ModManager.import_zip()` 委托 `script/mod_installer.gd:4`；先检查归档路径、重复文件、文件/目录冲突和 PCK，再完整解压到 mod 根下 `.import_*` 暂存目录，检查每次创建/写入和体积。成功后旧目录移至 `.rollback_*`、暂存目录成为正式安装；交换失败恢复旧目录，不返回假成功。成功安装后的旧目录清理失败仅告警保留；隐藏目录不会被安装扫描当作 mod。已挂载 PCK 更新、冲突/超限、提交失败回滚均有真实回归。
+
 - **发现**：主用构建期生成的 `content_index.json`，回退 `ResourceLoader.list_directory`（返回编辑器原始文件名；不可用 `DirAccess` 枚举 `res://`，导出后失效，见 `LEARNINGS.md` §Export）。
-- **导入**：`import_zip()` 用 `ZIPReader` 解压到 `user://mods/<id>/`（拒绝路径穿越；重装先递归清空旧目录；校验 zip 内含 `manifest.pck`；条目数 >2000 或累计解压 >256MB 报错并清理）。启用状态存 `user://mods/mods_state.json`；pck 一旦挂载无法卸载，启停统一靠重启。停用/失败经 `_fail_mod()`（`mods_changed.emit.call_deferred()` 通知 UI）。**卸载**：`uninstall(id)` 禁用 + 移出注册表 + 清 `mods_state.json`，并删该 id 在所有 `_mod_dirs()` 根下的目录（`_delete_dir_recursive` 仅允许 mod 根内路径）；占用/只读删不掉 → 写 `user://mods/.pending_uninstall.json`，`_ready()` 在挂载前 `_process_pending_uninstalls()` 重删。UI：`ui/mod_option.gd` 面板级「卸载」按钮 + 二次确认；因 pck 运行期不可卸载，本会话内容仍生效、重启后完全移除。
+- **导入**：`import_zip()` 用 `ZIPReader` 解压到 `user://mods/<id>/`（拒绝路径穿越；先在隐藏暂存目录完整解压，再交换安装目录；失败恢复旧包；校验 zip 内含 `manifest.pck`；条目数 >2000 或累计解压 >256MB 报错并清理）。启用状态存 `user://mods/mods_state.json`；pck 一旦挂载无法卸载，启停统一靠重启。停用/失败经 `_fail_mod()`（`mods_changed.emit.call_deferred()` 通知 UI）。**卸载**：`uninstall(id)` 禁用 + 移出注册表 + 清 `mods_state.json`，并删该 id 在所有 `_mod_dirs()` 根下的目录（`_delete_dir_recursive` 仅允许 mod 根内路径）；占用/只读删不掉 → 写 `user://mods/.pending_uninstall.json`，`_ready()` 在挂载前 `_process_pending_uninstalls()` 重删。UI：`script/mod_option.gd` 面板级「卸载」按钮 + 二次确认；因 pck 运行期不可卸载，本会话内容仍生效、重启后完全移除。
 - **顺序/依赖/补丁（P0.5）**：`_resolve_order()` 按 `manifest` 的 `dependencies`/`load_order`/`conflicts` 做拓扑排序（稳定 tie-break：先用户顺序 `user://mods/mods_order.json`（`get_order()`/`set_order()`），再 `(load_order, id)`）；依赖缺失/环/冲突 → 停用该 mod + error。`conflicts` 按**双向图**判定（A 声明 B 或 B 声明 A 皆冲突，后加载者被停用）。挂载后按序 `_scan_content()`，再由 `script/mod_patch.gd`（`class_name ModPatch`）应用 `patches/*.json`（replace/add/remove/inherit；缺 target → warning+skip）；`inherit` 按 target 的 kind 落表、走 `_validate_id` 前缀/冲突校验、并写入 `_order`（否则 `get_content()` 看不到）。同名 id 仅 `overrides` 显式声明才允许覆盖（后者胜 + 警告）。
 - **时序**：当前置于 autoload 末尾（仍早于主场景加载）；如需用 `replace_files` 覆盖本体 autoload 脚本，须把 `ModManager` 移到 `[autoload]` 最前并重启编辑器。
 - **entry / 深度修改（P4）**：`mod.json.entry` 指定的 Node 脚本由 `_run_entry_scripts()`（deferred，按 `_resolved_order` 顺序）实例化到 `ModManager` 下，可经 `ModAPI`（`script/mod_api.gd`，静态门面）+ `GameEvents` 挂接流程；`api_version > ModAPI.VERSION` 则跳过。`ModAPI` 稳定门面：只读 `get_content/get_resource/get_scene/get_characters/has_upgrade/get_content_mod/get_societies/get_unclaimed_characters/get_unclaimed_unlocked_characters/list_mods/get_languages/get_card_scene/has_mod_character/is_character_locked/get_base_societies/get_order/get_content_kinds/get_weapon_type_name/get_weapon_type_icon`；写入 `register_content(kind,id,res,mod_id,…)`（走 `_register_res` 前缀/冲突治理，mod 无需碰 `_registry`）、`register_weapon_type(code,icon_path?,display_name?)`（武器类型注册表：供 `PlayerCard.weapon_type` 的类型名/图标）、`add_translation(locale,key,value)`（`TranslationServer.add_translation`）、`register_language(locale,display_name,opts)`（`_languages` 注册/覆盖 + `LocaleFont.register_locale_fonts`，`languages_changed` 通知 `ui/langue_button` 重建）、`register_translation(t)` / `register_translation_resource(path)` / `register_translations_from_dir(dir)`（批量翻译 additive，跳过 `.csv`/`.import`）。`replace_files=true` 覆盖已挂载后加载的入口场景（`main.tscn` 等）——用覆盖型预设 `mod_sdk/ModPackReplace.preset.cfg`（`export_filter="resources"`，不排除本体目录）+ `build_mod.ps1 -Preset ModPackReplace`（`mods/<id>/**` 与 `replace_paths` 自动并入 `export_files`），见 `mod_sdk/README.md` §13。
@@ -114,13 +121,18 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - **中继服务器保存列表（coop mod，2026-10-11）**：中继页「**服务器列表**」按钮 → **子菜单**（挂在 `CoopMenu` 根下、不属于 `_panel`，故不受 `_set_buttons_enabled` 的后代 IGNORE 影响；内部 `ScrollContainer` 复用本体 `script/ScrollBox.gd` 做触摸/鼠标拖拽滚动，`set_script` 须在 `add_child` 前）。子菜单管理 MC 式「已保存的服务器」（名称+地址），默认含 Saki `mc.yqst.top:32085`；持久化在 `coop_settings.relay_servers`（`user://etn_coop_settings.cfg`，`sanitize_relay_servers` 去重/截断/名称空则回落地址，默认常量 `DEFAULT_RELAY_SERVERS`）。点条目**仅填入主面板地址并关闭子菜单**；`删除` 经代码建 `ConfirmationDialog` 二次确认；`关闭`/点背板/Esc 退出（子菜单可见时 Esc 只关子菜单）。主面板「服务器列表」按钮在 `_panel` 内，须登记进 `_build_interactive_controls()` 白名单。原「使用 Saki 服务器」快捷按钮已移除。i18n 键 `coop_saved_servers`/`coop_server_list`/`coop_server_close`/`coop_server_*`/`coop_cancel`。
 - **联机安全/一致性加固（2026-10-08）**：coop mod 的 `any_peer` RPC 参数按不可信输入处理——资源路径白名单（`_is_safe_remote_path`/`_is_safe_item_id`）、伤害/策反/金币等数值 sanity 上限（`MAX_NET_*` + `_sanitize_for_authority`）、玩家状态非有限值拒绝与 clamp（`_sanitize_player_state`）、召唤/支援归属校验；并在所有服务端 `any_peer` handler 加**握手门控** `_server_sender_ok()`（Relay 无 kick 帧的兜底），含 `_client_scene_ready` 补漏。同时补齐：视觉批量 `size()` 上限、医疗箱支援 `_sanitize_support_mods`（rate≤2.0）+ 广播消毒、`_server_apply_enemy_buff` 的 `stats`/`source_id` 消毒、`_server_boss_pattern_event` 的 `event_data` 消毒、buff 白名单扩 `res://mods/`、`victim_pos` 有限性、`game_ver` 限长、`summoned_state` 的 `state/facing` clamp；并修掉敌人池化重登记不清旧 `net_id` 映射（`_forget_enemy_net_id`）、relay 握手期心跳误判（`multiplayer_peer.get_connection_status()` 门控）、断线 peer 残留（倒地/救援/图标/召唤物，记分板行按用户决定保留到本局结束）、退出期 `_notification` 拆分最小释放。**退出语义（10–13）**：LAN 客机暂停退出改为「只结算自己」（`_gate_game_over` 客机分支断线，host/其余玩家继续），房主退出才全员结算，`_server_request_team_game_over` 保留但忽略；新增经济/聊天/召唤反滥用限频（`_rate_allow`/`MAX_SUMMONS_PER_PEER`）及被 host 转发放大的高频 unreliable 通道令牌桶限频（`_rate_allow_tokens`：player_state/summoned_state/gun_shoot/hurt/hit_sfx/视觉批；reliable 的 `enemy_hit` 不限以免丢伤害）；镜像坐标用 `MapBounds.nearest_inside` 夹回地图。**视觉通道加固（V1–V6）**：视觉接收端（`_server_visual_*`/`_remote_visual_node`）对客机来源逐条经 `_sanitize_bullet_entry`/`_sanitize_effect_entry`——路径走 `SAFE_VISUAL_SCENE_PREFIXES`、`method/pre`∈`SAFE_VISUAL_METHODS`、`grp`∈`SAFE_VISUAL_GROUPS`、`pr` 按 `BULLET/EFFECT_PROP_NAMES` 过滤、**强制 `eb=false`（禁客机开伤害洞）**；`spawn_visual_effect` 加 `allow_hole`、`_remote_visual_node`/`_remote_summoned_action` 加 `no_hole`（host→client authority 路径不变）；`_open_player_damage_hole` clamp；`_server_visual_node`/despawn 加令牌桶。已知残留：`_remote_item_visual` 经 `server_relay` 可被伪造 `owner_peer`（纯视觉，未修）；`res://scenes/update_item/` 效果场景接收端仍跑脚本（仅清碰撞，V1/V2/V4 已封堵）。**崩溃隐患修复（H1–H6）**：召唤通道改专用白名单 `SAFE_SUMMON_SCENE_PREFIXES`（排除 enemies/player）并在镜像 `active_state()` 后再 `disable_mirror_sim()`（防注入活敌/镜像本地跑 AI）；buff `load` 后校 `is Buff`；`motion_down_screen` 改走 `GameEvents.request_slow`（不再裸写 `Engine.time_scale`）；aura 视觉 `load` 判空；relay `join_prepared.peers` 类型校验；`tree_exiting` 回调对 `multiplayer==null` 判空。详见 `LEARNINGS.md`（`[Mod]`，2026-10-08）与 `mod_sdk/coop_mod/README.md`「加固」。
 
+> 2026-10-14 审计修复：`_resolve_order()` 接纳节点前要求全部依赖已经进入 kept，冲突停用随直接/传递依赖传播，enabled 仍保留用户意图。卸载在进入根及嵌套目录前检测链接，只删除 junction/符号链接本身，包含隐藏文件并向上传播失败。入口与安装器都遵守不跟随链接原则。证据：`script/mod_manager.gd:328`、`:1270`；`tests/run_mod_lifecycle_checks.py`。旧故障证据见审计历史。
+
 ### 1.12 ExtensionHooks / ProjectileSpawner（本体扩展点）
+
+
+
 - `script/extension_hooks.gd`（autoload `ExtensionHooks`，声明在 `ModManager` 之后）：一批默认 `Callable()` 的槽，供 mod（如联机）运行期挂接。**未注入时本体逻辑与单机逐字节一致**。
   - 接管类：`change_scene_gate(path,player)->bool`、`first_round_start_gate()->bool`、`enemy_damage_interceptor(damage_data,owner)->bool`、`coin_pickup_gate(coin,player,coin_mult)->bool`、`player_death_gate(player)->bool`、`game_over_gate(player_dead)->bool`、`round_upgrade_end_gate()->bool`、`summoned_damage_interceptor(summoned,damage_data)->bool`（`SummonedHealthComponent.take_damage` 顶部；镜像伤害转发/丢弃）、`summoned_upgrade_interceptor(summoned,amount,source_id,damage_add_override)->bool`（`Summoned.add_summon_exp` 顶部；镜像升级转发拥有者）；返回 true = mod 已接管，本体跳过默认分支。
   - 通知类：`on_projectile_spawned(bullet,owner,source_faction)`、`on_projectile_despawned(bullet)`、`on_enemy_spawned(enemy_body,scene_path)`、`on_summoned_spawned/despawned`、`on_coin_spawned(coin,value)`、`on_player_downed/revived(player)`。
   - 查询类：`enemy_spawn_stat_scale()->{hp,damage}`（`spawn_anim.spawn_enemy_body` 写 `max_hp_mult`/`damage_mult` 前调，空/未注入 = 1.0）、`enemy_spawn_count_scale(now_round,max_round)->float`（`enemies_spawn.get_level` 算 `round_mult` 后调，未注入 = 1.0）。供联机按人数缩放敌人（详见 `SYSTEMS.md` §5.7）。
   - UI：`populate_menu_buttons(box)`（`menu_screen._ready` 调，用于注入主菜单按钮）；`populate_option_pages(menu_box, button_box)`（`ui/option.gd:_ready` 调，用于向本体 option 菜单注入自定义页与页签按钮；`option.gd` 按 `option_id`/`button_id` 自动联动显隐）。
-  - 工具：`intercept(cb,args)`（无效返回 false）、`notify(cb,args)`（无效静默）。
+  - 工具（**2026-10-13 起本体统一走命名入口**）：`intercept_named(hook_name,args)->bool` = 先跑 `add_hook` 登记的命名回调（按 priority，任一返回 true 即短路），再跑同名字段的直接赋值；`notify_named(hook_name,args)` = 命名回调全跑 + 字段赋值。`hook_name` 必须与字段同名，拼错在运行期 `push_error`（不再静默失效）；`is_hook_active(hook_name)` 供「注入才覆盖默认值」的查询式分支（如 `first_round_start_gate`、`pause_visibility`、`on_summoned_action`）。旧的 `intercept(cb,args)`/`notify(cb,args)` 保留给已发布 mod（本体已不再调用）。**例外**：`enemy_spawn_stat_scale`/`enemy_spawn_count_scale` 返回数值，属覆盖语义，仍走字段直接调用，不参与命名链式。
 - 本体接线点：`GameEvents.change_scene/emit_game_over/emit_round_upgrade_end`（附 `force_emit_game_over`/`force_round_upgrade_end` 供 mod 绕过）、`main.first_round`（仅门控 `round_manager.first_round_start()`，host 才本地启动）、`health_component.take_damage(damage_data, bypass_hook=false)`（伤害仲裁，`bypass_hook=true` 供 mod 回投）、`coin.add_coin`（拾取门控）、`Stats.hp` setter（玩家 `hp<=0` 时问 `player_death_gate`，仅 owner 在 `"Player"` 组生效）、`player.set_downed_state()/get_downed()`、`spawn_anim.spawn_enemy_body`、`summoned._ready/idle_state`、`menu_screen._ready`、`script/buff_router.gd` 的 `apply_buff`/`remove_buff`/`remove_source`（玩家 buff 应用/移除拦截 `player_buff_apply/remove_interceptor`，供 mod 把命中远端玩家镜像的光环转交归属端；未注入返回 false）。**范围光环统一走本体基类 `script/buff_aura.gd`（`class_name BuffAura extends Area2D`）**，经 `BuffRouter` 上/去 buff 即自动适配联机（含召唤物光环契约 `network_summon_aura_info()`）；契约见 `CONVENTIONS.md` §11。
 - `script/projectile_spawner.gd`（`class_name ProjectileSpawner`）：把「取池/新建 → 配置 → 入树 → 激活 → 通知」收敛为 `spawn_core(...)`（位置参数、零 Dictionary 分配）。顺序语义用 `add_before_activate`/`deferred_add`/`pre_activate`(transform 后、activate 前)/`post` 复刻各生成点：`player_gun` 用 add→emit→activate；`bullet_launcher*` 用 activate→add；`bullet_launcher_2` 分支 2 用 deferred；爆炸类用 `pre_activate` 设 `hit_box_center`。`scale=Vector2.ZERO` 表示不改写缩放。`notify_local()` 供无法走 `spawn_core` 的特例（如 `self.duplicate()`）手动触发通知；`mark_remote()` 标记 mod 生成的远程视觉副本避免回环。⚠️ **顺序若为 activate→add（`add_before_activate=false`），消费方的 `active_state()` 必须在入树前可安全空转**（`@onready` 为 null、`get_path()` 无效）——统一用 `is_ready` 门（`_ready → is_on_ready → active_state`）；否则会踩「动画不播/`source_node` 空」的坑（`cross_bullet` 残留事故，见 `LEARNINGS.md` 2026-10-10）。
 - 本体生成点已统一迁移至 `ProjectileSpawner`（玩家武器/道具/PS/支援、敌人炮台、爆炸/范围伤害、`laser_launcher`/`player_laser_beam` 持久激光经 `notify_local`）。
@@ -128,7 +140,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 ### 1.13 Coop item visuals / 联机道具表现
 
 - **显示快照（2026-10-14）**：`mod_sdk/coop_mod/mods/etn_coop/net/coop_item_state.gd:12` 采样小小凯伊的绕行进度、速度、范围和朝向，救生衣的护盾显隐，以及四种内部道具固定节点的动画状态；`sanitize` 仅保留固定道具/动画清单并校验类型、钳制数值。
-- **传输与重建**：`coop_net.gd:_send_local_player_state` 随既有玩家快照发送 `items`，房主校验后转发；`_apply_item_states` 缓存最近状态并补建缺失动态外观，`_rebuild_peer_item_visuals` 重放缓存。现有房主身份迁移路径同时迁移道具 id、外观列表与状态缓存；本分支不包含此前的通用三端身份恢复修复。
+- **传输与重建**：`coop_net.gd:_send_local_player_state` 随既有玩家快照发送 `items`，房主校验后转发；`_apply_item_states` 缓存最近状态并补建缺失动态外观，`_rebuild_peer_item_visuals` 重放缓存。现有房主身份迁移路径同时迁移道具 id、外观列表与状态缓存。
 - **外观唯一性**：`coop_net.gd:_ensure_item_visual` 按 peer + item_id 复用节点，先登记 id 再等待镜像生成；重复升级更新显示状态，不重复挂载外观。
 - **瞄准与玩法隔离**：`coop_player_proxy.gd:130` 回填远端 `crosshair_pos`，菜刀支持世界原点瞄准并先应用翻面/高度再旋转。`coop_item_visuals.gd:_prepare_visual_resources` 复制材质和动画库，过滤方法、音频、碰撞、计时器和 Label 轨道，关闭 Timer.autostart；副本不运行 EquipItem 玩法脚本。
 - **兼容与验证**：玩家状态 RPC 增加道具快照，协议相对上游 v3 升为 v4，联机双方须使用配套构建；发布版本保持 `0.1.10`。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 从当前源码打包，隔离 user://，检查 LAN/Relay 双向与原点瞄准、动态范围/动画、碰撞隔离、重复升级、补建和镜像重建。
@@ -136,12 +148,13 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 ## 2. Save & config / 存档与配置
 
 ### Save: `user://PlayerData.res` (`Resource` of class `SceneData`)
-`SceneData` exports（`script/scene_data.gd`）：`save_version`, `player_pyroxenes`, `character`, `group`, `clothes_group`, `now_clothes`, `game_mode`, `support_savedata`, `game_support`。
-- 结构版本：根级整数 `save_version`（`SceneData.SAVE_VERSION`，当前 **2**）。字段默认 **0** 而非当前值，以便旧档（无该字段）解析为 0 从而触发迁移；新档在 `save_playerdata` 显式写入当前值。改序列化结构时 `SAVE_VERSION+1`，并在 `Game._migrate_scene_data()` 追加迁移分支。
-- `Game.save_playerdata()`：把 `PlayerData.*` + `SupportData.*` 填入新 `SceneData`，再交 `_write_scene_data()` **原子落盘**——先写临时文件 `user://PlayerData_new.res`，成功后旧档改名 `user://PlayerData.res.bak`、临时文件改名 `user://PlayerData.res`。任一步失败 `push_error` 并保留旧档。
-- `Game.load_playerdata()`：`ResourceLoader.load(SAVE_PATH)` → 若 `save_version < SAVE_VERSION` 走 `_migrate_scene_data()`；`game_mode`/`game_support` 无条件恢复，其余字段非空才覆盖；**先剔除 `"hujiu"` 再赋值 `player_pyroxenes`**（其 setter 会即时存档，此时字段应已就绪）。
+`SceneData` exports（`script/scene_data.gd`）：`save_version`, `player_pyroxenes`, `character`, `group`, `clothes_group`, `now_clothes`, `game_mode`, `support_savedata`, `game_support_id` 与仅用于旧档迁移的 `game_support`。
+- 结构版本：根级整数 `save_version`（`SceneData.SAVE_VERSION`，当前 **3**）。字段默认 **0** 而非当前值，以便旧档（无该字段）解析为 0 从而触发迁移；新档在 `save_playerdata` 显式写入当前值。改序列化结构时 `SAVE_VERSION+1`，并在 `Game._migrate_scene_data()` 追加迁移分支。
+- `Game.save_playerdata()`：把 `PlayerData.*` + `SupportData.*` 填入新 `SceneData`，交给 `script/scene_data_store.gd:58`；先完成临时文件，再将**已验证的有效主档**复制到 `.bak.new` 并替换 `.bak`，最后同目录 rename 覆盖主档。代码不预先移走或删除主路径；备份/主档替换失败均返回 false，原有效数据保留。`Game` 的路径常量直接引用 store 的单一来源。
+- `Game.load_playerdata()`：首次由 ModManager 在挂载/注册支援后调用，主场景仍可幂等重读；store 先读主档，失败后把 `.bak` 复制到独立恢复 `.res` 再以 `CACHE_MODE_IGNORE` 读取；恢复成功或旧版本迁移后显式保存。读取赋值期间 `_loading_playerdata` 阻止货币 setter 提前存档；无文件的首次启动允许新建，双坏档或未来版本暂停自动保存并保留文件（`script/scene_data_store.gd:32,90`）。元进度字段恢复顺序和 `"hujiu"` 清理规则保留。7 类隔离回归覆盖损坏/缺失恢复、双坏档、首次启动、未来版本、备份/主档替换失败。
 - 历史（v1→v2，2026-10-04）：v1 曾把整份字段再复制进 `game_version[version_number]` 快照，但每次存档都 `SceneData.new()` 从不读取旧快照 → 快照从不累积、`version_index` 只写不读，纯冗余。v2 删除 `game_version` 与 `Game.version_index`，存档体积约减半（实测 2876 B → 1718 B）。旧档顶层字段即真源，迁移只需重设 `save_version`。
 - 字段改名/删除是破坏性变更：Godot 加载 `.res` 时脚本未声明的属性会被**静默丢弃**（见 `LEARNINGS.md`），故 `support_savedata` 保留原名，迁移期不依赖已删字段。
+- **支援存档 v3（2026-10-14）**：`support_savedata` 只序列化 ID→LV/exp；所选支援保存 `game_support_id`，旧 `game_support` 声明保留但新档为 null。`SupportData.restore_progress` 在 Mod 支援注入后解析运行期 Resource；停用时保留等级与所选 ID、使用 null_support，选择列表跳过不可用资源；显式重新选择会更新 ID。旧档缺 Mod 时，store 仅对其直接依赖中明确缺失的 `res://mods/**` Resource 临时登记 `LegacySupportLoader`，用占位对象身份从旧已购字典 key 恢复真正 ID，加载后立即移除 loader；不猜文件名、不关闭全局缺资源保护。未来版本及坏档保护继续有效。新/旧启停、缺主档恢复及缓存撤销共 4 类真实 PCK 回归通过。证据：`script/scene_data.gd:7`、`script/scene_data_store.gd:18`、`script/Game.gd:250`、`script/support_data.gd:28`；`tests/run_support_persistence_checks.py`。原 v2 故障保留于审计历史。
 
 ### Config: `user://config.ini`
 - `[game]`：`full_screen`(false), `shake_screen`(true), `resolution`(0→1280×720 / 1→1600×900 / 2→1920×1080), `vsync_mode`(true), `game_language`("zh_CN"), `damage_text_freq`(4；0=关/1=低/2=中/3=高/4=最高，伤害数字频率上限), `effect_freq`(4；0=关/1=×4/2=×3/3=×2/4=×1，特效最短间隔系数), `hit_flash_freq`(4；同档位，受击闪白最短间隔系数，独立于 effect_freq), `developer_mode`(false；开发者模式，**无 UI**，手动把 `config.ini` 的该键改为 `true` 开启，用于解锁调试作弊菜单 `ui/cheat_menu`；正式版保持 false)（默认见 `Game.gd:234-238`）。
@@ -174,7 +187,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 | `"GameUI"`（含 `.support_box`, `.buff_box`） | `support_data.gd:68`、`player.gd:78`、`player_buff_manager.gd:26` |
 | `"BuffBox"` | `PoolManager.gd:46` |
 | `"SELayer"` / `"ForegroundLayer"` | `PoolManager.gd:152,162` |
-| `"EnemiesRoot"` / `"BulletRoot"` / `"CoinRoot"` / `"FloorLayer"` | `main.gd:77,102,108,113,122` |
+| `"EnemiesRoot"` / `"BulletRoot"` / `"CoinRoot"` / `"FloorLayer"` | `main.gd:85,121,110,130` |
 | `"Summoned"` / `"Converted"` | `Faction.of_entity`、召唤/策反逻辑 |
 | `"Interactable"` | `interaction_manager.gd` |
 | `"SummonedManager"` | `machine_part.gd:10` |
@@ -207,7 +220,7 @@ PoolManager.detach(node)
 1. 调用方 `Transition.play_left_start()` 然后 `await Transition.left_end_start`。
 2. 动画 method track → `Transition.is_left_end_start = true`。
 3. 切场景：`GameEvents.change_scene(path, player)`。
-4. `change_scene`（`GameEvents.gd:163-180`）：`change_scene_to_file` → `await tree_changed` → 若 `is_left_end_start` 则 `Transition.play_left_end()` → 若 `player != ""` 实例化到组 `"PlayerRoot"`（deferred）→ `emit_first_round_add.call_deferred()` → `first_round_switch = false`。
+4. `change_scene`（`GameEvents.gd:185`）：`change_scene_to_file` → `await tree_changed` → 若 `is_left_end_start` 则 `Transition.play_left_end()` → 若 `player != ""` 实例化到组 `"PlayerRoot"`（deferred）→ `emit_first_round_add.call_deferred()` → `first_round_switch = false`。
 5. `first_round_add` 被 `main.gd:31,46-67` 消费 → `first_round()`：重置 `PlayerData`、播 BGM、快照+emit 属性、`round_manager.first_round_start()`、`SupportData.game_add_support()`。
 
 > `GameEvents.emit_transition_start` 与 `script/transition_manager.gd` 是**死代码**（未注册、无引用）。
@@ -224,7 +237,13 @@ PoolManager.detach(node)
 - **池载荷（2026-10-08）**：`get_pool` 空闲优先；无空闲且未达 `limit` 返回 `null`、满额静默回收，调用方仍应检查 `is_idle`。`clear_pool`/`erase_pool` 不释放节点。
 - **ExtraDamage 递归**：请求者过滤 `EXTRA_DAMAGE`。
 - **重复遗留物**：`transition_manager.gd`（未注册）、`scenes/game_camera/transition.gd` 均未使用。
-- **窗口尺寸**：`Game._physics_process` 已不再轮询（注释掉）；实时路径为 `get_window_size()`（`Game.gd:59-69`）。
+- **窗口尺寸**：`Game._physics_process` 已不再轮询（注释掉）；实时路径为 `get_window_size()`（`Game.gd:111`）。
 - **相机震动单写者（2026-10-03）**：游戏相机 `scenes/game_camera/gamecamera.tscn`（玩家子节点）由 `_process` 每帧写 `position`（瞄准前导）；屏幕震动必须只写独立 `shake_offset`，在 `_process` 里合成 `position = base + shake_offset`，**禁止** tween `position`（会与 `_process` 互覆盖 → 整屏随机抖动/回弹，疑似"网络丢包"体感）。见 `LEARNINGS.md` [Camera]。
-- **移动端渲染设置（2026-10-03）**：`project.godot` 开 `shader_compiler/shader_cache/enabled`、Android 导出开 `shader_baker/enabled`，减少战斗中新特效首现时的运行期 shader 编译顿挫；移动端 `Engine.max_fps=60`（见 §1.5）。
+- **移动端渲染设置（2026-10-03）**：`project.godot` 开 `shader_compiler/shader_cache/enabled`、Android 导出开 `shader_baker/enabled`，减少战斗中新特效首现时的运行期 shader 编译顿挫；帧率上限由 `Game.apply_max_fps` 全平台配置、默认 60（见 §1.5；2026-10-14 核对）。
 - **SoundManager 异步**：`play_bgm_cut` 需 stream 结束并 emit `cut_finish`；`main.gd:53-55` 依赖此启动循环 BGM；`bgm_slow_fade_out` 在 `game_end` 时中止。
+
+## 7. Official Coop Extensions / 官方联机通用拓展接口
+
+官方 `net/coop_extensions.gd` 接收连接设施提供者，经 `CoopExtensionHost` 组发现；提供者交付 ENet 端点，握手、玩法与重连仍归 `CoopNet`。没有提供者时 LAN / Relay 流程保持原样，官方包不依赖附属实现。入口、页面工厂和生命周期契约见 `COOP_EXTENSION_API.md`。
+
+`coop_menu.gd` 创建通用页签并保存页面的鼠标/焦点设置；切页、关闭或释放菜单不停止提供者。准备/失败与游戏网络状态分别缓存，迟到通知不能覆盖当前结果。接口与菜单回归为 `tests/run_coop_extension_contract_checks.py`，仅安装官方联机包。

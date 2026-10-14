@@ -24,6 +24,8 @@ var _target: Vector2 = Vector2.ZERO
 var _tween: Tween = null
 
 func _ready() -> void:
+	# global_position 由 _process 每帧写入跟随目标，属"逐帧驱动视觉"，须关物理插值。
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	visible = false
 	# 气泡不吞输入：触摸需继续下传到 InteractionManager._unhandled_input。
 	if not Game.game_mode_changed.is_connected(_refresh_icon):

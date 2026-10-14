@@ -1,4 +1,4 @@
-﻿extends Control
+extends Control
 
 ## 联机菜单覆盖层（option 菜单式布局：左侧 option_button 页签 + 右侧内容面板）。
 ## 页签复用 `res://ui/option_button.tscn`；颜色统一为绿色。通过 CoopNet.instance 管理连接。
@@ -6,7 +6,7 @@
 const CoopNetScript := preload("res://mods/etn_coop/net/coop_net.gd")
 const MobileNoticeScene := preload("res://ui/mobile_notice.tscn")
 
-enum CoopPanelMode { LAN, RELAY, DEDICATED, OPTION }
+enum CoopPanelMode { LAN, RELAY, DEDICATED, OPTION, EXTENSION }
 
 const TAB_GREEN := Color(0.0, 0.837, 0.295)
 
@@ -34,6 +34,13 @@ var _submenu_save_button: Button = null
 var _submenu_close_button: Button = null
 var _saved_confirm: ConfirmationDialog = null
 var _pending_delete_addr: String = ""
+var _extension_buttons: Array[Control] = []
+var _extension_pages: Dictionary = {}
+var _selected_extension: String = ""
+var _extension_mouse_filters: Dictionary = {}
+var _extension_focus_modes: Dictionary = {}
+var _extension_statuses: Dictionary = {}
+var _active_extension_status: String = ""
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _ip_input: LineEdit = %IpInput
@@ -99,6 +106,7 @@ func _ready() -> void:
 		coop.connection_status_changed.connect(_on_connection_status_changed)
 		coop.character_select_requested.connect(out_coop_selected)
 		coop.relay_room_created.connect(_on_relay_room_created)
+		coop.extensions.state_changed.connect(_on_extension_state_changed)
 
 	_apply_tab_color(lan)
 	_apply_tab_color(relay)
@@ -126,6 +134,8 @@ func _ready() -> void:
 	_setup_saved_confirm()
 	_build_server_list_button()
 	_build_server_submenu()
+	_build_extension_actions()
+	_build_extension_pages()
 	_build_interactive_controls()
 
 	visible = false
@@ -152,7 +162,18 @@ func _build_room_list() -> void:
 
 func _process(_delta: float) -> void:
 	var coop = CoopNetScript.instance
-	var browsing: bool = visible and _selected_mode == CoopPanelMode.LAN \
+	# 隐藏时只补一次「停广播 + 清房间列表」，其余每帧刷新（房间列表/UPnP 提示）无意义。
+	if not visible:
+		if _browsing:
+			_browsing = false
+			if coop != null and is_instance_valid(coop):
+				coop.call("browse_lan_stop")
+			if _room_list != null:
+				for c in _room_list.get_children():
+					c.queue_free()
+				_room_keys = []
+		return
+	var browsing: bool = _selected_mode == CoopPanelMode.LAN \
 			and (coop == null or not bool(coop.is_lan_game))
 	if browsing != _browsing:
 		_browsing = browsing
@@ -295,7 +316,11 @@ func _is_gamepad_event(event: InputEvent) -> bool:
 
 
 func _get_nav_items() -> Array[Control]:
-	var items: Array[Control] = [lan, relay, option]
+	var items: Array[Control] = [lan, relay]
+	for entry in _extension_pages.values():
+		items.append(entry.tab)
+	items.append(option)
+	items.append_array(_extension_buttons)
 	# 玩家 ID 行常驻顶部（所有页签通用）
 	items.append(_player_id_input)
 	items.append(_player_id_confirm)
@@ -315,13 +340,24 @@ func _get_nav_items() -> Array[Control]:
 			for c in _coop_option.call("get_interactive_controls"):
 				if c is Control:
 					items.append(c)
-	return items
+	elif _selected_mode == CoopPanelMode.EXTENSION:
+		var page: Control = _extension_pages[_selected_extension].page
+		for control in page.get_interactive_controls():
+			if control is Control and control.focus_mode != Control.FOCUS_NONE:
+				items.append(control)
+	var visible_items: Array[Control] = []
+	for item in items:
+		if item.is_visible_in_tree() and not (item is BaseButton and item.disabled):
+			visible_items.append(item)
+	return visible_items
 
 
 func _move_nav(step: int) -> void:
 	var items: Array[Control] = _get_nav_items()
 	if items.is_empty():
 		return
+	# 页签切换后条目数可能变少，先夹取索引，避免 items[nav_index] 越界
+	nav_index = clampi(nav_index, 0, items.size() - 1)
 	_unfocus_nav(items[nav_index])
 	nav_index = posmod(nav_index + step, items.size())
 	_focus_nav(items[nav_index])
@@ -334,6 +370,8 @@ func _focus_nav(item: Control) -> void:
 		mouse_on_relay()
 	elif item == option:
 		mouse_on_option()
+	elif _extension_id_for_tab(item) != "":
+		item.call("mouse_entered_anim")
 	else:
 		item.grab_focus()
 		SoundManager.play_sfx("ButtonSounds2")
@@ -346,6 +384,8 @@ func _unfocus_nav(item: Control) -> void:
 		mouse_out_relay()
 	elif item == option:
 		mouse_out_option()
+	elif _extension_id_for_tab(item) != "":
+		item.call("mouse_exitedd_anim")
 
 
 func _activate_nav() -> void:
@@ -362,7 +402,8 @@ func _activate_nav() -> void:
 		nav_index = 1
 	elif item == option:
 		_set_selected_mode(CoopPanelMode.OPTION)
-		nav_index = 2
+	elif _extension_id_for_tab(item) != "":
+		_select_extension(_extension_id_for_tab(item))
 	elif item is LineEdit:
 		item.grab_focus()
 		DisplayServer.virtual_keyboard_show(item.text)
@@ -388,6 +429,9 @@ func out_coop_selected() -> void:
 	SoundManager.play_sfx("UISounds2")
 	_close_server_submenu()
 	on_coop = false
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused != null and is_ancestor_of(focused):
+		get_viewport().gui_release_focus()
 	_set_buttons_enabled(false)
 	_play_out()
 
@@ -402,11 +446,85 @@ func _build_interactive_controls() -> void:
 		option, _player_id_input, _player_id_confirm,
 		_addr_lan_toggle, _addr_public_toggle,
 	]
+	_interactive_controls.append_array(_extension_buttons)
+	for entry in _extension_pages.values():
+		var controls: Array = [entry.tab]
+		controls.append_array(entry.page.get_interactive_controls())
+		for control in controls:
+			_interactive_controls.append(control)
+			_extension_mouse_filters[control] = control.mouse_filter
+			_extension_focus_modes[control] = control.focus_mode
 	# 可复用 coop 选项内容（滑条/开关/自检按钮）也登记进白名单
 	if _coop_option != null and is_instance_valid(_coop_option) and _coop_option.has_method("get_interactive_controls"):
 		for c in _coop_option.call("get_interactive_controls"):
 			if c != null and is_instance_valid(c):
 				_interactive_controls.append(c)
+
+
+func _build_extension_actions() -> void:
+	var coop = CoopNetScript.instance
+	if coop == null:
+		return
+	var actions: Array = coop.extensions.get_menu_actions()
+	if actions.is_empty():
+		return
+	var row := HBoxContainer.new()
+	row.name = "ExtensionActions"
+	var content := _panel.get_node("RootHBox/ContentRoot")
+	content.add_child(row)
+	content.move_child(row, content.get_node("StatusBox").get_index())
+	for action in actions:
+		var button: Button = action.create_button.call() if action.create_button.is_valid() else Button.new()
+		button.name = str(action.id)
+		button.text = str(action.title)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(action.activate)
+		row.add_child(button)
+		_extension_buttons.append(button)
+
+
+func _build_extension_pages() -> void:
+	var coop = CoopNetScript.instance
+	if coop == null:
+		return
+	var content := _panel.get_node("RootHBox/ContentRoot")
+	var tabs := get_node("Node2D/VBoxContainer")
+	for descriptor in coop.extensions.get_menu_pages():
+		var page = descriptor.create_page.call()
+		if not page is Control or page.get_parent() != null or not page.has_method("get_interactive_controls"):
+			push_warning("[etn_coop] 拓展页须返回未挂载且提供交互名单的 Control：%s" % descriptor.id)
+			if page is Node and page.get_parent() == null:
+				page.queue_free()
+			continue
+		page.visible = false
+		page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		content.add_child(page)
+		content.move_child(page, content.get_node("ContentSpacer").get_index())
+		var tab := ModAPI.create_option_tab("coop_extension_" + str(descriptor.id), str(descriptor.title))
+		tab.get_node("Label").add_theme_font_size_override("font_size", 14)
+		tabs.add_child(tab)
+		tabs.move_child(tab, option.get_index())
+		tab.focus_mode = Control.FOCUS_ALL
+		_apply_tab_color(tab)
+		_setup_tab_input(tab)
+		_extension_pages[str(descriptor.id)] = {"tab": tab, "page": page, "title": str(descriptor.title)}
+		var provider: Object = descriptor.create_page.get_object()
+		var details: Dictionary = provider.diagnostics()
+		_on_extension_state_changed(str(descriptor.id), str(details.get("state", "idle")), "")
+
+
+func _extension_id_for_tab(tab: Control) -> String:
+	for id in _extension_pages:
+		if _extension_pages[id].tab == tab:
+			return id
+	return ""
+
+
+func _select_extension(id: String) -> void:
+	if not _extension_pages.has(id):
+		return
+	_selected_extension = id
+	_set_selected_mode(CoopPanelMode.EXTENSION, false)
 
 
 func _set_buttons_enabled(enabled: bool) -> void:
@@ -416,6 +534,10 @@ func _set_buttons_enabled(enabled: bool) -> void:
 	for c in _interactive_controls:
 		if c != null and is_instance_valid(c):
 			c.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+	# 拓展滚动页保留 PASS 冒泡；关闭菜单时同时撤销其键盘焦点。
+	for control in _extension_mouse_filters:
+		control.mouse_filter = _extension_mouse_filters[control] if enabled else Control.MOUSE_FILTER_IGNORE
+		control.focus_mode = _extension_focus_modes[control] if enabled else Control.FOCUS_NONE
 
 
 func _play_in() -> void:
@@ -492,6 +614,8 @@ func _set_selected_mode(mode: int, play_sound: bool = true) -> void:
 	_relay_panel.visible = on_relay
 	_dedicated_panel.visible = mode == CoopPanelMode.DEDICATED
 	_option_panel.visible = mode == CoopPanelMode.OPTION
+	for id in _extension_pages:
+		_extension_pages[id].page.visible = mode == CoopPanelMode.EXTENSION and id == _selected_extension
 	match mode:
 		CoopPanelMode.LAN:
 			_mode_subtitle_label.text = "coop_mode_subtitle_lan"
@@ -507,7 +631,13 @@ func _set_selected_mode(mode: int, play_sound: bool = true) -> void:
 			_set_status(_lan_status_message, "OPTION")
 			if _coop_option != null and is_instance_valid(_coop_option) and _coop_option.has_method("refresh"):
 				_coop_option.call("refresh")
+		CoopPanelMode.EXTENSION:
+			_mode_subtitle_label.text = _extension_pages[_selected_extension].title
+			_refresh_extension_status()
 	_update_mode_visuals(mode)
+	# 等旧页隐藏后的最小尺寸更新，再收紧滚动页；否则会被旧页最小高度夹回。
+	# 内容从设计坐标 y=48 开始，拓展页给 360 高视口底部留 8 像素。
+	_panel.set_deferred("size", Vector2(_panel.size.x, 304.0 if mode == CoopPanelMode.EXTENSION else 322.0))
 
 
 func _update_mode_visuals(mode: int) -> void:
@@ -533,6 +663,8 @@ func _tab_for_mode(mode: int) -> Node:
 			return relay
 		CoopPanelMode.OPTION:
 			return option
+		CoopPanelMode.EXTENSION:
+			return _extension_pages[_selected_extension].tab
 	return null
 
 
@@ -542,6 +674,12 @@ func _deselect_tab(tab: Node) -> void:
 
 
 func _on_menu_button(button_id: String) -> void:
+	if not on_coop:
+		return
+	for id in _extension_pages:
+		if button_id == _extension_pages[id].tab.button_id:
+			_select_extension(id)
+			return
 	if button_id == "coop_lan":
 		if _selected_mode != CoopPanelMode.LAN:
 			SoundManager.play_sfx("ButtonSounds")
@@ -1106,8 +1244,52 @@ func _on_relay_join_gui_input(event: InputEvent) -> void:
 		_relay_join_button.accept_event()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready() and _selected_mode == CoopPanelMode.EXTENSION:
+		_refresh_extension_status.call_deferred()
+
+
+func _on_extension_state_changed(id: String, state: String, message: String) -> void:
+	var previous: Dictionary = _extension_statuses.get(id, {})
+	_extension_statuses[id] = {"state": state, "message": message,
+		"network": previous.get("network", "") if state == "ready" else ""}
+	if state in ["preparing", "ready"]:
+		_active_extension_status = id
+	elif _active_extension_status == id:
+		_active_extension_status = ""
+	if _selected_mode == CoopPanelMode.EXTENSION and _selected_extension == id:
+		_refresh_extension_status()
+
+
+func _refresh_extension_status() -> void:
+	var status: Dictionary = _extension_statuses.get(_selected_extension, {})
+	var message: String = str(status.get("message", ""))
+	match str(status.get("state", "idle")):
+		"preparing":
+			message = "coop_status_extension_preparing"
+		"ready":
+			message = str(status.get("network", ""))
+			if message.is_empty() or message == "offline":
+				message = "coop_status_extension_ready"
+		"failed":
+			if message.is_empty():
+				message = "coop_status_extension_failed"
+		_:
+			message = "offline"
+	_set_status(message, _extension_pages[_selected_extension].title)
+	if status.get("state") == "failed":
+		_status_dot.color = Color(0.95, 0.18, 0.12)
+	elif message in ["coop_status_extension_preparing", "coop_status_extension_ready"]:
+		_status_dot.color = Color(1.0, 0.78, 0.12)
+
+
 func _on_connection_status_changed(message: String) -> void:
-	if _selected_mode == CoopPanelMode.RELAY:
+	# 只有当前组网会话接收网络状态；失败/取消后的迟到通知不能覆盖已缓存的结果。
+	if not _active_extension_status.is_empty():
+		_extension_statuses[_active_extension_status]["network"] = message
+	if _selected_mode == CoopPanelMode.EXTENSION:
+		_refresh_extension_status()
+	elif _selected_mode == CoopPanelMode.RELAY:
 		_set_status(message, "RELAY")
 	elif _selected_mode == CoopPanelMode.DEDICATED:
 		return

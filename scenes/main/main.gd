@@ -68,8 +68,8 @@ func first_round():
 	PlayerData.update_player_ability()
 	
 	var start_local_round: bool = true
-	if ExtensionHooks.first_round_start_gate.is_valid():
-		start_local_round = bool(ExtensionHooks.first_round_start_gate.call())
+	if ExtensionHooks.is_hook_active("first_round_start_gate"):
+		start_local_round = ExtensionHooks.intercept_named("first_round_start_gate", [])
 	if start_local_round:
 		round_manager.first_round_start()
 	

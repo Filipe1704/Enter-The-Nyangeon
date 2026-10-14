@@ -41,10 +41,10 @@
 ## 2. Combat pipeline / 战斗结算管线
 
 ### 2.1 玩家子弹产出 DamageData（暴击在此 roll）
-1. `PlayerGun._shoot_bullet` 取池化子弹，设速度/穿透等，加入 `BulletRoot`，emit `player_shot_position`（`script/player_gun.gd:141-229`）。
+1. `PlayerGun._shoot_bullet` 取池化子弹，设速度/穿透等，加入 `BulletRoot`，emit `player_shot_position`（`script/player_gun.gd:147-192`）。
 2. `Player` 在 `_ready` 连接 `player_shot_position → bullet_hit_damage`（`script/player.gd:90`）。
-3. `bullet_hit_damage`（`player.gd:390-426`）：`DamageData.fill(bullet_body.damage_data, {... source=PLAYER, node=bullet_body})` → `apply_penetrate_dealt()` → `randf_range(0,100) < stats.critical_luck` roll 暴击 → `base_damage = max(1, round(bullet_damage * global_damage [* critical_damage]))` → emit `player_shot_critical`/`player_shot_not_critical` → 追加玩家的 `damage_types`/`damage_modifier`/`damage_dealt`/`flags` → 缩放子弹。
-4. 敌方/召唤物/近战各自构造：`bullet_launcher.gd:45-51,85-91`、`entity_ENEMY.create_damage_data`（`:138-150`）、`enemy_bullet.gd`、`turret_summoned.gd:113-133`、`kick.gd:28-43`。
+3. `bullet_hit_damage`（`player.gd:473`）：`DamageData.fill(bullet_body.damage_data, {... source=PLAYER, node=bullet_body})` → `apply_penetrate_dealt()` → `randf_range(0,100) < stats.critical_luck` roll 暴击 → `base_damage = max(1, round(bullet_damage * global_damage [* critical_damage]))` → emit `player_shot_critical`/`player_shot_not_critical` → 追加玩家的 `damage_types`/`damage_modifier`/`damage_dealt`/`flags` → 缩放子弹。
+4. 敌方/召唤物/近战各自构造：`bullet_launcher.gd:62`、`entity_ENEMY.create_damage_data`（`:138-150`）、`enemy_bullet.gd`、`turret_summoned.gd:139`、`kick.gd:29`。
 
 ### 2.1b 子弹移动与追踪（数值安全）
 
@@ -88,24 +88,20 @@
 - 时间轴：`active_state()`（同时重置 `warning_time`/`end_time`/`is_stop`）→ `laser_shoot()` 置 `warning_time = WARNING_TICKS(15)` → 预警结束 `start_rotating()` → 每 tick `life_time_left--`，归零 `stop_rotating()`（`end_time = END_TICKS(15)` 淡出 → `idle_state()`）。`life_time == 0` 时预警结束直接 `idle_state()` 不出光。
 - `total_active_ticks() = WARNING_TICKS + life_time + END_TICKS`（单一真源，供塔组算窗口）。
 - 光束命中检测（`scenes/bullet/laser_bullet.gd`）：`add_damage()`（`global_time_count` tick）用 `PhysicsShapeQueryParameters2D` + `PhysicsDirectSpaceState2D.intersect_shape` **即时查询**当前命中框形状覆盖的 HurtBox，过滤 `is_instance_valid` + `monitorable` 再 `hit_received.emit`；形状 `disabled`（光束成长/淡出）时跳过。**不再**用 `HitBox.area_entered/exited` 维护 `_contacts` 集合（也没有 `_seed_contacts`）。⚠️ 边沿事件集合在 `monitorable` 切换（跳跃 `set_dodge`）时不补发 `area_exited` → 残留，玩家跳出/跳跃躲开后仍掉血（且躲回不再补发 `area_entered` → 漏打），2026-10-10 改即时查询修复（见 `LEARNINGS.md`）。`intersect_shape` 是即时空间查询，不受 `get_overlapping_areas()` 的 Rapier 缓存残留影响（`LEARNINGS.md` 321/463）；调用点由 Timer（`round_timer`/`test_room` 的 `_on_timer_timeout`）驱动的 `global_time_count` 触发，在 idle 帧、非物理 flush 期，安全。
-- 塔组 `erosion_tower_group.attack_state()` 用 `_active_attack_ticks()` 把单次攻击窗口 `shoot_time` 抬到 ≥ 当前开火激光的 `total_active_ticks()`，使激光只受自身 `life_time` 约束；非激光攻击仍为 `shoot_time_max`（`erosion_tower_group.gd:19,60-79`）。⚠️ `erosion_tower_group.enemy_fever_time()` 是**死代码**（塔组从未连 `GameEvents.fever_time_start`，全局只有 `goliath.gd:86` 连）。
+- 塔组 `erosion_tower_group.attack_state()` 用 `_active_attack_ticks()` 把单次攻击窗口 `shoot_time` 抬到 ≥ 当前开火激光的 `total_active_ticks()`，使激光只受自身 `life_time` 约束；非激光攻击仍为 `shoot_time_max`（`erosion_tower_group.gd:19,95`）。⚠️ `erosion_tower_group.enemy_fever_time()` 是**死代码**（塔组从未连 `GameEvents.fever_time_start`，全局只有 `goliath.gd:86` 连）。
 
 ### 2.3 HealthComponent 结算（敌方）
 `script/health_component.gd`：
-- `_ready` 连接 `hurt_box.hit_received → take_damage`。
-- `_is_friendly_fire`：非治疗友方=非敌对；**治疗的友方判定相反**。
-- `take_damage` 维护 `_hit_depth`，深度归零后 drain `pending_extra` 队列（`:31-36`）。
-- `_take_damage_internal`（`:57-179`）：
-  - `is_invincible` 直接返回。
-  - 友方 → 仅 `apply_conversion_power`（若有 `convert_power`）后返回。
-  - `raw_damage = base_damage`；仅非 TRUE_DAMAGE 的 CONVERTED 来源额外乘当前玩家的 `stats.dot_damage`。
-  - 若 `source_type.has(CONVERTED)` 且非 TRUE_DAMAGE：近战乘 `PlayerData.kick_damage_mult`，逐击 roll 暴击（`:71-85`）。
-  - 治疗分支：`final=max(1,raw)`，emit `enemy_heal_taken`，跑 modifier，`stats.hp += final`。
-  - 伤害分支（`:105-157`）：`final=max(1, raw * stats.global_hurt_damage)`；`TRUE_DAMAGE` 跳过该乘数；emit `enemy_damage_taken`；跑 `damage_modifier`；非 TRUE 时应用并重置 `damage_multiplier`；`final>stats.hp` → emit `enemy_over_kill_damage`；`stats.hp -= final`；`damage_taken.emit`；闪白/受击音；`on_damage_dealt`；`stats.hp<=0` → emit `enemy_damage_taken_dead`。
-  - 击退：方向默认 `(owner.pos - dmg.hit_box_center).normalized()`；`KNOCKBACK_ATTRACT` 反向；力度 `force * resist_factor * melee_mult`。
-- 🚩 **顺序**：`emit_enemy_damage_taken` 在 modifier / `damage_multiplier` / hp 扣减**之前**，但 `enemy_over_kill_damage` 用**后置**值 —— 订阅者不可假设二者一致。
-- 🚩 `damage_multiplier` 仅在 `!TRUE_DAMAGE` 时重置（`:130-132`），TRUE_DAMAGE 会漏掉重置，残留到下一次非真实伤害。
-- **客机菜刀伤害数字一致性（mod，2026-10-15）**：`coop_net.gd:_get_predicted_enemy_damage` 根据 `TRUE_DAMAGE` 跳过承伤倍率，`_predict_enemy_death` 直接消费已计算的伤害，不能再次乘承伤倍率。`_server_enemy_hit` 在权威 `DamageData.on_damage_dealt` 上采集结算后的命中伤害，用于飘字与归属端 proc；记分仍使用有效 HP 差。命中伤害与 HP 差并不等价：菜刀斩杀 `99999`、目标剩余 `50` 时，两端都显示 `99999`，实际只扣 `50`。沙袋的 `on_dead()` 经 `Enemy._on_is_dead` 延迟调用回血，跨帧比较 HP 会混入回血，测试须记录命中瞬间的 HP。`suppress_feedback=true` 只抑制自然表现和 gameplay 信号，不会跳过 `on_damage_dealt`。回归 `tests/coop_knife_damage_checks.gd`（`python tests/run_coop_item_visual_checks.py --damage`）覆盖 LAN/Relay 的正常命中、减伤/易伤、斩杀、普通过量伤害及沙袋回血，并检查同击只显示一次与记分不膨胀。
+- `take_damage(data, bypass_hook=false, suppress_feedback=false, resolved_damage=-1)`：先经过可选 Mod interceptor，维护 `_hit_depth`，最外层结算完成后 drain 额外伤害队列。死亡、无敌与阵营门控仍在组件；友方命中可只续策反条。
+- `_raw_damage` 保留策反伤害的实时 dot/近战乘区和独立暴击；普通伤害使用构建器中已计算的 base_damage。治疗仍走原治疗、modifier、加血和回调路径。
+- 普通伤害 `_resolve_damage` 顺序：承伤倍率 → `enemy_damage_calculating` 前置数值阶段 → 本地 `enemy_damage_taken` 关联 proc → DamageData modifiers → 组件倍率。真实伤害跳过承伤及前置修饰；两种路径都消费暂存倍率。前置阶段追加的临时 modifier 在命中末恢复，避免穿透复用累积。
+- 扣血仍包含一击必杀、溢出伤害事件、HP 修改、伤害反馈、on_damage_dealt、死亡/击杀归属；击退与策反继续在本体处理。`enemy_damage_taken` 仍发生在本地扣血之前，溢出/死亡事件使用后置数值，订阅者不要假设两者一致。
+- **联机数值契约（2026-10-14，COOP-008 已修）**：公开 `resolve_damage` 只计算本次命中，不扣血、不运行结算 proc 或 on_damage_dealt。客机 `_prepare_enemy_hit` 在预测扣血与生命周期之前计算 `resolved_damage`；根敌人、自管理子弹和独立部件统一发送。房主通过第四参数接纳该值，不重复应用承伤/自己的被动，但仍检查死亡、无敌、阵营并扣实际 HP；归属 proc 在权威结束后只回到攻击者。目标血量/距离等使用客机命中时快照，沿用好友房可信数值模型。
+- **目标承伤镜像契约（2026-10-14）**：房主 resolved 路径不再自行乘目标承伤（`global_hurt_damage`）或本机被动，客机 `resolved_damage` 依赖其对**目标受击者**的本地快照；因此任何修改目标 `global_hurt_damage`/`damage_multiplier` 的来源（debuff、道具、`BuffAura` 等）**必须经 buff 镜像同步到客机**，否则客机求值与房主实际扣血不一致。新增此类来源时须确认已走镜像通道。
+- Hina 距离闭包保持子弹内求值；Kotori、Tsurugi、Utaha、Momoi 的数值增伤及近战藏品迁到前置阶段。Momoi 的施加燃烧仍留在原 proc，避免预计算产生双重副作用；Mint 在命中瞬间写入倍率，由同一数值路径消费。
+- 版本：2026-10-14 用户改定发布版本为本体 v0.5.1.4 / 官方 Mod 0.1.10，尚未提交上游的协议变更统一为 v4；期间曾回滚至 v0.5.1.3（原标 v0.5.1.4 / 0.1.12 / 协议 v5）的修复保留。本体与 Mod 需配套更新，无前置接口的旧本体停止注入。证据：`health_component.gd:31,213,225`、`GameEvents.gd:97,333`、`coop_net.gd:_prepare_enemy_hit/_server_enemy_hit/_server_enemy_part_hit`。守卫：`run_damage_contract_checks.py` 与联机 `damage` 实际双端场景。
+
+- **客机菜刀伤害数字一致性（mod，2026-10-15）**：沿用主线 `_prepare_enemy_hit → resolve_damage → resolved_damage` 数值契约；`_server_enemy_hit` 额外在权威 `on_damage_dealt` 回调采集本次结算伤害，用于飘字和归属 proc，记分继续使用有效 HP 差。菜刀对剩余 `50` 生命的目标造成 `99999` 斩杀伤害时，两端均显示 `99999`，实际扣血和记分仍为 `50`。沙袋的 `on_dead()` 延迟回血，回归须记录命中瞬间的 HP，不能跨帧比较。`tests/coop_knife_damage_checks.gd`（`python tests/run_coop_item_visual_checks.py --damage`）覆盖 LAN/Relay 的正常命中、减伤/易伤、斩杀、普通过量伤害、沙袋回血及记分。
 
 ### 2.4 玩家血量 — `script/player_health_component.gd`
 - `is_invincible` 早退；`base_damage<=0` 时改走“仅击退”分支（有 `knockback_force` 则只结算击退，不扣血 / 不吃 `hurt_invalid` / 不进无敌帧 / 不触发 `on_hit_effects`）；正常伤害下 `hurt_invalid>0` 消耗一次免疫并显示 "IMMUNE!"（`:67-78`）。
@@ -156,9 +152,9 @@
 - ⚠️ `GameEvents.enemy_critical_hurt/fire_hurt/explosion_hurt/poison_hurt/normal_hurt` **无发射者**（遗留）；`entity_ENEMY.is_*_hit` 为只写。
 
 ### 2.10 Floating damage text / 伤害数字显示
-- 敌人伤害数字由每个敌人身上的 `script/enemy_hurt_floating_text.gd`（场景 `script/enemy_hurt_floating_text.tscn`，多数敌人场景实例化）**聚合**，而非逐次弹出：`health_component.damage_taken` → 按样式（前缀+颜色+字号）合并进 `_pending`，再统一 `_flush()` 出飘字（`enemy_hurt_floating_text.gd:47-70`）；离屏敌人直接跳过（`_on_screen`）。
+- 敌人伤害数字由每个敌人身上的 `script/enemy_hurt_floating_text.gd`（场景 `script/enemy_hurt_floating_text.tscn`，多数敌人场景实例化）**聚合**，而非逐次弹出：`health_component.damage_taken` → 按样式（前缀+颜色+字号）合并进 `_pending`，再统一 `_flush()` 出飘字（`enemy_hurt_floating_text.gd:61-108`）；离屏敌人直接跳过（`_on_screen`）。
 - **驱动 tick**：`GameEvents.global_time_count`，由 `ui/round_timer.tscn` 的 `GlobalTimer`（`wait_time=0.1`，10Hz）发射（`round_timer.gd:173`）；`test_room.tscn` 同为 0.1s。⚠️ **该 tick 被 `EnemyStats`/状态机/子弹等大量系统共用，不可改其频率来降频。**
-- **自适应节流（2026-09-27）**：`PoolManager` 在 `_on_global_time_count` 里对 `Engine.get_frames_per_second()` 做 EMA（α=0.2），按档位算出 `text_tick_skip`：`1`(10Hz，FPS≥55) / `2`(5Hz，35–55 滞回带) / `3`(~3.3Hz，25–35) / `4`(2.5Hz，<18)；每次变档停留 `TEXT_RATE_DWELL_TICKS=10`(~1s) 抑制抖动（`PoolManager.gd:17-28,181-209`）。消费者：`_on_tick` 累计 `_tick_accum`，达到 `skip` 才 flush；`skip=1` 保留首击即时反馈，`skip>1` 时首击不立即弹、只由 tick 节流合并（`enemy_hurt_floating_text.gd:49-73`）。仅作用于敌人聚合伤害数字，不含玩家/道具/旧直连敌人的飘字。
+- **自适应节流（2026-09-27）**：`PoolManager` 在 `_on_global_time_count` 里对 `Engine.get_frames_per_second()` 做 EMA（α=0.2），按档位算出 `text_tick_skip`：`1`(10Hz，FPS≥55) / `2`(5Hz，35–55 滞回带) / `3`(~3.3Hz，25–35) / `4`(2.5Hz，<18)；每次变档停留 `TEXT_RATE_DWELL_TICKS=10`(~1s) 抑制抖动（`PoolManager.gd:282-314`）。消费者：`_on_tick` 累计 `_tick_accum`，达到 `skip` 才 flush；`skip=1` 保留首击即时反馈，`skip>1` 时首击不立即弹、只由 tick 节流合并（`enemy_hurt_floating_text.gd:49-73`）。仅作用于敌人聚合伤害数字，不含玩家/道具/旧直连敌人的飘字。
 - **手动上限（2026-10-03，设置项）**：`Game.damage_text_freq`（存 `config.ini` `[game]`，默认 `4`）：`0`=关 / `1`=低(上限 skip4) / `2`=中(3) / `3`=高(2) / `4`=最高(1)。`PoolManager.get_text_tick_skip()` = `max(手动上限, FPS 自适应 _text_tick_skip)` —— 手动档是**上限**、自适应只在此基础上再降（更疏），不会更密；`0` 直接返回 0，消费者清空 `_pending` 停止飘字（避免 `skip=0` 时 `0>=0` 每 tick 都 flush）。UI 在 `ui/game_option.tscn` Graphics 第 3 行（`DamageFreq` 滑条 + `DamageFreqValue` 数值），`script/game_option.gd:_on_damage_freq_value_changed` 写盘；滑条场景 `ui/damage_freq_slider.tscn`（触屏按 x 比例吸附、桌面走 HSlider 原生；`project.godot` 关闭了 `emulate_mouse_from_touch`）。
 
 ### 2.11 Effect frequency / 特效频率节流
@@ -190,8 +186,8 @@
 - `value[0]` → base `max_layer`；实际 `entry["max_layer"] = _scale_max_layer(value[0])`，玩家版 = `max(1, floor(value[0] * stats.buff_layer_mult))`（`player_buff_manager.gd:23`），且**只在创建 entry 时定格**，之后不随属性变化重算。
 - `value[1]` → `entry["value"]`（magnitude）。
 - `value[2]` → 时长**秒**，转 tick：`erase_time = value[2] * TICKS_PER_SECOND * _duration_multiplier(buff)`（`TICKS_PER_SECOND := 10`，`:11`）。`_duration_multiplier` 默认 1；仅 `PlayerBuffManager` 覆写为 `body.stats.buff_duration`，且 `Buff.is_debuff=true` 时仍返回 1（有害 buff 不享受「有益 buff 持续时间」属性）。
-- 全局 tick 信号 `GameEvents.global_time_count`（10Hz，由 `round_timer.gd:173-174` 与 `test_room.gd:117` 发射）。
-- `entry["raw_value"]` = 原始 `value` 数组副本（`buff_manager_base.gd:225`）；供 component 读取约定外的扩展位（如 `debt_component` 用 `raw_value[3]` 作硬币开关）。
+- 全局 tick 信号 `GameEvents.global_time_count`（10Hz，由 `round_timer.gd:231` 与 `test_room.gd:117` 发射）。
+- `entry["raw_value"]` = 原始 `value` 数组副本（`buff_manager_base.gd:312`）；供 component 读取约定外的扩展位（如 `debt_component` 用 `raw_value[3]` 作硬币开关）。
 - 重复施加同 id：`layer < max_layer` 时加层。玩家 `stats.buff_layer_mult` = 场景导出基准 + `PlayerData.buff_layer_mult_add`（`PlayerData.gd:374`，`base_buff_layer_mult` 由 `get_player_base_ability()` 快照），**两者相加**；给「+上限」被动累加 `buff_layer_mult_add` 时，若场景基准已非 1 会叠加放大。
 - **source-capped stacking**（仅 chill）：按 `source_id` 各记 `source_layers/source_caps`。
 
@@ -230,7 +226,7 @@
 | `SupportCard` | `resources/support/support_card.gd` | `support_id, support_name/name2, ex_cost=50, unlock_cost=20, max_lv=100, pa_ability, ability_id, pa_value: Curve, support_pack: PackedScene, ex_voice, lv_voice` |
 | `TalkFormwork` | `resources/talk/talk_formwork.gd` | `talk_text, sprite_num, voice_name, voice_num, voice_time` |
 | `AbilityUpgrade` | `resources/upgrades/ability_upgrade.gd` | `id, icon, name, rare(0-2), order_num, special_rules, description, forward, negative, item_tags(bit flags), tags: Array[String], weight=1.0` |
-| `SceneData` (save) | `script/scene_data.gd` | `save_version, player_pyroxenes, character, group, clothes_group, now_clothes, game_mode, support_savedata, game_support` |
+| `SceneData` (save) | `script/scene_data.gd` | `save_version, player_pyroxenes, character, group, clothes_group, now_clothes, game_mode, support_savedata, game_support_id`（v3；`game_support` 仅旧档迁移用） |
 
 - **身份键 = `id`/`*_id` 字符串，通常等于 `.tres` 文件名**（`resources/enemy/sweeper.tres` → `id="sweeper"`）。
 - 显示文本两条路：① 直接内嵌字符串（`name="负债buff"`）；② 按 **`<id>_name` / `<id>_description` / `<id>_forward` / `<id>_negative`** 本地化键约定（`ui/ability_upgrade_card.gd:75-78`）。
@@ -264,19 +260,19 @@
 ### 5.3 EnemyStats — `script/EnemyStats.gd`
 - 信号 `hp_changed/hp_hurt/is_dead`；`hp` setter 通过 `hp_change_cd`/`hurt_count` 批处理，emit `enemy_hurt_hp`/`enemy_dead_hurt_damage`/`enemy_dead_score`/`is_dead`。
 - ⚠️ setter 中 `hurt_hp = hp - v; if hurt_hp > hp: emit_enemy_dead_overflow_hp(...)` 用旧 `hp` 比较（`:73-76`），与 `HealthComponent` 的 overkill 重复/不一致。
-- ⚠️ `hurt_resis` 对敌方减伤**无效**（公式被注释掉，`health_component.gd:108-110`），仅 `global_hurt_damage` 生效；`hurt_resis` 只影响飘字 "Resis " 前缀。
+- ⚠️ `hurt_resis` 对敌方减伤**无效**（承伤只用 `stats.global_hurt_damage`，无 `hurt_resis`/armor 项，`health_component.gd:230`），仅 `global_hurt_damage` 生效；`hurt_resis` 只影响飘字 "Resis " 前缀。
 - `update_body_ability()`：`Enemy_damage`/`Enemy_bullet_damage = max(1, ceili(base * Enemy_damage_mult))`，`base<=0` 保持 0（`shield`/`sandbag` 无伤害单位）。⚠️ 旧实现用 `int()` 截断，会把低基数敌人压成 0（如 base1 × 难度 0.8 = 0），2026-09-27 改为 `ceili` 向上取整（`:161-162`）。
 - **移动加速度 `move_acceleration()`（2026-10-02）**：`maxf(base_MAX_SPEED, MAX_SPEED) / maxf(SPEED_TIME, 0.001)`。以 `base_MAX_SPEED` 为下限——恶寒把 `MAX_SPEED` 压到 `0.1×base` 时加速度**不再随之归零**（否则 `move_toward` 无法减速、击退后持续滑行）；仅当当前 `MAX_SPEED` 大于基准（如 `goliath` fever `MAX_SPEED_mult=1.5`）时才提高。7 个敌人脚本统一改用 `stats.move_acceleration()`（`automaton`/`sweeper`/`tester_automaton_shield`/`enemy_tank`/`sandbag`/`boss/goliath`/`boss/erosion_tower`）；`player.gd` 仍用旧式（玩家 `MAX_SPEED` 有 `clamp(50,…)` 下限，不受影响）。
 
 ### 5.4 Summoned — `script/summoned.gd`
 - `SummonedFollowers`（跟随玩家、自动索敌开火）、`TurretSummoned`（炮台，固定/随机点位）、`SummonedGun`（`luminous_nova.gd`）、`KeiSummoned`（支援 kei 召唤物，`scenes/player_support/kei/kei_summoned.gd`）。
 - `idle_state()` 隐藏并放到 `(10000,-10000)`、清 buff、停处理。
-- 索敌列表 `enemy_body`：`_on_area_2d_body_entered/exited`、`_on_target_converted` 只置脏 `_mark_sort_dirty()`，同帧多次变更由 `sort_enemy.call_deferred()` **合并为每帧最多排一次**；比较器改用 `distance_squared_to`（省 sqrt）。`enemy_body[0]` 为最近目标（`summoned_follower.gd:78-89`、`turret_summoned.gd:82-85` 读取）（2026-10-02）。
+- 索敌列表 `enemy_body`：`_on_area_2d_body_entered/exited`、`_on_target_converted` 只置脏 `_mark_sort_dirty()`，同帧多次变更由 `sort_enemy.call_deferred()` **合并为每帧最多排一次**；比较器改用 `distance_squared_to`（省 sqrt）。`enemy_body[0]` 为最近目标（`summoned_follower.gd:78-89`、`turret_summoned.gd:109` 读取）（2026-10-02）。
 - `SummonedStats`：`summoned_damage, summoned_damage_mult, global_hurt_damage, ...`；`update_body_ability()` 从 `PlayerData.player.stats.summoned_damage` 取值。**不再各自订阅** `player_ability_changed`（原先每个召唤物订一次 → O(n) 扇出）。
 - `SummonedManager`（组 `SummonedManager`）用 Area2D 跟踪召唤物，emit `summoned_changed`；`_ready` 订阅 `PlayerData.player_ability_changed`，在 `_refresh_summoned_stats()` 里批量刷新 `summoned_group` 各 `stats.update_body_ability()`。
 - 可受伤召唤物（挂 `SummonedHealthComponent`：`mobu_trinity`/`kei_summoned`/`utaha_turret_body`）默认**受伤不击退**、**转发伤害给玩家时不带击退**；两行为分别由 `knockback_on_hurt` / `transfer_knockback` 开关控制（受伤击退另有 `knockback_mult` 百分比系数），详见 §2.5。召唤物无敌帧与玩家同构：跳跃=闪避档（挡激光），受击=普通档（激光照打）。
 - **联机召唤物镜像（mod，2026-10-07）**：`CoopSummonedProxy` 镜像端 `_disable_remote_simulation()` 关掉 StateMachine + physics → 本体 `SummonedFollower.tick_physics/transition_state` 不跑，故**动画/朝向/瞄准/开火必须由 proxy 直接驱动**。快照 `send_summoned_state` 除位置/速度/朝向角外，增 `state`(IDLE/RUNNING/JUMP) + `facing`(±1)；`SummonedFollower` 实现 `get/apply_network_visual_rotation`（枪口角复用 rotation 通道）与 `apply_network_state(state,facing)`（只切 `sprite_2d` 动画/`graphics.scale.x`/`halo.flip_h`/`jump_anim`，不移动不开火）；开火由拥有者在 `SummonedGun.shoot_bullet` 时 `notify(on_summoned_action,...)` 广播，镜像端 `network_play_action("shoot")` 播后坐（子弹本体仍由 `ProjectileSpawner` 广播）。`TurretSummoned`（`extends Summoned`）早有同名接口，不受影响；kei/mobu 等 `SummonedFollower` 全部受益。
-- **召唤物固有等级/经验系统（2026-10-08）**：等级从「utaha 角色被动」改为**召唤物自身固有属性**，任何来源（utaha 近战 / 未来道具）经统一入口 `Summoned.add_summon_exp(amount, source_id, damage_add_override)` 喂经验（`script/summoned.gd:83-106`）；`set_summon_level/add_summon_level` 供道具直接给级。配置在 `SummonedStats`（`level_enabled` 默认 true、`max_level`、`level_damage_add` 默认 **6**、`level_up_exp_base=3`、`level_exp_growth=10`），阈值/曲线等价旧 utaha 逻辑（原 `utaha/melee.gd` 的 `summoned_group` 字典已删）。每级加成写 `stats.summoned_damage_add`（与召唤物 buff 同路叠加）：`damage_add_override>0` 用之，否则固有 `level_damage_add` → utaha 近战传 `up_v`（6，其被动升级后 12）覆盖固有 6。`summon_level_changed(state)` 信号驱动头顶显示。
+- **召唤物固有等级/经验系统（2026-10-08）**：等级从「utaha 角色被动」改为**召唤物自身固有属性**，任何来源（utaha 近战 / 未来道具）经统一入口 `Summoned.add_summon_exp(amount, source_id, damage_add_override)` 喂经验（`script/summoned.gd:89`）；`set_summon_level/add_summon_level` 供道具直接给级。配置在 `SummonedStats`（`level_enabled` 默认 true、`max_level`、`level_damage_add` 默认 **6**、`level_up_exp_base=3`、`level_exp_growth=10`），阈值/曲线等价旧 utaha 逻辑（原 `utaha/melee.gd` 的 `summoned_group` 字典已删）。每级加成写 `stats.summoned_damage_add`（与召唤物 buff 同路叠加）：`damage_add_override>0` 用之，否则固有 `level_damage_add` → utaha 近战传 `up_v`（6，其被动升级后 12）覆盖固有 6。`summon_level_changed(state)` 信号驱动头顶显示。
 - **召唤物等级头顶显示（2026-10-08）**：`scenes/summoned/summon_level_display.tscn` + `script/summon_level_display.gd`，外观复刻旧 UtahaPS 进度节点（LVNum / LEVEL UP↑ / 竖直 ProgressBar，字体 `BoutiqueBitmap7x7_1.7`）。走**对象池**（pool id `"summon_level_display"`，`PoolManager.IDLE_LIMITS` 16），`Summoned._ready` 经 `_setup_level_display()` 取用/实例化到 `SELayer` 并 `bind(self)`，`idle_state()/_exit_tree()` 释放回池；每帧 `global_position = summon.get_level_display_position()`。高度适配用**场景锚点 `LevelDisplayAnchor`（Marker2D，`unique_name_in_owner`）**：mobu/kei 挂在 `%AnimatedSprite2D` 下（随跳跃动画上下），turret 挂根；缺失回退 `global_position + (0,-level_display_height)`。旧 UtahaPS 进度节点保留但隐藏，`show_progress` 不再被调用。
 - **联机召唤物固有等级 / 友方近战击退（mod，2026-10-08）**：镜像召唤物的 `HurtBox` 被 `CoopSummonedProxy._enable_melee_detect()` 恢复为「探测专用」（`collision_layer=8192` summoned_box、`monitorable=true`、`monitoring=false`、形状启用），使**本机近战 HitBox 能检测到队友召唤物镜像**。两个闸门：① `summoned_damage_interceptor` → 镜像收到友方近战（`PLAYER`+`MELEE_DAMAGE`）则转发 `{net_id, kb_force, kb_dir}` 给拥有者（`_server_summoned_melee_kb`/`_remote_summoned_melee_kb`），拥有者对真实召唤物 `apply_network_melee_knockback`；其它镜像伤害丢弃。② `summoned_upgrade_interceptor` → 镜像收到升级则转发 `{net_id, amount, source_id, override}`（`_server_summoned_upgrade`/`_remote_summoned_upgrade`），拥有者调 `add_summon_exp`。拥有者 `summon_level_changed` → `_on_local_summon_level_changed` → host 直发 / client 经 `_server_summoned_level_state` 中继 → 各端镜像 `apply_network_summon_level_state`（驱动头顶显示）。**来源无关**：未来道具升级召唤物自动复用该通道。所有 `any_peer` handler 有 `_server_sender_ok` + owner 校验 + `clampi`。
 
@@ -287,6 +283,8 @@
 - ⚠️ 少数 `crit_chance_bonus` 字段（三处 health component）无读者。
 
 ### 5.6 Support — 支援角色
+- **持久化边界（2026-10-14）**：v3 保存支援 ID/LV/exp 与 selected_support_id；运行期 support_data 仍可附 resource 供 UI 使用，但写盘剥离它。缺/停用 Mod 时保持进度与选择、显示空支援，重新启用后恢复；旧 Resource 存档在 Mod 挂载后迁移，缺依赖时采用局部占位加载器。实现与验证见 ARCHITECTURE §2 及 `tests/run_support_persistence_checks.py`。
+- **同 ID 覆盖解析（2026-10-14）**：`SupportData.restore_progress` 解析每个支援 id 时优先 `ModManager.get_resource("supports", id)`（含以 manifest `overrides` 声明的同 ID 覆盖版），未注册才回退 `support_pool`；本体与 Mod 同 ID 支援可并存，池顺序不决定覆盖优先级。
 - 数据：`SupportCard`（`resources/support/support_card.gd`）定义被动（`ability_id`：PlayerData 变量名 + `pa_value: Curve` 等级曲线）与主动（`ex_cost`、`support_pack`）。
 - 装配：`SupportData.game_add_support()`（`script/support_data.gd:59-74`）实例化 `support_pack` 到 `"PlayerRoot"` 并注入 `ins.support_card`，UI 挂 `"GameUI".support_box`；被动数值不再由 `SupportData` 写入。⚠️ `game_support` 可为 `null`（全新档/从未选过支援时初值为 `null` 而非 `null_support`），`game_add_support()` 对 `null` 与 `support_id == "null"` 一律早退；正常流程由 `reset_game_support()`/`Game.load_playerdata()`/`support_select_ui.check_data()` 把 `null` 归一为 `null_support`，避免 HUD 出现空卡与结算 Nil 访问。
 - **`SupportCharacter`**（`script/support_character.gd`，`extends Node2D`）：`support_pack` 根基类。`_ready()` 调 `_apply_passive_boost()`（读存档 `support_data[id].LV` → `pa_value.sample(lv/100)` → `PlayerData.set(ability_id, …)` + `update_player_ability()`）与虚函数 `_special_effect()`。
@@ -303,7 +301,7 @@
 
 ### 5.7 敌人人数缩放（联机，mod `mods/etn_coop`，2026-10-08）
 
-- **收口点（本体侧扩展点）**：血量/伤害在 `spawn_anim.spawn_enemy_body()`（`script/spawn_anim.gd:96` 前）读 `ExtensionHooks.enemy_spawn_stat_scale()` 注入 `{hp,damage}` 乘数后写入 `max_hp_mult`/`Enemy_damage_mult`/`Enemy_bullet_damage_mult`（部件同系数）——**所有刷怪路径**（`enemies_spawn`/`path_spawn`/`raid_spawn`/Boss 的 `enemy_spawn_launcher`）都经此。数量在 `enemies_spawn.get_level()`（`script/enemies_spawn.gd:48` 后）读 `ExtensionHooks.enemy_spawn_count_scale(now_round,max_round)` 乘到 `round_mult`。
+- **收口点（本体侧扩展点）**：血量/伤害在 `spawn_anim.spawn_enemy_body()`（`script/spawn_anim.gd:100` 前）读 `ExtensionHooks.enemy_spawn_stat_scale()` 注入 `{hp,damage}` 乘数后写入 `max_hp_mult`/`Enemy_damage_mult`/`Enemy_bullet_damage_mult`（部件同系数）——**所有刷怪路径**（`enemies_spawn`/`path_spawn`/`raid_spawn`/Boss 的 `enemy_spawn_launcher`）都经此。数量在 `enemies_spawn.get_level()`（`script/enemies_spawn.gd:48` 后）读 `ExtensionHooks.enemy_spawn_count_scale(now_round,max_round)` 乘到 `round_mult`。
 - **mod 公式**（`coop_net.gd`，`N = get_peers().size()+1`，仅 `is_lan_game`；单机返回默认 → 零回归）：
   - 生命 `1 + 0.5·(N-1)` → ×1.5/2.0/2.5（2/3/4人）。
   - 伤害 `1 + 0.1·(N-1)` → ×1.1/1.2/1.3。
@@ -313,6 +311,8 @@
 
 ### 5.8 断线重连（联机，mod `mods/etn_coop` + 中继服务端，2026-10-08）
 
+- **传输断线边界（2026-10-14）**：`net/coop_enet_peer.gd` 为原生 ENet 的薄适配器，汇总一次 poll 的连接事件后再通知 SceneMultiplayer；发送检查底层 ENetPacketPeer 仍为 CONNECTED，避免同 poll 多端退出时向已无通道的 peer 发引擎成员通知或玩法广播。保持原生通道/可靠性及 server relay；前置伤害契约与本批其他尚未提交上游的协议变更统一纳入 v4（原计划 v5）。`coop_relay_peer.gd` 清理已断开 sender 的排队包、拒绝晚到旧包，同 poll 复用 ID 时先断后连。真实同时断开及 Relay 队列守卫、三端重连严格通过；不靠扩大错误白名单。中继发送超水位改为分级背压：软水位（256 KiB）先给宽限（默认 5s）并继续写可靠帧，硬水位（默认 4 MiB）或宽限超时再断开慢端，仍不跳过可靠帧。
+
 - **身份**：客户端 `coop_settings.ensure_client_token()`（UUID 持久化 `profile/client_token`）；LAN/Relay 加入帧带 token，host 记 `_peer_token`/`_token_peer`。
 - **host 宽限**：`_on_peer_disconnected` 对已握手且有 token 的 peer 进入 `REJOIN_GRACE_MSEC=45s` 宽限——保留 `player_by_peer_id`/`player_scene_by_peer`/`player_name_by_peer`/`team_stats`/`support_*`/`down_peer_ids` 等与镜像（冻结 `player_stop`），超时 `_cleanup_peer`。宽限内 `_check_team_game_over` 直接 return（防其余人倒地误结束）。
 - **重连迁移（方案 B：新 id + host 迁移）**：`_old_peer_for_rejoin(token)` 命中旧 id → `_migrate_peer_state(old,new)` 搬移所有 per-peer 字典键、`last_attacker_by_net_id`/`summoned_owner_by_net_id` 引用、镜像 proxy `peer_id`；`_accept_peer` 不再覆盖已迁移角色。ENet 由 host 分配新 id、Relay 由服务端 `next_peer_id` 分配。
@@ -320,6 +320,9 @@
 - **服务端**（`mod_sdk/coop_mod/server/relay_server.py`）：`join_room` 在容量判断前对同 token 的旧 `clients` 先 `remove_peer`（释放名额，修满房误拒 + 半开幽灵占位）并广播 `peer_disconnected(old_id)` 让 host 进宽限；`heartbeat_peers` 主动 WebSocket PING，`PEER_TIMEOUT_MSEC` 无数据即回收半开连接。
 - **回合切换冻结（掉线期间不停旧回合）**：host `_reconnecting_peers` 非空时——`_gate_round_end_emit` 暂缓本回合结束（`_deferred_round_end`）、`_maybe_finish_round_upgrade` 暂缓升级页推进；重连/超时后 `_on_rejoin_settled` 解冻（补发 `emit_round_end` / 重判升级）。重连识别后若 host 正处于升级页（`_round_upgrade_active`），补发 `_remote_round_end`+`_remote_round_upgrade`，让重连者进入升级页，不丢升级（客机 `_in_round_upgrade` 幂等；`_on_round_upgrade_end_local` 复位）。各端显示轻量等待遮罩（`wait_reconnect_show`/`wait_reconnect_hide` → `coop_round_wait` light 模式：无背景遮罩 + 小字号(12)、回合计时下方顶部居中（`LIGHT_TOP_MARGIN=44`，避开 `ui/round_timer.tscn` 顶部计时，2026-10-09 调整）+ 鼠标穿透、世界仍可操作；名字按视口宽度换行不溢出）。
 - **局限**：房主自身重连未做。详见 `LEARNINGS.md`。
+
+- **身份恢复修正（2026-10-13，官方 mod 0.1.11 / 协议 4）**：迁移包含升级/选人/准备房就绪表、金币倍率及道具视觉记录；房主向所有存活端广播旧/新身份与权威恢复状态，补回召唤物、支援选择、名字和倒地状态，LAN 换 ID 与 Relay 复用同 ID 均补发恢复；同 ID 迁移直接保持字典，召唤物节点/proxy 的 `owner_peer_id` 同步更新（`coop_net.gd:1046,1121,1167`）。客机封面完成后在恢复握手时幂等重报升级就绪（`:2995`）。正式关卡三端带召唤物/道具/倒地恢复，以及客机先继续后重连的回合屏障均有回归。
+- **准入规则（来源：user，2026-10-13）**：进入 SELECT / ALL_READY / BATTLE 后拒绝新身份，提示等待下一局；已有 token 的重连继续允许。阶段屏障只统计已握手成员，并在宽限结束后重判选人，拒绝中的传输 peer 不进入就绪人数（`coop_net.gd:1046`、`_maybe_finish_select`、`_maybe_finish_round_upgrade`）。
 
 ### 5.9 联机网络补偿调优 / 诊断（mod，2026-10-08）
 
@@ -329,6 +332,13 @@
 - **实测基线（同机两 peer，`--coop-*` headless）**：LAN RTT ~4–10ms；默认中继 `mc.yqst.top:32085` RTT ~115ms（基础 TCP RTT ~31ms）→ **中继链路/服务器转发**为主要延迟来源，mod 自身处理（LAN 回环）可忽略；插值约为固定加成。详见 `LEARNINGS.md`。
 
 ---
+
+### 5.10 官方联机通用拓展接口
+
+- 注册表 `net/coop_extensions.gd` 提供接口 v1，接收具有 prepared / failed 信号和 start / stop / diagnostics 的 Node 提供者；官方 `CoopNet` 安装端点并保持会话与玩法职责。
+- `ui/coop_menu.gd` 按可选页面工厂创建页签，与内置页面互斥；导航只纳入可见且启用的控件，关闭/重开恢复提供者原始交互设置。
+- 准备中拒绝重复启动，自动重连保留连接设施；显式退出、F12、取消及退树释放提供者。延迟失败校验代次，不关闭后续新会话。
+- 官方包可独立运行；提供者由独立 Mod 自行实现。契约见 `docs/COOP_EXTENSION_API.md`，仅官方包回归见 `tests/run_coop_extension_contract_checks.py`。
 
 ## 6. Managers / 管理器
 
@@ -415,10 +425,12 @@
 - `AbilityUpgrade` 定义升级项（id/rare/tags/weight/special_rules…）。
 - `ItemWeightManager.calculate_item_weight` = base `weight` × 稀有度权重 × 平均标签权重 × 玩家状态 × 历史 × 特殊规则 × modifiers；默认稀有度 `{0:1.0, 1:0.375, 2:0.1}`。
 - `UpgradeManager.build_pool` 用 `AliasMethod` 建池；`get_triple_choice` 取 3 个不重复选项。
+- **刷新权重（2026-10-14，AUD-LOOT-001 已修）**：refresh_mult 表示额外增益，初始/选择后为 0；刷新更新 `(1+bonus)*1.1-1`，最高稀有度权重乘 `(1+bonus)`，因此中性时不归零、每次刷新总倍率增长 10%。其他加法使用处仍把它视为额外增益。health_percent 使用浮点除法；`run_upgrade_snapshot_checks.py` 覆盖连续刷新、选择复位和非满血比例。
 - `apply_upgrade` 记录数量/顺序、镜像到 `PlayerData.current_upgrades`、实例化 `res://scenes/update_item/<id>.tscn` 到玩家、记录选择、emit `ability_upgrade_added`；`EquipItem` 基类处理装备/叠加。
 - **联机菜刀瞄准平滑（mod，2026-10-15）**：拥有者的 `crosshair_pos` 随玩家快照发送；镜像不能只在收包时回填，否则菜刀转向会随网络更新呈台阶。`coop_snapshot_buffer.gd:85` 的可选 `look` 与位置共用时间戳和插值系数，`coop_player_proxy.gd:170` 采样后统一回填镜像准星、身体及武器朝向，道具驱动继续读取镜像准星。瞄准目标 `Vector2.ZERO` 合法，欠载时保持最后目标，不猜测后续转向；敌人/召唤物原有三参数调用兼容。`tests/coop_item_visual_checks.gd:_knife_smoothness_probe` 在双端连续扫动准星，按 60 FPS 检查刀刃停帧比例、最大角度步长和对准误差，覆盖 LAN/Relay。
 - **救生圈清弹联机（mod，2026-10-09）**：`lifebuoy.gd` 受伤触发时经新增 `ExtensionHooks.on_enemy_bullet_clear(pos, radius)` 通知 mod；mod 本机即时按半径清 `group EnemyBullet`（普通弹 `bullet_clear`、导弹 `enemy_missile_1` 无 `bullet_clear` → `idle_state`），非 host 再 `rpc_id(1, "_server_enemy_bullet_clear", pos, radius)` 请求 host 权威清理——host 清真子弹经既有 `on_projectile_despawned`(`net_visual_id`) 广播 `_despawn_visual_bullet`，各端一致消失。带 `source_faction==ENEMY_SIDE` 过滤 + `_rate_allow_tokens` + 归属校验（距发送者玩家 ≤400）；**不清**激光/狙击/爆炸 AoE（不在 `EnemyBullet` 组）。本体侧另修 `lifebuoy.tscn` 的 `Area2D.collision_mask` `65536`→`128`（恢复单机清普通弹；快照曾把 `128` 改 `65536`，而标准敌弹是 `128`）。
 - 拾取（瞬时）：`coin.gd`（池 `"coins"`，组 `PickItem`，`pick_up` 后归位并加 `coin*coin_mult`）；`pyroxenes.gd`（加 `PlayerData.player_pyroxenes`）。
+- **联机共享金币（来源：user，2026-10-13）**：按拾取者的 `coin_mult` 向上取整后共享全队；客机在可靠 channel 0 先同步有限、受范围约束的倍率，再提交拾取。房主对已知 net_id 仅使用自己的原始币值与已保存倍率计算，忽略客机上报总额；零倍率仍消费金币，重复拾取不重复结算（`coop_net.gd:6941,6954`、`_server_pickup_coin`）。倍率沿用本项目客机属性自报的信任模型，并非完整属性反作弊；房主掌握原始币值及消费去重。回归覆盖 2 倍、小数向上取整、零倍率、伪造总额与重复请求。
 - 金币掉落/合并（`CoinManager`，2026-10-02）：掉落统一走 `CoinManager.drop_coin(pos, value, pick_up)`（`entity_ENEMY._coin_drops`/`sandbag._coin_drops`）。池上限 `COIN_POOL_CAP=150`：优先复用空闲金币 → 未满则实例化 → 满额则并入 `_nearest_active()`（仅可拾取、非 `is_idle`）并通过 `coin.absorb(value, pick_up)` **累加值、不新建节点**（总值守恒）。活跃集 `_active` 由 `coin.gd` 在 `active_state()`/`idle_state()`/`_exit_tree()` 上报（仿 `PoolManager._active_enemies`）。合并目标**排除 `can_pick==false`**（抛物线/Boss 金币演出，回合末 `coin_clear_unit` 不返还其值）。**`coins` 池不进 `IDLE_LIMITS`**（`limit>=0` 时满额 `get_pool` 会静默回收活跃金币 → 丢值；故 `coins` 一律只走 `get_pool_idle` + 自管计数）。视觉缩放 `coin_scale` 改边际递减（`0.8 + 1.7*(1-exp(-coins/56.7))`，小值≈旧线性、渐近上限 2.5）。
 - 青辉石自动拾取全部金币（2026-10-02）：Boss 死生成 `coin_box`（100 枚抛物线金币，约 3s 掉完、每枚再 3s 落地）+ `pyroxenes`；拾取青辉石后 `round_timer.end_boss_round` 给 3.5s 清场缓冲。旧实现每枚金币各自连 `pyroxenes_pick_up`，**拾取信号发射之后才生成的金币收不到** → 只自动拾取已掉完的。修法：① `CoinManager` 监听 `pyroxenes_pick_up` → `auto_pick=true` + 遍历 `_active` 逐个 `auto_pick()`（含飞行中金币，置 `can_pick` 让磁吸接管）；② `coin.gd.active_state()`/`absorb()` 在 `CoinManager.auto_pick` 时置 `can_pick=true; pick_up=true`（覆盖之后生成的金币）；③ `coin_box` 监听同一信号置 `_flushed=true`，`add_coin()` 循环 `if _flushed: continue` 跳过 `await timer.timeout`，**立即补发剩余金币**（含拾取早于 `add_coin()` 的情况）；④ `round_start` 复位 `auto_pick`。逐枚 `pyroxenes_pick_up` 连接已移除（改由 `CoinManager` 单点驱动）。`game_eval` 验证：`emit_pyroxenes_pick_up()` 后 `auto_pick=true`、`box._flushed=true`、5 枚剩余同帧全生成、其后激活的金币 `can_pick && pick_up` 为真。
 - 抛物线金币联机（2026-10-07，mod `mods/etn_coop`）：`coin_box` 的 `parabola_path` 金币在 `drop()` 里 `body.active_state()` 早于 `curve` 构建，故 host `on_coin_spawned` 对父节点为 `PathFollow2D` 的 coin 延后一帧读 `parabola.curve`、转世界坐标后 `rpc("_remote_parabola_coin", net_id, points, value, pick_up)`；客机按 `coin_traj` + 墙钟沿折线驱动镜像飞行，落地才 `can_pick`（拾取仍走 `_gate_coin_pickup → host 共享`）。
@@ -461,7 +473,7 @@
 - **记分板 mod 支持（2026-10-09）**：筛选列表改为动态——角色 = `ModManager.get_base_characters()`（扫 `res://resources/player`，含分支形态如 `aris_armed`，`all_player.tres` 回退）+ `get_characters()`；模式 = `get_base_game_modes()`（扫 `res://resources/game_mode`）+ `get_content("game_modes")`（`ui/menu_box_character.gd` / `ui/menu_box_gamemode.gd`，按 id 去重）。记录解析 `ui/score_card.gd` 改为优先 `ModManager.get_resource(kind,id)`、回退本体 `res://resources/...`；**已卸载/缺失内容占位降级**：角色立绘用 `res://sprites/player_support/null_picture.png` + 显示原 id、支援回退 `null_support`、模式卡/道具卡**跳过**、关卡显示原 id；**不自动清理**旧记录（交给面板删除/清空）。
 - **深度修改（P4）**：`mod.json.entry`（Node 脚本）启动时由 `_run_entry_scripts()`（按 `_resolved_order`）实例化到 `ModManager` 下；`api_version > ModAPI.VERSION` 则跳过。mod 经 `ModAPI`（静态门面）+ `GameEvents` 挂流程；`replace_files=true` 可覆盖入口场景（`main.tscn` 等，加载晚于挂载；用覆盖型预设 `mod_sdk/ModPackReplace.preset.cfg` + `build_mod.ps1 -Preset ModPackReplace`，见 `mod_sdk/README.md` §13）。`ModAPI` 稳定接口：只读 `get_content/get_resource/get_scene/get_characters/has_upgrade/get_content_mod/get_societies/get_unclaimed_characters/get_unclaimed_unlocked_characters/list_mods/get_languages/get_card_scene/has_mod_character/is_character_locked/get_base_societies/get_base_characters/get_base_game_modes/get_order/get_content_kinds/get_weapon_type_name/get_weapon_type_icon`；写入 `register_content(kind,id,res,mod_id,scene_path?,card_scene_path?)`（经 `_register_res` 治理）、`register_weapon_type(code,icon_path?,display_name?)`（武器类型注册表，2026-10-13，`api_version` 升 2）、`add_translation(locale,key,value)`（`TranslationServer.add_translation`）、`register_language(locale,display_name,opts)`（`ModManager._languages` 注册/覆盖 + `LocaleFont.register_locale_fonts`，`languages_changed` 通知 `ui/langue_button` 重建）、`register_translation(t)` / `register_translation_resource(path)` / `register_translations_from_dir(dir)`（批量翻译 additive）。
 - **语言注册表（2026-10-09）**：`ModManager.BASE_LANGUAGES`（zh_CN/en/pt/vi_VN）+ mod `register_language` 覆盖/追加 → `get_languages()`；`ui/langue_button`（主菜单/暂停页共用）数据驱动生成下拉与触屏行，`display_font` 指定显示名字体；`script/locale_font.gd` 由单一 vi 泛化为 `_locale_fonts`/`_locale_ranges`（多 locale 映射 + 窄触发）。契约见 `mod_sdk/README.md` §15。
-- **zip 导入健壮性（2026-10-09）**：`import_zip()` 重装先递归清空 `user://mods/<id>/`；校验 zip 含 `manifest.pck`（默认 `<id>.pck`）；条目数 >2000 或累计解压 >256MB 报错并清理。`_fail_mod()` 停用时 `mods_changed.emit.call_deferred()` 通知 UI。
+- **zip 导入健壮性（2026-10-14 核对）**：`import_zip()` 已委托 `script/mod_installer.gd:4`，先验证并完整解压到隐藏暂存目录，再交换正式目录；失败恢复旧包。旧版 2026-10-09 的“重装先清空正式目录”描述已失效，事务细节见 `ARCHITECTURE.md` §1.11。校验 zip 含 `manifest.pck`（默认 `<id>.pck`）；条目数 >2000 或累计解压 >256MB 报错并清理暂存。`_fail_mod()` 仅更新运行期加载结果，不修改用户 enabled 意图，并用 `mods_changed.emit.call_deferred()` 通知 UI。
 - **补丁**（P0.5，已实现）：`patches/*.json`（loose `mods/<id>/patches/` 或 pck 内 `res://mods/<id>/patches/`）由 `script/mod_patch.gd`（`class_name ModPatch`）按 `load_order` 依次应用，对内存注册表做 `replace/add/remove/inherit`；`target`/字段不存在 → warning + skip。加载顺序由 `dependencies`/`load_order`/`conflicts` 拓扑排序（`ModManager._resolve_order`），依赖缺失/环/冲突 → 停用。
 - **管理面板描述 tooltip（2026-10-08）**：`mod.json` 增可选 `description`（直接字符串，Label 自动翻译、命中翻译键即翻译），`ModManager.list_mods()` 返回 `description`（`version`/`author` 原已返回）。`script/mod_option.gd`（`ui/mod_option.tscn`）悬停行显示跟随鼠标的 tooltip（名字 + 版本 + 作者 + 描述）；触屏点按显示、再点同一行/点列表空白隐藏、拖动排序时隐藏。命中判定用整行 `get_global_rect()`（含开关）；面板在 CanvasLayer 下无缩放，故 `get_global_mouse_position()` 与 `get_global_rect()` 同系可直接比较。
 - 打包/安装/导出设置见 `CONVENTIONS.md` §10 与 `mod_sdk/README.md`。

@@ -44,7 +44,7 @@ func ps_upgrade(t_num: int):
 	elif now_t == 3:
 		value_2 = [buff_layer_2, buff_value_2, buff_erase_timer_2]
 		GameEvents.enemy_damage_taken.connect(add_mark_buff)
-		GameEvents.enemy_damage_taken.connect(add_damage)
+		GameEvents.enemy_damage_calculating.connect(add_damage)
 
 func show_progress(max_v: int, value: int, lv: int):
 	progress_bar.visible = true

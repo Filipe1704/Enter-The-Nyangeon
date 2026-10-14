@@ -27,7 +27,7 @@ func clear_enemy_bullet(player: Node):
 	SoundManager.play_sfx("EquipSounds2")
 	animation_player.play("new_animation")
 	# 联机：通知 mod 做 host 权威半径清除（未装 mod 时为空 Callable，无副作用）
-	ExtensionHooks.notify(ExtensionHooks.on_enemy_bullet_clear, [area_2d.global_position, clear_radius])
+	ExtensionHooks.notify_named("on_enemy_bullet_clear", [area_2d.global_position, clear_radius])
 
 func center_position():
 	if animation_player.is_playing():

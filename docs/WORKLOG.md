@@ -231,6 +231,63 @@
 - Docs synced / 文档同步: `AGENTS.md`「本地文件与在制品」、`docs/CONVENTIONS.md` §9。
 - Open / 待办: 待用户明确「结案」后移除该目录。
 
+## 2026-10-13 — 联机准入与共享金币规则确认
+- Correction / 修正: SELECT 阶段接纳新身份但不同步选人流程 → 选人开始后拒绝新加入并提示等待下一局，允许原身份重连（来源：user）。
+- Correction / 修正: 客机拾取已知网络金币仅按房主原始币值共享 → 房主使用原始币值与已同步的拾取者倍率向上取整后共享全队（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`、`i18n/coop_i18n.gd`、`tests/coop_recovery_checks.gd`。
+- Summary / 改动摘要: 记录本会话用户明确选择的两项修正规则；两项均有真实多进程回归。
+- Reason / 原因: 用户裁定选人准入和共享经济的预期行为。
+- Systems / 影响系统: 联机会话阶段、断线恢复、共享金币。
+- Docs synced / 文档同步: `docs/SYSTEMS.md` §5.8 / §8、`docs/LEARNINGS.md` 对应用户规则。
+
+## 2026-10-14 — 本地导入文件与忽略配置提交范围修正
+- Correction / 修正: soft reset 后暂存包含 `.import` 与 `.gitignore` → 忽略 `.import`，不提交 `.gitignore` 改动（来源：user）。
+- Files / 涉及文件: 本地 `.git/info/exclude`、Git 索引；`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
+- Summary / 改动摘要: 取消暂存 627 个 `.import` 与 `.gitignore`，已跟踪 `.import` 设置本地 `skip-worktree`，保留磁盘内容。
+- Docs synced / 文档同步: `docs/CONVENTIONS.md` §6.1、`docs/LEARNINGS.md` 对应 Git 条目。
+
+## 2026-10-14 — 本体与联机 Mod 发布版本回滚
+- Correction / 修正: 本体 `v0.5.1.4` / 联机 Mod `0.1.12` → 本体 `v0.5.1.3` / 联机 Mod `0.1.10`，最低本体版本声明恢复为 `v0.5.1.2-test`（来源：user）。
+- Files / 涉及文件: `script/Game.gd`、`mod_sdk/coop_mod/mods/etn_coop/mod.json`、`net/coop_net.gd`、`entry/coop_entry.gd`。
+- Summary / 改动摘要: 仅回滚发布版本标记并修正接口缺失提示；协议 v5、存档格式 v3、Android 模板版本及功能修复保留。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/LEARNINGS.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 未提交上游的联机协议统一为 v4
+- Correction / 修正: 发布版本回滚后联机协议仍为 v5 → 本批尚未提交上游的协议变更统一使用 v4（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`。
+- Summary / 改动摘要: 仅调整协议标记，保留实际 RPC 与玩法修复；发布版本及存档格式不变。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 重新划定提交范围
+- Correction / 修正: 本批提交包含独立组网拓展、设计稿及开发工具状态 → 仅重新提交本体与官方联机修复，EasyTier 联机、UI 设计草案和开发配置保留本地（来源：user）。
+- Files / 涉及文件: 本轮重新整理的源码、永久守卫及相关说明。
+- Summary / 改动摘要: 保留发行包导出隔离，拆出通用 Godot 回归工具和导出验证工具，确保被保留的检查独立于排除项；原提交与设计稿已建立本地备份。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、相关 SDK 说明。
+- Verified / 验证: 独立候选工作区通过本体/官方联机各专项及导出隔离；公共检查不依赖被排除的拓展源码和本地审计状态。
+
+## 2026-10-14 — 补交官方联机通用接入
+- Correction / 修正: 将官方通用拓展接入与独立附属包一起排除 → 官方联机 Mod 代码提交，独立 EasyTier 附属包继续不提交（来源：user）。
+- Files / 涉及文件: 官方 `net/coop_extensions.gd`、`net/coop_net.gd`、`ui/coop_menu.gd`、`i18n/coop_i18n.gd` 及官方接口回归。
+- Summary / 改动摘要: 补交通用注册、页面工厂、交互恢复、状态栏和会话生命周期；不纳入独立附属实现、设计草案与开发配置。
+- Docs synced / 文档同步: `docs/COOP_EXTENSION_API.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/PROJECT_MAP.md`、`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
+- Verified / 验证: 21 项契约与 17 项官方菜单检查通过，测试只安装官方联机包。
+
+## 2026-10-14 — 升级权重判定与 PR #7 合并后联机修复
+- Correction / 修正: 「最高稀有度应完全由回合推进、刷新不应抬升；防御低血加成应随拥有数量归零」的审计判断 → 用户裁定按 PR 保留（`round_weight_curve_3` 回合曲线为主导，刷新额外抬升稀有档；防御低血旁路生效且不随拥有数量归零）（来源：user）。
+- Files / 涉及文件: `scenes/manager/upgrade_manager.gd`、`scenes/manager/upgrade_manager.tscn`、`scenes/manager/item_weight_manager.gd`（仅记录，未改）；`script/health_component.gd`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_enet_peer.gd`（A/B/D 修复）；`.gitattributes`。
+- Summary / 改动摘要: 合并 PR #7（`Merge PR #7: fix: 完善存档与 Mod 管理、联机同步及通用拓展接口`）后补 follow-up：修正客机命中预测二次乘算、ENet 强制断开重复 `peer_disconnected`，并为 `resolve_damage` 补空守卫；`.gitattributes` 为 `ETN_*localization.csv` 声明 CRLF 并规范工作区行尾。
+- Reason / 原因: 用户对升级权重（最高稀有度/防御类）的原意作出裁定并按 PR 保留；审计发现的联机边界问题经用户同意修复。
+- Systems / 影响系统: 升级权重（`upgrade_manager`/`item_weight_manager`）、联机命中预测与断线、伤害求值守卫、本地化行尾。
+- Docs synced / 文档同步: `docs/LEARNINGS.md` 新增 `[Upgrade]` 与 `[Coop]` 两条；`.gitattributes` 的 CRLF 规则落地使 `docs/CONVENTIONS.md` §6.1 描述成立。
+- Verified / 验证: 合并后本机跑通 Python 单测 16/16、persistence 7/7、support 4/4、upgrade/mod-install `failures=0`、UI/UX 133/0、export boundary EXIT=0；`tests/check_localization.py` 5/5 PASS。A/B/D 脚本经 `find_symbols`/`--check-only` 解析无语法错误；伤害契约与联机恢复回归由用户在具备 pwsh 的环境复核。
+
+## 2026-10-14 — 发布版本改定 v0.5.1.4 与文档锚点清理
+- Correction / 修正: 本体发布版本 `v0.5.1.3` → `v0.5.1.4`（`Game.version_number` 与三平台导出文件名同步 0.5.1.4，路径统一 `../GodotExport/`）；官方联机 Mod 仍 `0.1.10`（来源：user）。
+- Files / 涉及文件: `script/Game.gd`、`export_presets.cfg`；`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`；`docs/SYSTEMS.md`/`docs/ARCHITECTURE.md`（锚点）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（死代码注释）。
+- Summary / 改动摘要: 统一本体与导出文件名为 0.5.1.4；抽查并修正 `SYSTEMS`/`ARCHITECTURE`/coop README 的 `文件:行号` 锚点（审计 92 处、错 17 处 → 0，含 2 处越界）；给未用的 `will_enemy_hit_kill`/`_get_predicted_enemy_damage` 加 deprecation 注释；`SYSTEMS.md:227` 的 `SceneData` 字段表补 `game_support_id`；删除 6 个生成的 `tests/*.gd.uid` 并在 `.git/info/exclude` 本地忽略；删除本地 `pr-7` 分支。
+- Reason / 原因: 用户改定发布版本并采纳 H1/H2/死代码注释的审计处理。
+- Docs synced / 文档同步: 本文件、`docs/LEARNINGS.md`（`[Version]` 追加 SUPERSEDED）、`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
+
 ## 2026-10-14 — 当前分支收敛为远端道具显示修复
 - Correction / 修正: 当前分支包含本体与官方联机整批修复 → 仅保留“远端道具动态表现同步与重复外观”相关改动及必要回归、说明（来源：user）。
 - Files / 涉及文件: 官方联机 `net/coop_item_state.gd`、`coop_item_visuals.gd`、`coop_net.gd`、`coop_player_proxy.gd`、`coop_visual_driver.gd`；`tests/coop_item_visual_checks.gd`、`run_coop_item_visual_checks.py`。

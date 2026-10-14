@@ -52,7 +52,7 @@ func is_on_ready():
 func idle_state():
 	reset_physics_interpolation()
 	if is_idle == 0:
-		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
+		ExtensionHooks.notify_named("on_projectile_despawned", [self])
 	add_explosion()
 	is_idle = 1
 	if GameEvents.global_time_count.is_connected(time_count):

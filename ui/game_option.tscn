@@ -615,6 +615,67 @@ color = Color(0.815686, 0.701961, 0.0235294, 1)
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync" unique_id=202520950]
 libraries/ = SubResource("AnimationLibrary_tb017")
 
+[node name="RowPhysicsInterp" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1910000001]
+layout_mode = 2
+offset_transform_enabled = true
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowPhysicsInterp" unique_id=1910000002]
+custom_minimum_size = Vector2(170, 22)
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("3_1qnnq")
+theme_override_font_sizes/font_size = 15
+text = "option_physics_interp"
+horizontal_alignment = 2
+script = ExtResource("4_458px")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 170.0
+min_font_size = 7
+
+[node name="PhysicsInterp" type="PanelContainer" parent="Scroll/Content/Graphics/RowPhysicsInterp" unique_id=1910000003]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_vertical = 4
+theme = SubResource("Theme_ye3ks")
+
+[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowPhysicsInterp/PhysicsInterp" unique_id=1910000004]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.0784314, 0.0784314, 0.0784314, 1)
+
+[node name="Node2D" type="Node2D" parent="Scroll/Content/Graphics/RowPhysicsInterp/PhysicsInterp" unique_id=1910000005]
+
+[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowPhysicsInterp/PhysicsInterp/Node2D" unique_id=1910000006]
+clip_children = 1
+offset_left = 2.0
+offset_top = 2.0
+offset_right = 16.0
+offset_bottom = 16.0
+mouse_filter = 2
+color = Color(0.815686, 0.701961, 0.0235294, 1)
+
+[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowPhysicsInterp/PhysicsInterp/Node2D/ColorRect" unique_id=1910000007]
+layout_mode = 0
+offset_left = -8.0
+offset_top = 8.0
+offset_right = 12.0
+offset_bottom = 28.0
+rotation = 0.785398
+mouse_filter = 2
+color = Color(0.815686, 0.701961, 0.0235294, 1)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Scroll/Content/Graphics/RowPhysicsInterp/PhysicsInterp" unique_id=1910000008]
+libraries/ = SubResource("AnimationLibrary_tb017")
+
 [node name="RowMaxFps" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1810000001]
 layout_mode = 2
 offset_transform_enabled = true

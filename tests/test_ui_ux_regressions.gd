@@ -51,6 +51,11 @@ func _run() -> void:
 		push_error("请通过 run_ui_ux_checks.py 在独立用户目录运行")
 		quit(2)
 		return
+	if "--ui-ux-settings-only" in OS.get_cmdline_user_args():
+		await _check_settings()
+		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	if "--ui-ux-test-item-input-only" in OS.get_cmdline_user_args():
 		await _check_test_item_mouse()
 		print("UI_UX_RESULT checks=%d failures=%d" % [checks, failures])
@@ -119,7 +124,8 @@ func _check_level_entry_visuals() -> void:
 		await create_timer(0.15).timeout
 		_tap_key(KEY_ESCAPE)
 		await screen.animation_player.animation_finished
-	screen.free()
+	screen.queue_free()
+	await process_frame
 
 func _observe_level_entry(screen: CanvasLayer) -> Array[String]:
 	var flashed: Array[String] = []
@@ -745,8 +751,44 @@ func _wait_for_focus(control: Control) -> void:
 		await process_frame
 
 func _check_settings() -> void:
+	# ModManager 的 entry 安装钩子是 deferred，先等其完成再包装实际回调。
+	await process_frame
+	# 通过真实扩展点创建页面，确保工厂返回的控件能接入本体页面生命周期。
+	# 独立 SceneTree 入口在 autoload 注册前编译，ModAPI 需等单例就绪后加载。
+	var api = load("res://script/mod_api.gd")
+	var hooks := root.get_node("ExtensionHooks")
+	var previous_hook: Callable = hooks.populate_option_pages
+	hooks.populate_option_pages = func(menu_box: Node, button_box: Node):
+		if previous_hook.is_valid():
+			previous_hook.call(menu_box, button_box)
+		var custom_page = load("res://ui/controls_option.tscn").instantiate()
+		custom_page.name = "UIUXCustomPage"
+		custom_page.option_id = "ui_ux_custom_settings"
+		menu_box.add_child(custom_page)
+		var custom_tab: Control = api.create_option_tab("ui_ux_custom_settings", "CUSTOM")
+		custom_tab.name = "UIUXCustomTab"
+		_check(custom_tab.get_parent() == null, "页签工厂返回未挂载控件，由调用方决定容器")
+		button_box.add_child(custom_tab)
 	var screen = load("res://ui/option.tscn").instantiate()
 	root.add_child(screen)
+	hooks.populate_option_pages = previous_hook
+	var custom_tab = screen.option_button_box.get_node("UIUXCustomTab")
+	var custom_page = screen.menu_box.get_node("UIUXCustomPage")
+	var native_tab = screen.option_button_box.get_child(0)
+	var native_label: Label = native_tab.get_node("Label")
+	var custom_label: Label = custom_tab.get_node("Label")
+	_check(custom_tab.scene_file_path == native_tab.scene_file_path, "扩展页签与本体共用同一个组件场景")
+	_check(custom_label.text == "CUSTOM" and custom_tab.button_id == custom_page.option_id, "统一接口正确设置标题与页面标识")
+	_check(custom_label.get_theme_font("font") == native_label.get_theme_font("font") and custom_label.get_theme_font_size("font_size") == 19, "扩展页签沿用本体字体与字号")
+	_check(custom_label.get_theme_color("font_outline_color") == native_label.get_theme_color("font_outline_color") and custom_label.get_theme_constant("outline_size") == 4, "扩展页签沿用本体描边")
+	_check(custom_tab.animation_player.has_animation("on_select") and custom_tab.animation_player.has_animation("selected"), "扩展页签包含本体悬停与选中动画")
+	_check(custom_tab.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_INHERIT, "页签默认继承自动翻译")
+	custom_tab.text = "UPDATED"
+	_check(custom_label.text == "UPDATED", "页签运行期标题修改同步到文字控件")
+	custom_tab.text = "CUSTOM"
+	var literal_tab: Control = api.create_option_tab("ui_ux_literal", "COOP", false)
+	_check(literal_tab.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_DISABLED, "硬编码页签标题支持关闭自动翻译")
+	literal_tab.free()
 	_check(screen.menu_box.focus_behavior_recursive == Control.FOCUS_BEHAVIOR_DISABLED, "关闭的设置页不接收焦点")
 	screen.on_option_selected()
 	await screen.animation_player.animation_finished
@@ -758,6 +800,15 @@ func _check_settings() -> void:
 	await process_frame
 	_check(page.shown, "真实 Enter 键打开 GAME 页")
 	_check(page.modulate.a > 0.9 and page.scale.x > 0.9, "GAME 页动画后内容可见")
+	custom_tab.grab_focus()
+	root.push_input(_key(KEY_ENTER))
+	await custom_page.animation_player.animation_finished
+	_check(custom_page.shown and not page.shown and custom_tab.on_show, "真实 Enter 键激活扩展页签并切换页面与选中状态")
+	await _capture("settings-custom-tab")
+	native_tab.grab_focus()
+	root.push_input(_key(KEY_ENTER))
+	await page.animation_player.animation_finished
+	_check(page.shown and not custom_page.shown and not custom_tab.on_show, "切回本体页面时撤销扩展页签选中状态")
 	var game := root.get_node("Game")
 	var old_shake: bool = game.shake_screen
 	page.shake.grab_focus()
@@ -775,6 +826,7 @@ func _check_settings() -> void:
 	await _capture("settings-audio")
 	screen.out_option_selected()
 	_check(screen.menu_box.focus_behavior_recursive == Control.FOCUS_BEHAVIOR_DISABLED, "关闭设置立即禁用内容焦点")
+	_check(custom_tab.focus_mode == Control.FOCUS_NONE and custom_tab.mouse_filter == Control.MOUSE_FILTER_IGNORE, "关闭设置同时禁用接口创建的页签输入")
 	await create_timer(0.3).timeout
 	screen.free()
 

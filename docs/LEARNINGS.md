@@ -21,8 +21,16 @@
 ## 待确认 / To Confirm
 
 > 高影响、低置信的结论；用户确认或纠正后按格式移入下方正文。
->
-> （暂无）
+
+### [Coop/Testing] `relay_rejoin3` 的 host 侧偶发引擎错误会让整套回归判失败
+- Evidence / 证据: `tests/run_coop_recovery_checks.py`（`--cases relay_rejoin3`，日志目录 `--log-dir`）、`tests/coop_recovery_checks.gd`；现象日志 `.godot/coop_recovery_checks/` 与 `.godot/coop_recovery_rerun/`
+- Notes / 说明: 同一天三次运行（全量失败 → 单例通过 → 全量通过）中，仅首次全量执行的 `relay_rejoin3/host` 失败，报 Godot 引擎 `ERROR: Condition "!connected_peers.has(sender)" is true. Continuing.`（中继拆除阶段）。runner 会合并 stdout/stderr 并把任何非豁免 ERROR 当作失败，因此这条时序抖动会伪装成功能回归。未复现期间不要据此判定中继重连被改坏：先看是否只出现在 host 侧、再单独重跑该用例确认。尚不清楚触发条件（疑与上一用例的中继连接释放时序有关），待确认。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+- Follow-up / 后续（2026-10-14，来源：test）：新一轮 full 的 `relay_rejoin3` 通过，但 LAN `rejoin3/host` 出现三条 `Unable to send packet on channel 0, max channels: 0`，功能断言仍为 0 失败；LAN/Relay 单独重跑通过。两种报错不能直接认定同根因；新增 AUD-TEST-002 跟踪，保持严格日志判定与原始失败证据。
+
+- SUPERSEDED: 2026-10-14 同类 Relay 报错已由排队旧包/断线事件顺序的确定性守卫复现并修复；LAN 同 poll 多端退出另复现 ENet 原生成员通知及玩法发送错误，薄适配器修复后全套与复跑严格通过。旧历史现象不删除，详见下方新记录（来源：test）。
 
 ---
 
@@ -43,6 +51,7 @@
 - Notes / 说明: WeakPart 命中会加 `TRUE_DAMAGE`，从而跳过应用与重置，pending multiplier 泄漏到下一次非真实伤害。
 - Source / 来源: code
 - Date / 日期: 2026-09-25
+- SUPERSEDED: 2026-10-14 HealthComponent 统一消费倍率，真实伤害和拒绝/零伤害命中也清理；伤害契约守卫覆盖前后两次命中。来源：code | test。
 
 ### [Combat] 空的 `source_type` 被当作玩家方
 - Evidence / 证据: `script/faction.gd:9-14`
@@ -231,6 +240,7 @@
 - Source / 来源: test
 - Date / 日期: 2026-09-26
 - SUPERSEDED: 2026-09-28 「追加用 LF」改定为 **CRLF**（来源：user；规则见 `AGENTS.md` / `docs/CONVENTIONS.md` §2.4）。各文件既有行尾仍按实况保留，避免整文件转换。
+- SUPERSEDED: 2026-10-13 5 组源文件已规范为 UTF-8 BOM/CRLF，`.gitattributes` 为 CSV 单独覆盖 eol，旧“既有行尾保留”说明不再描述当前状态。格式防护见 `tests/check_localization.py`（来源：test）。
 
 ### [Time] `process_mode` 只绕开 paused，不绕开 `Engine.time_scale`
 - Evidence / 证据: `ui/transition.tscn:733,1004`（`process_mode=3`）, `scenes/enemies/boss/goliath.tscn:2704,2740`, `scenes/game_camera/gamecamera.gd:41`
@@ -405,6 +415,8 @@
 - Notes / 说明: Resource 反序列化只填充脚本仍声明的属性，未声明者被丢弃（无警告）——所以**改名/删除存档字段是破坏性变更**：改名前须在迁移期按旧名读取再写新名，删除前确认确为冗余。`SceneData.save_version` 默认值必须是 **0** 而非当前版本：旧档无该字段会解析为默认值，若默认=当前版本则旧档被误判为最新、永久跳过迁移。`save_playerdata` 采用「临时文件 → 备份旧档 `.bak` → 替换」的原子写，避免写坏唯一存档。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-04
+- SUPERSEDED: 2026-10-13 仅修正末句“原子写”的可靠性结论：当前是两次 rename，无失败回滚或备份加载；损坏主档还会在首次货币变化时覆盖有效 `.bak`。字段迁移结论仍有效。隔离复现见根 `CODEBASE_AUDIT.md` 的 AUD-SAVE-001，准确流程已更新 `ARCHITECTURE.md` §2（来源：test）。
+- SUPERSEDED: 2026-10-13 本轮已修复恢复/写入路径：`scene_data_store.gd:15,41` 验证主档后读取备份，只轮换有效主档，不先移走主路径；双坏档/未来版本禁止自动覆盖。7 类回归通过。原字段迁移结论保留（来源：test）。
 
 ### [UI] 升级卡/道具卡文本只来自 `id` 派生的翻译 key，不读 `AbilityUpgrade` 文本字段
 - Evidence / 证据: `ui/ability_upgrade_card.gd:76-79`（`upgrade.id + "_name"/"_description"/"_forward"/"_negative"`）、`ui/upgrade_item_card.gd:34-37`（同）；全项目无 `upgrade.name/description/forward/negative` 的显示消费
@@ -1022,6 +1034,8 @@
 - Notes / 说明: **目标**：每个玩家的道具/PS 只为**自己的伤害**触发，且触发在**自己端**；host 不再被客机伤害误触发。**机制**：`owner_peer` 作"独立 id"落点；host 结算后按 `owner_peer` 决定：本机 → 自然 emit；客机 → `suppress_proc` 抑制 host 本地 emit + `_remote_enemy_proc` 发回归属端发射。击杀（`hp_before>0 && hp_after<=0`）与 DOT（`entry.applier_peer`）同归属。**为什么不是"过滤 51 个监听器"**：全局信号无法按归属过滤；但每个客户端进程只有本机玩家的道具/PS，故"只在归属端发射"即等价归属。**β 难点（`source_node` 需活来源）**：权威回传是延迟的，届时来源子弹已 `idle_state` 回池 → `iori_ps`（分裂）/`mint_chocolate_parfait`（按 `flight_time` 加乘）失效；改为二者监听 `GameEvents.player_projectile_hit`（`HitBox._emit_self_hit` 命中瞬间发射、携带 live bullet），其余仍走权威回传。**通用教训**：① 多玩家共享"全局权威事件"（如 `enemy_damage_taken`）时，用"归属 id + 只在归属端发射"代替"在权威端统一发射"，可零侵入所有监听器地实现归属；② 需要"活对象"的旧式 proc（从事件里 `get_node(source_node)`）与"权威延迟回放"天然冲突，应改挂到**命中瞬间**的信号；③ 一次性/延迟回放路径要把**权威数值**与**归属 id**一起带回，且击杀判定用 hp 前后差比 `is_dead` 信号更精确（复活型敌人）。验证：`--coop-devowner` 客机命中 → host `proc=0`、客机 `proc=1`（`op=<客机 id>`）；`--coop-devbattle --coop-devreset --coop-devpause --coop-devpreplaced --coop-devfollow --coop-devbuff` 无 `SCRIPT ERROR`。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-05
+- 补充 / 2026-10-14: 活对象信号迁移不等于前置数值已跨端生效；COOP-008 的实际 wire roundtrip 证明仍缺伤害修饰契约，见文末 [Coop/Combat] 条目。
+- SUPERSEDED: 2026-10-14 随后以本体前置阶段和协议 v5 补齐数值契约，真实双端 damage 场景已通过；上述补充保留为修复前观察。
 
 ### [Mod] 命中闭包本地回放 / 测试房重置-换角色同步 / 道具视觉同步
 - Evidence / 证据: `scenes/bullet/poison_ring.gd:44-57`（`apply_buff` 在 `hit_box.damage_data.on_damage_dealt` 闭包内，只在 `_take_damage_internal` 执行）、`ui/character_test_menu.gd:31-47 reset_player()`（`emit_test_room_reset`）、`scenes/main/test_room.gd:56-91`（`reset_clear_unit` 清 PlayerRoot 非"Player"/召唤物/特效；`refresh_enemies` 清非 `initial_enemies`）、mod `net/coop_net.gd`（`_intercept_enemy_damage`/`_gate_projectile_self_hit` 本地跑 `on_damage_dealt`；`_replace_player_for_peer` 远端分支补 `player_scene_by_peer`；`_on_local_test_room_reset`/`_despawn_owned_summons_local`；`_remote_item_visual`/`_hook_visual_roots`/`_remote_visual_node`）；本体 `script/hit_box.gd`（**移除** `on_remote_hit`/`run_remote_hit`）、`script/player_bullet.gd`/`normal_bullet.gd`/`megu_bullet.gd`。
@@ -2107,6 +2121,101 @@
 - Source / 来源: test
 - Date / 日期: 2026-10-13
 
+### [UI/Mod] 页签工厂只统一采用接口的控件，旧安装包不会自动变样式
+- Evidence / 证据: 用户确认目标为已安装 COOP；直接挂载其 `etn_coop.pck` 核对 `entry/coop_entry.gd:138`、`ui/coop_ui_style.gd:23`，与工作区 `mods/etn_coop/` 副本一致；`script/mod_api.gd:13`；`tests/test_ui_ux_regressions.gd:_check_settings`。
+- Notes / 说明: 已安装 COOP 0.1.14 自建 `Button`，使用 11 号字、独立绿色主题和 32 像素最小高度；本体页签为带动画的 `PanelContainer` 和 19 号文字。隔离验证确认即使移除 mod 主题，组件和动画差异仍在。新增 `ModAPI.create_option_tab` 后，本体与采用接口的 mod 页签共用场景；带原安装包的渲染检查中，测试页签外观统一，旧 COOP 页签仍保持其自定义样式。SDK 示例更新不会替换玩家已有 `.pck`，需 mod 作者采用接口并重新发布。不要把“共存检查通过”写成“旧 COOP 样式已修复”。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-13
+
+
+### [Mod] ZIP 中存在 PCK 条目不等于安装成功；重装失败不会自动保留旧包
+- Evidence / 证据: `script/mod_manager.gd:1241,1255,1259`、`script/mod_option.gd:457`；根 `CODEBASE_AUDIT.md` AUD-MOD-001。
+- Notes / 说明: 当前导入先清旧目录，文件打开失败时跳过但仍返回 `ok=true`。隔离探针先安装真实 PCK，再用 PCK 同路径目录/文件冲突包重装，结果提示成功却无 PCK。需要先暂存并完整校验，再交换目录；修复前调用者不能把成功返回当作所有文件写入成功，也不能依赖失败回滚。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+- SUPERSEDED: 2026-10-13 本轮已改为 `mod_installer.gd:4` 的暂存/验证/交换事务，文件/目录冲突、写入/交换失败及超限明确失败并保留旧安装。真实已挂载 PCK 更新亦通过。旧“失败不保留旧包”仅描述修复前行为（来源：test）。
+
+### [Testing] Godot 退出 0 与断言完成标记不能排除原生错误
+- Evidence / 证据: `tests/run_ui_ux_checks.py:98`、`tests/test_ui_ux_regressions.gd:127`；根 `CODEBASE_AUDIT.md` AUD-TEST-001。
+- Notes / 说明: 两次隔离 UI 回归均 133 项断言通过、runner 退出 0，仍打印信号发射期间同步 `free()` 导致的原生 `ERROR:`。当前 runner 只检查 stderr 的 `SCRIPT ERROR:` 和 stdout 完成标记。错误检查应合并两条流，精确区分退出资源计数例外和真正错误；在动画信号恢复栈中拆除场景要延迟/队列释放并等待完成。此现象定位于测试拆除，不能直接当作正式 UI 故障。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+- SUPERSEDED: 2026-10-13 runner 已使用 `godot_check_output.py` 合并检查两条输出流，只精确豁免退出资源计数；动画信号恢复后的场景改为 queue_free 并等待一帧。133 项 UI 回归通过，原信号释放错误消失；通用“退出 0 不足以证明成功”结论保留（来源：test）。
+
+### [Android] 自适应图标必须按安全圆校验，不能只检查方形留白
+- Evidence / 证据: `android/icons/launcher_foreground.svg:2`、`android/icons/launcher_monochrome.svg:2`、`export_presets.cfg:137`；维护规则见 `docs/CONVENTIONS.md` §6.1。
+- Notes / 说明: 432×432 图层的安全区为居中、直径 264 px 的圆，位于同尺寸方形角落的猫耳仍可能被裁切。隔离 APK 中实际导出的前景及单色层最远像素半径约 127.47 px，低于安全半径 132 px；后续调整需要重新校验完整主体。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+### [Android] 图层尺寸合规与主体最小尺寸需分别核验
+- Evidence / 证据: `android/icons/launcher_foreground.svg:1`、`:2`、`android/icons/launcher_monochrome.svg:2`、`export_presets.cfg:138`；[Android 官方设计要求](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)。
+- Notes / 说明: 当前自适应图层 432×432 px 对应 xxxhdpi 下的 108×108 dp；彩色前景与单色层可见主体均为 216×174 px，即 54×43.5 dp。SVG 矩形轮廓顶点距中心最远约 128.16 px，小于安全圆半径 132 px，且主体距画布四边至少 108 px，大于外缘保留区 72 px。安全区与留白符合要求，但若按主体宽高均至少 48 dp 严格核验，高度仍不足；不能用画布大小代替可见主体大小。轮廓顶点距离与上条 APK 栅格像素距离采用不同测量口径。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-13
+
+### [Coop] 选人准入与共享金币规则由用户敲定
+- Evidence / 证据: 当前会话用户选择；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:1046,6941,6954`；`docs/SYSTEMS.md` §5.8 / §8。
+- Notes / 说明: 选人开始后拒绝新加入、允许原身份断线重连；共享金币按拾取者倍率向上取整后共享全队。后续不得仅凭旧实现恢复成 SELECT 中随意接纳新身份，或对客机只结算未乘倍率的币值。倍率属性继续沿用现有客机自报、有界同步模型。
+- Source / 来源: user
+- Date / 日期: 2026-10-13
+
+### [Coop] 延迟节点回调传 ObjectID；重连中的召唤物必须等待连接与握手
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:4200,7230`、`net/coop_summoned_proxy.gd:98`；`tests/coop_recovery_checks.gd`。
+- Notes / 说明: `call_deferred(child)` 传入类型为 Node 的参数时，child 若已释放，错误发生在参数转换阶段，函数内部 is_instance_valid 尚未执行。改为传 instance_id 和会话代次，执行时重新解析、校验节点和所属会话。另一处实测错误来自保留场景重连时召唤物 proxy 在 CONNECTING 阶段发送 RPC：不仅需要 peer 非 null，还要 CONNECTED 及客机握手通过，再标记 despawn_sent 或发送状态。两项错误均被严格日志回归捕获并修复。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+### [Localization] Python strict CSV 仍会漏掉 Godot 吞引号的写法
+- Evidence / 证据: `tests/check_localization.py:10`、`tests/test_localization_format.py`；`.godot/repository_audit_full/csv_messages.log`。
+- Notes / 说明: 原字段中裸 `"Samuela the Beyond"` / `"Fruit Jelly"` / `"Momoyodou"` 被 Python csv.reader(strict=True) 保留，却被 Godot importer 去掉引号。须将整个字段括起、内部双引号写为两个。本分支原本修正 5 处 CSV 写法并重新生成 3 个 item 翻译资源；对齐上游时确认 `3e77cb5`/`44e2651` 已独立落地同样的修正（合并后 CSV 逐字节一致），故 rebase 后本分支不再改动 CSV 与 `.translation`，只保留 `.gitattributes` 行尾规则与守卫脚本。新守卫同时检查裸引号。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+### [Mod] `ExtensionHooks` 的命名链式钩子（add_hook/run_hooks）全仓库零调用，实际语义是「后赋值者覆盖」
+- Evidence / 证据: `script/extension_hooks.gd:128-174`（定义 add_hook/remove_hook/has_hook/run_hooks/notify_hooks）；本体 78 个调用点全部走单 Callable 的 `ExtensionHooks.intercept/notify`（如 `script/buff_router.gd:5`、`script/GameEvents.gd:186`）；联机 Mod 直接赋值约 40 个槽（`mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:63-64`、`net/coop_net.gd:1780-1830`）。
+- Notes / 说明: `:129` 的注释宣称「多个 mod 需要挂钩同一扩展点时用 add_hook/remove_hook，避免直接赋值互相覆盖」，但本体从未调用 `run_hooks/notify_hooks`，该能力实际未接通：第二个 Mod 挂钩同类扩展点会静默覆盖前一个，无告警。要真正支持多 Mod 共存，需让本体调用点改走命名钩子并按 Mod 归属登记。
+- SUPERSEDED: 2026-10-13 已修复——新增 `intercept_named`/`notify_named`/`is_hook_active`，本体 86 处调用点迁移到命名入口，命名回调与字段赋值双轨共存（见下方同名条目的新记录）。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Mod] 启动期自动停用（缺依赖/依赖环/冲突）会被写进 `mods_state.json`，造成永久禁用
+- Evidence / 证据: `script/mod_manager.gd:344-350`（`_fail_mod` 写 `_mods[id]["enabled"] = false`）、`:119-127`（`_save_state` 遍历全部 Mod 落盘）、`:1171-1176`（`set_enabled` 触发保存）。
+- Notes / 说明: Mod A 因依赖 B 缺失被停用时，用户此后任意一次切换别的 Mod 开关都会把 `A: false` 持久化；即使之后装上 B，A 也不会自动恢复。应把「用户启用状态」与「本次解析结果」分开存储。
+- SUPERSEDED: 2026-10-13 已修复——`_fail_mod()` 不再改 `enabled`（只写 `error`/`mounted`），`enabled` 回归「用户启用意图」并被 `_save_state` 持久化；另新增 `_disable_dependents()`：某 Mod 挂载失败时递归摘除依赖它的 Mod（同样只写运行期字段）。已用隔离 user 目录 + 3 个测试 Mod（缺依赖 / 缺 pck / 依赖缺 pck）验证：自动停用不再落到 `mods_state.json`，依赖方被正确摘出 `_resolved_order`。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Coop] 本体倒地文案键由联机 Mod 提供，本体 CSV 未定义
+- Evidence / 证据: `script/player.gd:138,144` 使用 `lan_player_down` / `lan_player_revived`（`_downed_text` 在同名或空翻译时回退英文 `DOWN!`/`REVIVED!`）；5 个 `ETN_*localization.csv` 均无这两个键；由 `mod_sdk/coop_mod/mods/etn_coop/i18n/coop_i18n.gd:130-132` 注入。
+- Notes / 说明: 未安装联机 Mod 时这两条文案永远是英文，单机中文本地化被 Mod 绑架。跨模块复用文案键应回归本体 CSV。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Coop] 联机信任模型由用户敲定：好友房默认可信，不做反作弊校验
+- Evidence / 证据: 用户 2026-10-13 判断（主机/客机数据校验「没有必要，而且对主机性能和延迟都拖累比较大」）；涉及 `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:3776-3784`（青辉石来源）、`:5988-6028`（命中位置历史）、`:6007`（回滚校验）、`:7479-7523`（召唤物所有权）；性能相关 `:325-358`（限流）、`:6157-6159`、`:6260-6262`（per-peer 转发）、`:1084`、`:6240`（reliable 大包）。
+- Notes / 说明: **反作弊类语义校验＝可选/可删**：青辉石来源校验、命中位置历史回滚、召唤物所有权拒绝分支、`max_hp`/`ammo` 语义上限、命中音效 key 白名单。**必须保留的三类护栏不是反作弊**：① 防崩 / 防远程代码执行——`_is_safe_remote_path` 路径白名单（客机可借此在 host 上 `load()` 任意场景并执行其脚本）、`is_finite`/`_finite_v2` 有限性、条目数上限（`BULLET_BATCH_LIMIT`、召唤物 32 上限）；② 防会话错乱——`_server_sender_ok()` 握手门控、`_session_generation` 代次校验；③ 玩法正确性——召唤物 owner 路由、`MapBounds.nearest_inside` 位置夹取、青辉石同颗 key 去重、客机拾取医疗箱后 host 端实体必须移除。性能事实：`_rate_allow`/`_rate_allow_tokens` 与 `_sanitize_*` 都是每 RPC / 每视觉条目一次的本地计算（量级 μs，无往返），且限流是**提前丢弃洪泛的性能保护**——删校验基本省不到 CPU，也不会降低延迟。真正拖累 host 与延迟的是：客机→host 视觉转发的 per-peer `rpc_id` 循环（每条包序列化 `peers-1` 次）、发送侧视觉队列无上限、以及 reliable 通道承载大包（`:1084` 全表广播、`:6240` 可靠视觉批）造成的队头阻塞。**落地（2026-10-13，code）**：已删除命中位置历史回滚及其全部连带结构（`_record_enemy_pos` / `_enemy_expected_pos` / `_enemy_pos_history` / `HIT_VALIDATE_MAX_DIST` / `HIT_VALIDATE_TOL` / `HIT_HISTORY_MAX` 与调用点），`_validate_enemy_hit` 精简为「目标存活」检查，`attacker`/`victim_pos` 保留为参数占位以免改动 RPC 签名；纯表现发送队列封顶（`_queue_visual`/`_queue_effect` + `PENDING_VISUAL_MAX=256`/`PENDING_VISUAL_RELIABLE_MAX=512`/`PENDING_EFFECT_MAX=256`）；UI 每帧轮询加早退与节流（`coop_menu`/`coop_room_label`/`coop_chat`/`coop_downed_indicator`）。per-peer 扇出改广播、reliable 全表 roster 改增量经评估后**未做**：前者需在包内携带来源 peer id 才能让 sender 忽略自身，后者要同步改 5 处 `_client_sync_roster` 接收语义，收益与风险不匹配。
+- Source / 来源: user
+- Date / 日期: 2026-10-13
+
+### [Mod] ExtensionHooks 命名钩子已接通：本体调用点走 `*_named`，字段直接赋值继续兼容
+- Evidence / 证据: `script/extension_hooks.gd:134-160`（`intercept_named`/`notify_named`/`_slot_of`/`is_hook_active`）；本体 78 处 `intercept/notify(ExtensionHooks.xxx,...)` 迁移为 `*_named("xxx",...)`，另有 8 处改用 `is_hook_active`（`scenes/main/main.gd:71`、`scenes/main/menu_screen.gd:52`、`script/projectile_spawner.gd:83,96`、`scenes/manager/enemy_buff_manager.gd:67`、`ui/pause_screen.gd:39,79`、`ui/round_timer.gd:73`、`scenes/player/hina/hina_ps.gd:36`、`scenes/player_support/ayane/ayane.gd:7`、`script/summoned_follower.gd:233`）。
+- Notes / 说明: 语义＝先跑 `add_hook` 命名回调（按 priority，接管类任一 true 短路），再跑同名字段赋值；`hook_name` 必须与字段同名，拼错在运行期 `push_error`（不再静默失效）；`is_hook_active(name)` 供「注入才覆盖默认值」的查询式分支。**例外**：`enemy_spawn_stat_scale` / `enemy_spawn_count_scale` 返回数值，属覆盖语义，仍走字段直接调用，不参与命名链式。旧 `intercept(cb,args)`/`notify(cb,args)` 保留给已发布 mod（本体已不再调用）。验证：56→58 个改动脚本 Godot 解析全过；`enemy_*_scale` 之外的直连 `.call()/.is_valid()` 已清零（静态集合比对 45 个调用名全部命中声明字段）。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Relay] `relay_server.py` 加固：CSPRNG 房间码、join 限速、资源上限、丢帧背压与并发心跳
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py`（608 → 760 行）—— `_secure_choice = secrets.choice`、`generate_room_code()`（长度/字母表不变）、`join_block_reason`/`record_join_fail`（每连接 8 次/60 s、每 IP 40 次/60 s、30 s 冷却）、`MAX_ROOMS=256` / `MAX_TOTAL_CLIENTS=512`、`send()` 超水位丢帧 + 连续 3 次断开、`heartbeat_peers()` 并发 gather；`tests/test_relay_limits.py`。
+- Notes / 说明: 帧格式、控制消息类型与字段名、房间码字母表、帧长上限全部未变（客户端无需改动）；新增行为均由带默认值的环境变量控制：`MAX_ROOMS`、`MAX_TOTAL_CLIENTS`、`WRITE_OVERFLOW_LIMIT`、`JOIN_FAIL_WINDOW_SEC`、`MAX_JOIN_FAILS_PER_PEER`、`MAX_JOIN_FAILS_PER_IP`、`JOIN_BLOCK_SEC`。原实现「超水位 `await drain()` 5 s」会让一个只发不读的客户端拖住整条广播链与心跳，现改为丢帧保全部。注意：房间码仍是 4 字符（20 bit），限速只缓解枚举、不改变熵；如需强抗枚举必须加长或引入口令（会破坏现有 UI/客户端约定）。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Mod] `etn_coop` 不再整文件覆盖本体脚本：manifest 去掉 `replace_files`/`replace_paths`
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/mod.json`（删除 `replace_files: true` 与 `replace_paths: ["res://ui/round_timer.gd","res://scenes/item/pyroxenes.gd"]`，`name` 改为「ETN Coop 联机」）；本体这两个文件已内建 `ExtensionHooks` 调用（`ui/round_timer.gd:73,77,81`、`scenes/item/pyroxenes.gd:20,63`）。
+- Notes / 说明: 覆盖是冗余的，且经 `ModPackReplace` 构建时会把打包时刻的本体脚本嵌进 pck，在用户机上覆盖本体、把本体后续修复回退；`docs/ARCHITECTURE.md:161` 记录过同类事故（0.1.9 携带 `ScrollBox.gd.remap`）。`version` 字段刻意未改：它需与 `coop_net.gd` 的 `MOD_VERSION` 保持一致。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
 ### [Render] 2D 物理插值开启后：逐帧 `_process` 驱动的节点须关插值，传送/复用点须 `reset_physics_interpolation()`
 - Evidence / 证据: `project.godot` `[physics] common/physics_interpolation=true`；`scenes/game_camera/gamecamera.tscn`、`camera_2d.tscn` 的 Camera2D `physics_interpolation_mode = 2`(OFF)；`script/player.gd` 的 `halo` 设 OFF；池化基类 `script/player_bullet.gd`、`script/entity_ENEMY.gd`、`scenes/item/coin.gd` 等的 `active_state()`/`idle_state()` 顶部 `reset_physics_interpolation()`；`script/map_bounds.gd` 拉回后 reset；coop 镜像 `coop_enemy_proxy.gd`/`coop_summoned_proxy.gd` 关插值、`coop_visual_sync.gd`/`coop_net.gd` 出生点 reset。依据 issue #4（Naitrate，高刷显示器角色/摄像机抖动）。
 - Notes / 说明: 高刷屏下渲染帧率 > 物理 60Hz 时，物理体按 60Hz 跳步、而相机在 `_process` 每帧跟随 → 相对抖动。开启插值让物理体在 tick 间平滑，但：① 位置在 `_process` 每帧赋值的节点（相机、逐帧 lerp 的视觉子节点）会与内插叠加 → 必须 `physics_interpolation_mode = OFF`（相机建议配 `position_smoothing` 由引擎在 `_process` 平滑）；② 对象池复用/传送时若不理会，会从旧坐标插值「拉丝」一帧 → 在最终定位后 `reset_physics_interpolation()`；③ 在 `_physics_process` 内移动的节点**不要**每 tick reset（会抵消内插）；④ 迁移期：新增需要逐帧 `_process` 定位的视觉节点应主动设 OFF，新增池化/传送点应补 reset。移动端原先硬编码 `Engine.max_fps = 60` 的 workaround 已由「帧率上限设置」取代。
@@ -2132,6 +2241,173 @@
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
 
+### [Mod] 角色 id 必须 `<mod_id>_` 前缀；想「无后缀」只能把 mod_id 取短
+- Evidence / 证据: `script/mod_manager.gd:930-937`（`if not id.begins_with(mod_id + "_"): return "缺少 mod 前缀..."`）
+- Notes / 说明: 自动注册 id 一律要求以 `<mod_id>_` 开头，否则被拒、角色不出现（非致命：push_warning + 跳过）。若想让角色 id 无额外后缀（如 `foo_izzy`），须令 `mod_id=foo` + 角色 id=`foo_izzy`；`mod_id=foo_izzy` + 角色 id=`foo_izzy` 不合法。`overrides` 可绕过该前缀校验（`_validate_id` 开头 `if overrides.has(id): return ""`），但语义不符且丧失 reserved 冲突保护，勿用。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-14
+
+### [Mod] 复制本体角色场景做 mod 角色：删 `[gd_scene]` 的 uid，只改 3 处引用
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_izzy.tscn:1`（`[gd_scene format=3]` 去 uid）、`:4`（`player_card`→mod `.tres`）、`:7`（`ps_card`→mod PS `.tres`）、`:29`（PS 节点→mod `_ps.tscn`）；游戏进程实测 `get_characters()` 含该角色、`mounted=true`、无 `player_card 对齐` 告警。
+- Notes / 说明: 场景 `uid` 全局唯一，复制必须删（编辑器重分配）；指向**新建** mod 资源的 `ext_resource` 只写 `path`（不写 uid），指向本体资源的保留原 uid/path。节点 `unique_id` 是场景内唯一，整树复制安全。PS 节点由 `script/player.gd:169-186` 按**方法名**扫描子节点定位 → 节点名可任意改（如 `MomoiPS`→`PS`）。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Mod] mod 源放项目根 `mods/` 时别用 `build_coop_mod.ps1`（会镜像自拷贝）
+- Evidence / 证据: `mod_sdk/build_coop_mod.ps1:51-67`（`$mirror = <Project>/mods/<ModId>`；Source 与 mirror 同为项目根 `mods/<id>` 时 `Copy-Item` 自我复制报错）；`mod_sdk/build_local_mod.ps1`（PCKPacker 直打 + `-Install`）
+- Notes / 说明: `build_coop_mod.ps1` 假设「源在 `mod_sdk/coop_mod/mods/`、镜像在项目根 `mods/`」两者不同；源若直接放项目根 `mods/`，Source==mirror → `.uid` 同步阶段自我复制报错。改用 `build_local_mod.ps1`（直接 `--script pack_mod.gd` 打 `mods/<id>/**`，无需工程副本/镜像），pck 输出 `mods/_build/`（落在 gitignore 的 `/mods/` 下，保持 git 干净）。边界：PCKPacker 原样打包**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）→ 自带贴图走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Tooling] 含中文的 `.ps1` 必须存为 UTF-8 **带 BOM**（PS 5.1 否则按 ANSI 解析）
+- Evidence / 证据: `mod_sdk/build_local_mod.ps1` 无 BOM 时 `Write-Host "已生成：$pck（...）"` 的中文引号被 ANSI 撕裂 → `TerminatorExpectedAtEndOfString`；`mod_sdk/build_coop_mod.ps1`/`setup_mod_project.ps1` 均为 UTF-8 BOM。
+- Notes / 说明: Windows PowerShell 5.1 读无 BOM 脚本按系统 ANSI(GBK)。写文件用 `[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($true)))` 生成 BOM。同理：从 PS 读含中文的 JSON 用 `[IO.File]::ReadAllText(path,[Text.Encoding]::UTF8)`，别用 `Get-Content`（默认 ANSI，会把合法 JSON 读坏报错）。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Editor] 在 `mods/` 下新增文件后，编辑器 Errors 面板可能残留 stale parse error（游戏进程正常）
+- Evidence / 证据: 新增 mod 文件后编辑器报 `Function "_seed_weapon_types()" not found in base self`（`res://script/mod_manager.gd:86`），但磁盘 `mod_manager.gd:1184` 有该定义；从编辑器运行游戏时 `/root/ModManager` 存在、`doom_slayer_izzy` `mounted=true`、角色注册成功。
+- Notes / 说明: 属编辑器脚本重载缓存滞后（与 AGENTS 所述新增 autoload 的静态分析滞后同类）；重启编辑器可清。判定以「磁盘 grep + 游戏日志/`game_eval`」为准，勿据编辑器残留报错否定改动。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Mod] 聊天窗释放鼠标须按「当前阶段」还原，不能写回过期快照
+- Evidence / 证据: `mods/etn_coop/ui/coop_chat.gd` 与 `mod_sdk/coop_mod/mods/etn_coop/ui/coop_chat.gd`（`_acquire_controls` 记 `_prev_mouse_mode` + 新增 `_prev_overlay_active`；`_release_controls` 仅当 `_pointer_overlay_active()` 与捕获时相同才 `Input.mouse_mode = _prev_mouse_mode`；新增 `_game_over_active` 与 `_pointer_overlay_active()`）；阶段写指针者 `scenes/crosshair/crosshair.gd:33-39`（`round_upgrade`→VISIBLE、`round_start`→CONFINED_HIDDEN）、`ui/game_over_page.gd:105`（VISIBLE）、`scenes/manager/upgrade_manager.gd:60-62`。
+- Notes / 说明: **现象**（user）：升级页（鼠标可见）里用聊天窗发送消息后鼠标被隐藏。**根因**：`_release_controls` 无条件写回**开聊瞬间**的快照 `_prev_mouse_mode`，而快照会随游戏阶段过期——游玩期开聊捕获 `CONFINED_HIDDEN`，随后回合结束、升级页由 `crosshair` 置 `VISIBLE`，发送时又写回过期的 `CONFINED_HIDDEN`；反向（升级页开聊 → 回到游玩）同理会写出错误值。**修法**：释放时仅当「当前是否处于可见指针覆盖层阶段」（`_upgrade_active`/`_game_over_active`）与捕获时一致，才写回快照；阶段已变则**不覆盖**（`crosshair`/结算页等当前持有者已写好正确模式）。纯游玩期发送仍还原为游玩捕获模式（隐藏），符合既有的「发送即释放、游玩态指针隐藏属预期」约定（见 2026-10-07 同主题条目）。不硬编码任何鼠标常量；两处副本同改。验证：`godot-ai_script_patch` 对镜像 `res://mods/etn_coop/ui/coop_chat.gd` 解析 `diagnostics=[]`（无语法错误），两副本 `MD5` 一致。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Relay] 可靠 WebSocket 连接不能在背压时跳整帧后继续工作
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py:175-202`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_relay_peer.gd:268`；`CODEBASE_AUDIT.md` AUD-NET-001。
+- Notes / 说明: 中继首两次超水位直接跳帧，水位恢复即清计数，不关闭连接。控制帧与可靠 RPC 共用此路径，客户端没有额外重传。真实发送函数配合可控 transport 水位，已复现控制帧丢失、下一游戏包仍发送；不能把“慢端不阻塞广播”视为可靠性已保证。修法需有界排队或明确断连；当前尚未实施。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 首次超水位改为明确断开慢端，保留非阻塞广播；2 项背压回归先红后绿，不再容忍跳帧。（来源：test）
+- SUPERSEDED: 2026-10-14 进一步改为分级水位：软水位（256 KiB）给宽限（默认 5s）继续写可靠帧，硬水位（默认 4 MiB）或宽限超时再断开慢端；仍禁止跳帧。证据：`mod_sdk/coop_mod/server/relay_server.py:28-30,172-205`、`tests/test_relay_limits.py`。（来源：user + code）
+
+### [Mod] 依赖校验必须覆盖冲突过滤后的最终集合
+- Evidence / 证据: `script/mod_manager.gd:272-340`；本地审计记录（未入本次提交）；AUD-MOD-002。
+- Notes / 说明: 缺依赖检查在 conflicts 之前，挂载失败传播无法覆盖排序阶段的冲突剔除。A/B 冲突、C 依赖 B、D 依赖 C 时，真实排序返回 `[a,c,d]`。最终集合需要满足依赖闭包，同时继续保留 `enabled` 为用户意图，不能借机恢复永久停用行为。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 按拓扑顺序验证依赖已进入 kept，直接/传递依赖随冲突停用；用户启用意图保留，生命周期回归通过。（来源：test）
+
+### [Mod] 安装清理与卸载递归的链接行为不同，字符串前缀不能证明删除边界
+- Evidence / 证据: `script/mod_manager.gd:1262-1287`；`script/mod_installer.gd:124`；AUD-MOD-003。
+- Notes / 说明: 安装器清理会检查链接，但卸载对 `current_is_dir()` 直接递归。Windows 隔离实验在 Mod 子目录创建 junction 指向 Mod 根外、同一实验根中的哨兵，真实卸载返回成功且删除外部哨兵。此结论需要已有本地链接，不表示 ZIPReader 会生成链接。后续统一清理时须保留“不跟随链接”原则，普通路径前缀检查不足以替代它。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 卸载已在根/嵌套目录先检测链接，Windows 两类 junction 哨兵保留且隐藏目录可删除；不跟随链接的原则继续有效。（来源：test）
+
+### [Save/Mod] 旧 Resource 存档迁移要保留对象身份，不能按文件名猜内容 ID
+- Evidence / 证据: `script/scene_data_store.gd:18`、`script/Game.gd:250`；`tests/run_support_persistence_checks.py`。
+- Notes / 说明: 支援真实 ID 与资源文件名可以不同；旧档所选资源与已购字典引用同一个 ext_resource。只在同步读档期间为明确缺失的 Mod 依赖提供临时 SupportCard 占位，便可按对象身份从已购字典 key 恢复真实 ID，再转 v3 纯 ID/LV/exp。加载后移除 ResourceFormatLoader，不污染普通资源缓存；未来版本与坏档保护保持。启停、旧备份、仅购买未选中支援及不同文件名均由真实 PCK 跨进程验证。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Coop] 同 poll 多端退出需同时处理底层 ENet 状态和 Relay 排队包
+- Evidence / 证据: `net/coop_enet_peer.gd:48,75`、`net/coop_relay_peer.gd:139,227`（均位于 `mod_sdk/coop_mod/mods/etn_coop/`）；`tests/coop_recovery_checks.gd:_simultaneous_leave_case/_relay_queue_case`。
+- Notes / 说明: 原生 ENet poll 发出断线信号时，其他底层 peer 可能已无通道但尚在 SceneMultiplayer 成员表，既有引擎成员广播与玩法 RPC 都会报 max channels: 0；汇总一次原生 poll 的事件并检查底层目标状态后转发可避免该路径。Relay 则须在移除 sender 时丢弃其已排队数据、禁止晚到数据自动重建身份，并让同 ID 重连先断后连；仅修复 getter 的 peek 顺序不足以解决此类报错。两类新增守卫先红后绿，全套 12 组与三组复跑严格通过，没有扩大日志豁免。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-14
+
+
+### [Relay] 准入时必须补齐最新成员，join_prepared 的快照可能漏掉并发 pending 客机
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py:441,465,490`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_relay_peer.gd:233`；本地审计记录（未入本次提交） --case relay_join`
+- Notes / 说明: 两端均 join 后再依次 ready，第二端的初始 peers 只有 host；第一端 ready 的公告不送 pending 第二端，第二端 ready 也不补第一端。未知 sender 拒收本身是正确边界，漏公告会让可靠数据被持续静默丢弃。真实三端回归首轮失败、单例复跑成功不能消除竞态；应修准入公告而非放宽未知数据接入。当前未修，见 AUD-NET-002。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 服务端在 client_ready 准入前补发当前成员公告，并对重复 ready 幂等；确定性测试及真实三端重连通过。AUD-NET-002 resolved。来源：code | test。
+
+### [Coop/Combat] 前置伤害修饰不能通过结算后 proc 补偿，必须进入本次命中的数值契约
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:2255,5823,6000,8548`、`script/health_component.gd:146-155`；诊断 `--case damage_wire`
+- Notes / 说明: SDK 实际 wire roundtrip 丢失 damage_modifier（1→0），同一 base=10、×2 修饰从本地扣 20 变为权威扣 10；组件 damage_multiplier 也没有携带。host 抑制前置 proc，归属端回传事件在扣血之后，修改镜像不能改变本次权威 HP。旧「活对象信号迁移」只解决引用有效性，不证明 mint_chocolate_parfait 等增伤已跨端结算；COOP-008 当前未修。不能简单传 Callable 或放开 host 全局 proc。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 新增前置阶段和 v5 resolved_damage 数值契约；真实 wire、Hina/Kotori/近战藏品、Mint 自管理子弹及独立部件双端检查通过。COOP-008 resolved；目标条件使用命中端快照。来源：code | test。
+- SUPERSEDED: 2026-10-14 用户要求将尚未提交上游的本批协议变更统一为 v4，以上 v5 为调整前标记；数值契约保持。
+
+### [Upgrade] 归零后只乘增长系数不能产生刷新增益，稀有度权重会被清零
+- Evidence / 证据: `scenes/manager/upgrade_manager.gd:35,131,138,205,293`；诊断 `--case gameplay`
+- Notes / 说明: refresh_mult 初始/选中复位为 0，*=1.1 后仍为 0；rare=2 权重乘它，真实刷新后约 0.01→0，建池排除。基准乘区与累计增益需分开考虑。health_percent 还使用 int/int，81/82 得到 0；当前低血量奖励又乘恒零倍率，此问题应在修刷新时一并覆盖。AUD-LOOT-001 当前未修，勿把观察型诊断当通过型守卫。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 改为累计额外增益、总倍率保留基准 1；浮点血量比例同时修复。刷新/选择复位守卫通过，AUD-LOOT-001 resolved。来源：code | test。
+
+### [Coop/Interpolation] 衰减速度必须积分成位移，v*t*damp 会让位置回退
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd:124-130`；诊断 `--case snapshot`
+- Notes / 说明: T=120ms、最新 x=10/vx=100，当前采样 10→12.25→13→12.25→10，且超过 T 后速度从 0 恢复为旧 100。公式 t*(1-t/T) 后半段减少，不能表示平滑停止；应积分速度并保持末端位置和零速度。AUD-NET-003 当前未修，玩家/敌人/召唤物 proxy 共用该缓冲。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 使用衰减速度积分并保持末端位置/零速度，逐毫秒单调性与冻结守卫通过。AUD-NET-003 resolved。来源：code | test。
+
+
+### [Coop/Equip] 跟随图标必须只占用所属玩家的一个 Follow 挂点
+- Evidence / 证据: `script/equip_item.gd:79`、`scenes/update_item/mint_chocolate_parfait.gd:5`、`tests/coop_recovery_checks.gd:_damage_case`
+- Notes / 说明: 联机镜像可能保留 Follow 组，旧 Mint 遍历所有空挂点会把同一节点重复 add_child，真实双端测试出现 already has a parent。Mint 改走通用 helper；helper 用所属玩家 is_ancestor_of 过滤，只占一个点后返回。数值回归必须保留严格原生错误检查，不能仅看 failures=0。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [UI/Mod] 已挂载不代表脚本入口已运行，兼容信息需区分最低本体版本与 API 要求
+- Evidence / 证据: `script/mod_manager.gd:538,976`；`mod_sdk/README.md` §2。
+- Notes / 说明: game_version 是最低本体版本声明，不足时只告警；api_version 超过本体支持版本时跳过 entry，但此前资源包可能已经 mounted=true，列表 error 也未因此写入错误。兼容 UI 不能仅凭 mounted 显示“完整运行正常”，也不能将这两类检查统一标为整包拒载。当前 list_mods 尚未公开版本要求与 entry 执行结果，新增详情须补相应数据契约。
+- Source / 来源: code
+- Date / 日期: 2026-10-14
+
+### [Git] 本地忽略 `.import`，不提交 `.gitignore` 改动
+- Evidence / 证据: `docs/CONVENTIONS.md` §6.1；本地 `.git/info/exclude` 的 `*.import` 与索引 `skip-worktree` 标记。
+- Notes / 说明: 用户要求忽略 `.import` 且不提交 `.gitignore`。2026-10-14 已将 627 个 `.import` 改动及 `.gitignore` 从暂存区排除；972 个已跟踪 `.import` 用本地 `skip-worktree` 跳过，新文件用 `.git/info/exclude` 忽略，不删除文件或取消既有跟踪。后续暂存须继续排除 `.gitignore`。`skip-worktree` 只影响本地索引，未来上游若修改这些文件，同步前需按需清除标记并保留本地内容。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Localization] CSV 引号修复后须同时核验生成的 Translation 资源
+- Evidence / 证据: `ETN_item_localization.csv`；`ETN_item_localization.en.translation`、`ETN_item_localization.vi_VN.translation`；Godot 4.7 隔离工程逐 key 对照 CSV，结果 `TRANSLATION_CHECK failures=0 changes=4`。
+- Notes / 说明: 上游 CSV 已修正字段内双引号，但既有英/越 Translation 仍缺少部分引号；当前重新导入结果补回 `samuela_the_beyond_description` 的英/越引号及 `jellies_cushion_description`、`sakura_daifuku_description` 的越南语引号。SUPERSEDED: 2026-10-14 先前「对齐上游后本分支不再改动 `.translation`」仅描述当时提交范围，本次分类提交纳入已逐项验证的两份生成资源；CSV 未改动。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Version] 本体与联机 Mod 发布版本回滚，格式版本保留
+- Evidence / 证据: `script/Game.gd:13`；`mod_sdk/coop_mod/mods/etn_coop/mod.json`、`net/coop_net.gd:32-33`；`script/scene_data.gd:7`。
+- Notes / 说明: 用户明确回滚本体与联机 Mod 的发布版本：`v0.5.1.4` → `v0.5.1.3`、`0.1.12` → `0.1.10`，manifest 的最低本体版本声明同步恢复为上游原值 `v0.5.1.2-test`。协议 v5、存档格式 v3 和 Android 模板版本保留，既有功能修复不回滚；entry 继续按前置伤害信号是否存在进行能力检查。后续不能仅凭发布版本号推断是否具备本轮新接口。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 用户确认本批变更尚未提交上游，联机协议由 v5 统一调整为 v4；存档格式 v3 及其他版本约定不变。
+- SUPERSEDED: 2026-10-14 用户改定本体发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4），联机 Mod 仍 `0.1.10`；本条回滚结论仅适用于当时。（来源：user）
+
+### [Coop/Version] 尚未提交上游的联机协议变更统一为 v4
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:32`（`PROTOCOL_VERSION = 4`）；上游基线 `78ed5ad` 同字段为 3。
+- Notes / 说明: 用户说明本批变更尚未提交上游，要求协议从 v5 调整为 v4，将新增身份恢复、金币倍率与前置伤害等契约变化合并为相对上游 v3 的一次升级。发布版本继续保持本体 `v0.5.1.3` / 联机 Mod `0.1.10`，存档格式 v3 保留；联机双方需使用本批一致的新构建。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Git/Scope] 本批重新提交仅包含本体与官方联机修复
+- Evidence / 证据: 本轮提交清单；`tests/isolated_godot.py`、`tests/export_boundary_helpers.py`。
+- Notes / 说明: 用户明确排除 EasyTier 联机、UI 设计草案及开发配置。开发配置范围已确认包含 `.gitattributes`、`android/.build_version`、`.repository-audit/`，以及既有 `.gitignore`、`project.godot`、`.import`；`export_presets.cfg` 的发行包隔离修复保留。被排除内容与原提交在本地备份保留，公共回归工具已从拓展测试中拆出，永久守卫不再依赖本地审计工具状态。本体/官方联机发布版本仍为 `v0.5.1.3` / `0.1.10`，协议为 v4。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+- Implementation / 实现: CSV 的 CRLF 规则移到本地 `.git/info/attributes`；验证目录按项目约定校准行尾，本次不改动 CSV 源内容或提交开发配置。
+- Validation / 验证: 独立候选工作区通过 16 项 Python 单元测试、23 项设置检查、7 组存档恢复、4 组支援跨进程迁移，以及安装、生命周期、伤害契约、5 组联机场景、刷新/外推和实际 PCK 导出隔离检查。
+
+### [Git/Scope] 官方联机通用接入应提交，独立附属包不提交
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_extensions.gd`、`net/coop_net.gd`、`ui/coop_menu.gd`；`docs/COOP_EXTENSION_API.md`。
+- Notes / 说明: 用户再次明确：涉及官方联机 Mod 的代码应提交，独立 EasyTier 附属包不要提交。官方通用提供者注册、菜单页签、状态栏及生命周期接入属于官方代码；附属包源码、工具清单、构建/下载脚本及附属专用测试继续保留本地。UI 设计草案与开发配置仍排除。
+- SUPERSEDED: 2026-10-14 上轮把官方通用拓展接入一并排除的执行范围过宽，本轮补交官方部分；前条记录的其他提交边界不变。
+- Validation / 验证: 仅安装官方源码 PCK，通用提供者的 21 项生命周期契约和 17 项实际菜单检查通过；未安装任何附属 Mod。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Upgrade] 最高稀有度由回合曲线主导、刷新额外抬升；防御低血加成不随拥有数量归零
+- Evidence / 证据: `scenes/manager/upgrade_manager.tscn`（`round_weight_curve_3` 0.01→0.55，`curve1` 1→0.35，`curve2` 0.05→0.75）；`scenes/manager/upgrade_manager.gd:64-70`（回合基准权重）、`:132/139`（`refresh_mult=(1+x)*1.1-1`，稀有档×`(1+refresh_mult)`）、`:294`（`health_percent` 浮点）；`scenes/manager/item_weight_manager.gd:52`（`DEFENSE` 标签权重 0）、`:150-153`（`max(0, defense_bonus - defense_tag_quantity*0.3)` + 低血项）。
+- Notes / 说明: 用户裁定**升级权重按 PR 保留**。最高稀有度「早期回合抽不到、随回合推进才给权重」由 `round_weight_curve_3`（回合曲线）承担，PR 未改回合边界路径（`round_weight_upgrade`）；PR 只把刷新路径从 `curve3 * refresh_mult`（`refresh_mult` 初值 0、`*=1.1` 恒 0 → 稀有档归零）改为 `curve3 * (1 + refresh_mult)`，故刷新次数也会额外抬升稀有档（且无上限）。防御类由 `max(0, defense_bonus - 0.3×拥有数)` 随获取数量衰减回基准；PR 未改 `item_weight_manager.gd`（与 main 零差异），仅令低血旁路 `(2+now_round)*refresh_mult` 从恒 0 变为生效——该项是加法且与拥有数量无关。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Coop] 命中预测二次乘算与强制断线重复信号（PR #7 合并后修复）
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:2041-2043,2251-2253,5831-5836`（`cfg.resolved_damage` 已含 `global_hurt_damage`+前置修饰）、`:8626-8633`（`_get_predicted_enemy_damage` 再乘一次 `global_hurt_damage`）、`:8658-8666`（`_predict_enemy_death`）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_enet_peer.gd:38-46,127-130`（`_disconnect_peer(force=true)` 手动调用 + 原生 `peer_disconnected` 各排一次事件）；`script/health_component.gd:213-240`。
+- Notes / 说明: ① 客机命中预测把已求值的 `resolved_damage` 又乘一次 `global_hurt_damage` → 镜像血条/致死预测偏大、与飘字不一致；改为 `_predict_enemy_death` 直接取 `maxi(0, damage)`（入参已是最终值）。② ENet 强制断开时断线事件在同一 poll 入队两次 → `peer_disconnected` 双发；`_poll` 断线分支先判 `_admitted.has(id)`、出表即视为重复跳过。③ `resolve_damage` 补 `damage_data==null or stats==null` 空守卫，`_resolve_damage` 对 `owner.get_path()` 判空，防 RPC 路径崩溃。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
 ### [Git/Scope] 当前分支仅保留远端道具动态表现同步与重复外观修复
 - Evidence / 证据: 用户 2026-10-14 明确要求；本地备份分支 `backup/before-items-only-20261014`；`tests/coop_item_visual_checks.gd`。
 - Notes / 说明: 本轮以 `upstream/main` 的 `78ed5ad` 重建分支，只保留菜刀瞄准回填、内部道具显示快照/驱动、外观去重/补建/重建、必要的道具缓存迁移、协议 v4 及专用回归和说明。此前本体存档、伤害、Mod 生命周期、设置页签、中继加固、通用联机拓展及分享标签等改动保存在备份分支，不属于本分支交付范围；主线已有内容保留。
@@ -2144,6 +2420,24 @@
 - Source / 来源: code
 - Date / 日期: 2026-10-14
 
+### [Combat] `PlayerRef.ensure` 形参不能用强类型 `Node`：已释放实例会在入参检查处就崩
+- Evidence / 证据: `script/player_ref.gd:27`（`static func ensure(from: Node, cached: Variant)`）；崩溃点 `script/summoned.gd:38`（`player = PlayerRef.ensure(self, player)`），经 `script/summoned_follower.gd:146 get_direction_to_player()` 触发，报 `MobSummoned._ensure_player: Invalid type in function 'ensure' in base 'GDScript'. The Object-derived class of argument 2 (previously freed) is not a subclass of the expected argument class.`，游戏开局即 `game_status.status=break`（`can_debug=false`，无法继续）。
+- Notes / 说明: `PlayerRef` 收口（2026-10-09 条目）只防了「读属性时 previously freed」，漏了「把已释放实例当实参传给强类型形参」——Godot 在**进入函数前的入参类型检查**就抛错，函数体内的 `is_instance_valid(cached)` 根本执行不到。修法：`cached` 改弱类型 `Variant`，但**必须先判 `is_instance_valid` 再判类型**——写成 `cached is Node and is_instance_valid(cached)` 时，`cached is Node` 会在已释放实例上先抛 `Left operand of 'is' is a previously freed instance.`，函数体内的判定同样执行不到；正确顺序为 `is_instance_valid(cached) and cached is Node and cached.is_inside_tree()`（`is_instance_valid` 对已释放实例安全），一处收口即覆盖全部 65 处调用点。通用：任何「接收可失效对象缓存」的工具函数，形参都别用具体 Object 类型，一律收成 `Variant` 再运行期校验。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Render] 2D 物理插值改为设置项（默认关）；逐帧驱动视觉须关插值（`3e21ac0` 遗漏项）
+- Evidence / 证据: `script/Game.gd`（`var physics_interp: bool = false`、`apply_physics_interp()` 运行期设 `get_tree().physics_interpolation`；`config.ini` 的 `[game] physics_interp`）；`ui/game_option.tscn` / `script/game_option.gd`（Graphics 页开关 `%PhysicsInterp`，移动端隐藏）；`scenes/crosshair/crosshair.gd:_ready`、`scenes/player/momoi/momoi_ex_range.gd:_ready`、`scenes/manager/interact_prompt.gd:_ready`、`scenes/player_support/serina/serina_as.gd:_on_ready`（`aura`）、`scenes/update_item/life_jacket.gd:_on_equip`（`Node2D2`）均设 `physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF`。
+- Notes / 说明: ① `3e21ac0` 全局开启物理插值后，凡「由 `_process` 每帧写自身 transform」的视觉节点都须关插值（`CONVENTIONS.md:102` 规则①），否则插值会在物理 tick 间把它渲染在上一次位置 → 准星/指示器滞后、与真实瞄准点错位；该提交漏了准星、Momoi EX 指示器、交互气泡、serina aura、救生衣护盾。② `SceneTree.physics_interpolation` 可在运行期安全赋值，故做成 Graphics 设置项、默认关（迁移期仍可能有个别视觉错位），无需重启；用户 2026-10-14 裁定默认关。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Render] 物理插值开启时射击特效“频闪”——调查结论（暂不修，保留开关）
+- Evidence / 证据: 现象（user）：开插值后玩家/炮塔开火时枪口火焰、子弹烟、子弹“频闪（一闪一闪）/偏移”，关闭插值即消失。尝试 B（射击栈 FX 根 `physics_interpolation_mode=OFF` + `turret_summoned._shoot_bullet` 由 `call_deferred` 改物理 tick 内直接调用）**实测无效**；未验证 A（射击栈 `GPUParticles2D` 转 `CPUParticles2D`）。Godot 4.7 文档：2D 物理插值只支持 `CPUParticles2D`、GPU 粒子不插值；物理 tick 外写被插值对象 transform 会 jitter。
+- Notes / 说明: 根因**未定位**。处理=保留 `Game.physics_interp` 设置项（默认关，Graphics 页 `RowPhysicsInterp` 可开，见 `9ffece1`），由玩家自行取舍；后续若要根治，优先评估 A（转 `CPUParticles2D`，射击栈粒子量小、代价可忽略）。**勿重复 B**。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
 ### [Coop/Visual] 远端瞄准必须与位置共用插值时间
 - Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd:85`、`coop_player_proxy.gd:170`；`tests/coop_item_visual_checks.gd:_knife_smoothness_probe`；用户 2026-10-15 反馈另一客户端菜刀卡顿。
 - Notes / 说明: 用户确认症状为「菜刀移动或挥砍画面跳动，但角色移动正常」。静态方向检查通过不能证明连续转向平滑。已提交版本在双进程 LAN、60 FPS 连续扫动准星时，远端菜刀 75% 帧保持不动，而拥有者持续转动；原因是镜像准星只在收包时回填。瞄准点与位置一起入缓冲并按同一时间采样后，镜像准星和身体/武器统一读取采样值，避免位置滞后但瞄准超前。世界原点也是有效目标，不能用 `Vector2.ZERO` 作为未初始化哨兵。已有在制插值只完成入缓冲、未接回表现时，远端菜刀会完全停止转向，故回归必须覆盖实际镜像道具驱动。
@@ -2154,4 +2448,11 @@
 - Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_server_enemy_hit`、`_get_predicted_enemy_damage`、`_predict_enemy_death`；`script/health_component.gd:_take_damage_internal`；`tests/coop_knife_damage_checks.gd`。
 - Notes / 说明: 用户确认「客机玩家的菜刀，同次命中的伤害数字在主机与客机视角不同」。双端回归复现：减伤目标主机 `45`/客机 `22`，易伤目标主机 `45`/客机 `90`，斩杀主机 `50`/客机 `99999`。预测遗漏 TRUE_DAMAGE 且血条路径重复乘承伤倍率；主机以 HP 差作为飘字又截断了过量伤害。统一从真实结算取得命中数值、保留有效扣血记分后，两端数字一致。沙袋回血经 `Enemy._on_is_dead → on_dead.call_deferred()` 发生，回归若跨帧取 HP 差会误把回血计入同次命中。契约已上提 `SYSTEMS.md` §2.3。
 - Source / 来源: user + code + test
+- Date / 日期: 2026-10-15
+
+### [Coop/Integration] PR #9 以最新主线求值契约为准，移除重复预测修复
+- Evidence / 证据: `upstream/main@0b7e446`；主线提交 `7cc6cc3`、`8a992ff`、`7dd2470`；`coop_net.gd:_prepare_enemy_hit`、`_server_enemy_hit`；`coop_snapshot_buffer.gd:sample`。
+- Notes / 说明: 核对主线后确认：主线已统一 `resolve_damage` 与 `resolved_damage`、支持真实伤害并修正预测二次乘算。本分支旧版数值修复与其重叠，合并时沿用主线；新增差异仅保留瞄准插值与主机命中数字取值，不恢复旧预测助手。快照欠载外推沿用主线的积分位移，追加瞄准目标保持。上条菜刀数值复现描述针对更新主线前的旧分支，不能当作最新主线仍存在全部问题的证据。
+- Validation / 验证: 对齐主线后的 LAN/Relay 道具视觉及菜刀伤害双端回归均通过；主线伤害契约断言 `DAMAGE_CONTRACT_RESULT failures=0`，本机只按既有道具 runner 精确豁免缺失 godot_ai 的三条日志与退出资源计数。
+- Source / 来源: code + test
 - Date / 日期: 2026-10-15

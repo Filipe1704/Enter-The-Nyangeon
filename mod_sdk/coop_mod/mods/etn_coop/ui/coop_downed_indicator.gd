@@ -79,11 +79,32 @@ func _process(delta: float) -> void:
 		_hide_all()
 		return
 	var local = coop.call("get_local_player")
-	var cam := get_viewport().get_camera_2d()
-	if local == null or not is_instance_valid(local) or cam == null:
+	if local == null or not is_instance_valid(local):
 		_hide_all()
 		return
 	if bool(local.get("is_downed")):
+		_hide_all()
+		return
+	var peers = coop.get("player_by_peer_id")
+	if peers == null:
+		_hide_all()
+		return
+	# 先筛倒地队友：无人倒地时直接收尾，省掉相机/视野矩形/脉冲与名字查询
+	var downed: Array = []
+	for pid in peers.keys():
+		var p = peers[pid]
+		if p == null or not is_instance_valid(p) or not (p is Node2D):
+			continue
+		if p.get("is_downed") != true:
+			continue
+		downed.append(pid)
+		if downed.size() >= _arrows.size():
+			break
+	if downed.is_empty():
+		_hide_all()
+		return
+	var cam := get_viewport().get_camera_2d()
+	if cam == null:
 		_hide_all()
 		return
 	var zoom: Vector2 = cam.zoom
@@ -96,20 +117,12 @@ func _process(delta: float) -> void:
 	var rect := Rect2(center - world_size * 0.5, world_size)
 	var pulse: float = (sin(_pulse_t * TAU / PULSE_PERIOD) + 1.0) * 0.5
 	var tint: Color = COLOR_DOWN.lerp(COLOR_BRIGHT, pulse)
-	var peers = coop.get("player_by_peer_id")
-	if peers == null:
-		_hide_all()
-		return
 	var idx: int = 0
-	for pid in peers.keys():
+	for pid in downed:
 		if idx >= _arrows.size():
 			break
-		var p = peers[pid]
-		if p == null or not is_instance_valid(p) or not (p is Node2D):
-			continue
-		if p.get("is_downed") != true:
-			continue
-		var wp: Vector2 = (p as Node2D).global_position
+		var node = peers[pid]
+		var wp: Vector2 = (node as Node2D).global_position
 		if rect.has_point(wp):
 			continue
 		var arrow := _arrows[idx]
@@ -123,7 +136,9 @@ func _process(delta: float) -> void:
 		icon.rotation = (wp - center).angle()
 		icon.modulate = tint
 		label.modulate = tint
-		label.text = str(coop.call("get_display_name_for", int(pid)))
+		var nm: String = str(coop.call("get_display_name_for", int(pid)))
+		if label.text != nm:
+			label.text = nm
 		var inward: Vector2 = (viewport_size * 0.5 - clamped)
 		inward = inward.normalized() if inward.length_squared() > 0.0001 else Vector2.DOWN
 		label.position = inward * (ICON_SIZE * 0.5 + 10.0) - Vector2(LABEL_W, 0.0) * 0.5

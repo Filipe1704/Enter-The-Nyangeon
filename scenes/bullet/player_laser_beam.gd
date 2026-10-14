@@ -160,7 +160,7 @@ func _read_thickness_scale() -> float:
 func idle_state() -> void:
 	reset_physics_interpolation()
 	if is_idle == 0:
-		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
+		ExtensionHooks.notify_named("on_projectile_despawned", [self])
 	is_idle = 1
 	enabled = false
 	damage_cd = 0

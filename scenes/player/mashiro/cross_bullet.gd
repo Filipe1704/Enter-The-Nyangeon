@@ -26,7 +26,7 @@ func is_on_ready():
 func idle_state():
 	reset_physics_interpolation()
 	if is_idle == 0:
-		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
+		ExtensionHooks.notify_named("on_projectile_despawned", [self])
 	is_idle = 1
 	self.visible = false
 	self.global_position = Vector2.ZERO

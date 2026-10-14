@@ -230,7 +230,7 @@ func network_play_action(action: String, dur: float = -1.0) -> void:
 
 # 拥有者开火 → 通知 mod 广播（子弹本体已由 ProjectileSpawner 广播，这里只同步枪口表现）
 func _on_gun_shoot(_bullet: Node) -> void:
-	if is_idle == 1 or not ExtensionHooks.on_summoned_action.is_valid():
+	if is_idle == 1 or not ExtensionHooks.is_hook_active("on_summoned_action"):
 		return
 	var sfx_key: String = ""
 	if gun.get("sound_id") != null:
@@ -246,4 +246,4 @@ func _on_gun_shoot(_bullet: Node) -> void:
 	var dur: float = -1.0
 	if gun.get("shoot_timer") != null:
 		dur = float(gun.get("shoot_timer").wait_time)
-	ExtensionHooks.notify(ExtensionHooks.on_summoned_action, [self, "shoot", sfx_key, fx_scene, fx_pos, fx_rot, dur])
+	ExtensionHooks.notify_named("on_summoned_action", [self, "shoot", sfx_key, fx_scene, fx_pos, fx_rot, dur])

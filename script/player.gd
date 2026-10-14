@@ -139,13 +139,13 @@ func set_downed_state(value: bool) -> void:
 			smoke.emitting = false
 		add_text(_downed_text("lan_player_down", "DOWN!"))
 		GameEvents.player_downed.emit(self)
-		ExtensionHooks.notify(ExtensionHooks.on_player_downed, [self])
+		ExtensionHooks.notify_named("on_player_downed", [self])
 	else:
 		player_stop = false
 		_apply_downed_visual(false)
 		add_text(_downed_text("lan_player_revived", "REVIVED!"))
 		GameEvents.player_revived.emit(self)
-		ExtensionHooks.notify(ExtensionHooks.on_player_revived, [self])
+		ExtensionHooks.notify_named("on_player_revived", [self])
 
 
 func _apply_downed_visual(is_down: bool) -> void:
@@ -194,7 +194,7 @@ func apply_network_heading_direction(_dir: Vector2) -> void:
 # 联机可选：角色专属一次性事件（EX/拍地等）。角色子脚本在事件点调 broadcast_character_event，
 # 并实现 apply_network_character_event 供其它端镜像回放（默认转发给子节点）。
 func broadcast_character_event(event_name: StringName, event_data: Dictionary = {}) -> void:
-	ExtensionHooks.notify(ExtensionHooks.on_character_event, [self, event_name, event_data])
+	ExtensionHooks.notify_named("on_character_event", [self, event_name, event_data])
 
 func apply_network_character_event(event_name: StringName, event_data: Dictionary) -> void:
 	for c in get_children():

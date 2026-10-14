@@ -319,7 +319,7 @@ func apply_conversion_power(power: int) -> int:
 	if is_in_group("EnemyPart"):
 		return ConvertResult.NONE
 	# 联机：客机转发 host 权威结算（本端镜像不本地累积/策反）
-	if ExtensionHooks.intercept(ExtensionHooks.enemy_conversion_interceptor, [self, power]):
+	if ExtensionHooks.intercept_named("enemy_conversion_interceptor", [self, power]):
 		return ConvertResult.NONE
 	if faction == Faction.PLAYER_SIDE:
 		refresh_converted_buff()

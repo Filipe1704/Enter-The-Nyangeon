@@ -125,18 +125,13 @@ func sample(render_msec: int) -> bool:
 		return true
 	var last_t: int = int(_t[n - 1])
 	if render_msec >= last_t:
-		var ahead: int = render_msec - last_t
-		if ahead <= EXTRAP_MAX_MS:
-			extrapolating = true
-			# 缓入衰减：越接近上限速度越小（1→0），避免过冲后回弹抖动，末段平滑冻结
-			var damp: float = 1.0 - float(ahead) / float(EXTRAP_MAX_MS)
-			sample_pos = _pos[n - 1] + _vel[n - 1] * (float(ahead) / 1000.0) * damp
-			sample_vel = _vel[n - 1] * damp
-			sample_look = _look[n - 1]
-			return true
-		extrapolating = false
-		sample_pos = _pos[n - 1]
-		sample_vel = _vel[n - 1]
+		var ahead: int = mini(render_msec - last_t, EXTRAP_MAX_MS)
+		var t: float = float(ahead) / 1000.0
+		var limit: float = float(EXTRAP_MAX_MS) / 1000.0
+		# 对线性衰减速度积分：位移单调增加，达到上限后保持积分末端，速度归零。
+		sample_pos = _pos[n - 1] + _vel[n - 1] * (t - t * t / (2.0 * limit))
+		sample_vel = _vel[n - 1] * (1.0 - t / limit)
+		extrapolating = render_msec - last_t < EXTRAP_MAX_MS
 		sample_look = _look[n - 1]
 		return true
 	var lo: int = n - 2

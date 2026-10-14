@@ -14,6 +14,7 @@ extends OptionMenu
 @onready var resolutions: OptionButton = %Resolutions
 @onready var max_fps: HSlider = %MaxFps
 @onready var max_fps_value: Label = %MaxFpsValue
+@onready var physics_interp: Control = %PhysicsInterp
 
 func _ready():
 	setting_status()
@@ -26,6 +27,9 @@ func _ready():
 	v_sync.mouse_entered.connect(mouse_on_vs)
 	v_sync.mouse_exited.connect(mouse_out_vs)
 	v_sync.gui_input.connect(mouse_selected_vs)
+	physics_interp.mouse_entered.connect(mouse_on_physics_interp)
+	physics_interp.mouse_exited.connect(mouse_out_physics_interp)
+	physics_interp.gui_input.connect(mouse_selected_physics_interp)
 	resolutions.item_selected.connect(_on_resolutions_item_selected)
 	damage_freq.value_changed.connect(_on_damage_freq_value_changed)
 	effect_freq.value_changed.connect(_on_effect_freq_value_changed)
@@ -35,7 +39,7 @@ func _ready():
 	resolutions_block.mouse_filter = (
 		Control.MOUSE_FILTER_STOP if OS.has_feature("mobile") else Control.MOUSE_FILTER_IGNORE
 	)
-	for toggle in [full_screen, shake, v_sync]:
+	for toggle in [full_screen, shake, v_sync, physics_interp]:
 		toggle.focus_mode = Control.FOCUS_ALL
 		var label: Label = toggle.get_parent().get_node("Label")
 		label.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -45,12 +49,16 @@ func _ready():
 	shake.focus_exited.connect(mouse_out_shake)
 	v_sync.focus_entered.connect(mouse_on_vs)
 	v_sync.focus_exited.connect(mouse_out_vs)
+	physics_interp.focus_entered.connect(mouse_on_physics_interp)
+	physics_interp.focus_exited.connect(mouse_out_physics_interp)
 	full_screen.get_parent().get_node("Label").gui_input.connect(mouse_selected_full_screen)
 	shake.get_parent().get_node("Label").gui_input.connect(mouse_selected_shake)
 	v_sync.get_parent().get_node("Label").gui_input.connect(mouse_selected_vs)
+	physics_interp.get_parent().get_node("Label").gui_input.connect(mouse_selected_physics_interp)
 	if OS.has_feature("mobile"):
 		full_screen.get_parent().get_parent().hide()
 		v_sync.get_parent().hide()
+		physics_interp.get_parent().hide()
 
 func menu_show():
 	super()
@@ -195,6 +203,38 @@ func mouse_selected_vs(event: InputEvent):
 			Game.save_config()
 
 
+func mouse_on_physics_interp():
+	if Game.physics_interp == false:
+		physics_interp.get_node("AnimationPlayer").play("full_on")
+	else:
+		physics_interp.get_node("AnimationPlayer").play("selected_out")
+
+func mouse_out_physics_interp():
+	if Game.physics_interp == false:
+		physics_interp.get_node("AnimationPlayer").play("full_out")
+	else:
+		physics_interp.get_node("AnimationPlayer").play("selected")
+
+func mouse_selected_physics_interp(event: InputEvent):
+	if event as InputEventScreenTouch and event.pressed:
+		SoundManager.play_sfx("ButtonSounds")
+		_toggle_physics_interp()
+
+	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		physics_interp.accept_event()
+		SoundManager.play_sfx("ButtonSounds")
+		_toggle_physics_interp()
+
+# 物理插值开关（默认关）：写入设置并运行期应用，随后持久化。
+func _toggle_physics_interp():
+	Game.physics_interp = not Game.physics_interp
+	Game.apply_physics_interp()
+	Game.save_config()
+	if Game.physics_interp == true:
+		physics_interp.get_node("AnimationPlayer").play("selected")
+	else:
+		physics_interp.get_node("AnimationPlayer").play("full_out")
+
 func setting_status():
 	if Game.on_full_screen == true:
 		full_screen.get_node("AnimationPlayer").play("selected")
@@ -212,6 +252,11 @@ func setting_status():
 		v_sync.get_node("AnimationPlayer").play("selected")
 	else:
 		v_sync.get_node("AnimationPlayer").play("full_out")
+
+	if Game.physics_interp == true:
+		physics_interp.get_node("AnimationPlayer").play("selected")
+	else:
+		physics_interp.get_node("AnimationPlayer").play("full_out")
 
 	damage_freq.set_value_no_signal(Game.damage_text_freq)
 	damage_freq_value.text = _damage_freq_text(Game.damage_text_freq)

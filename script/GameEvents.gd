@@ -94,6 +94,7 @@ signal on_selected
 
 signal scoreboard_select(select_name: String, type_name: String)
 
+signal enemy_damage_calculating(final_damage: int, damage_data: DamageData, body_path: NodePath)
 signal enemy_damage_taken(final_damage: int, damage_data: DamageData, body_path: NodePath) #公共敌人DamageData事件
 signal enemy_damage_taken_dead(final_damage: int, damage_data: DamageData, body_path: NodePath) #公共敌人死亡事件
 signal enemy_heal_taken(final_damage: int, damage_data: HealthChangeData, body_path: NodePath) #公共敌人治疗事件
@@ -183,7 +184,7 @@ signal gamemode_conflicting(gamemode_group: Array)
 
 func change_scene(path: String, player: String):
 	clear_slow()
-	if ExtensionHooks.intercept(ExtensionHooks.change_scene_gate, [path, player]):
+	if ExtensionHooks.intercept_named("change_scene_gate", [path, player]):
 		return
 	change_scene_requested.emit(path, player)
 	var tree := get_tree()
@@ -255,7 +256,7 @@ func emit_round_upgrade_closing():
 	round_upgrade_closing.emit()
 
 func emit_round_upgrade_end():
-	if ExtensionHooks.intercept(ExtensionHooks.round_upgrade_end_gate, []):
+	if ExtensionHooks.intercept_named("round_upgrade_end_gate", []):
 		return
 	round_upgrade_end.emit()
 
@@ -329,6 +330,9 @@ func emit_on_selected():
 	on_selected.emit()
 
 #敌人事件信号
+func emit_enemy_damage_calculating(final_damage: int, damage_data: DamageData, body_path: NodePath):
+	enemy_damage_calculating.emit(final_damage, damage_data, body_path)
+
 func emit_enemy_damage_taken(final_damage: int, damage_data: DamageData, body_path: NodePath):
 	enemy_damage_taken.emit(final_damage, damage_data, body_path)
 
@@ -587,7 +591,7 @@ func  emit_floor_layer_group_add(floor_node: Node):
 	floor_layer_group_add.emit(floor_node)
 
 func emit_game_over(player_dead: bool):
-	if ExtensionHooks.intercept(ExtensionHooks.game_over_gate, [player_dead]):
+	if ExtensionHooks.intercept_named("game_over_gate", [player_dead]):
 		return
 	clear_slow()
 	game_over.emit(player_dead)
