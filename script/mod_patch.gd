@@ -32,7 +32,9 @@ static func apply_one(registry: Dictionary, op: Dictionary, order: Dictionary = 
 			registry[kind].erase(id)
 			return true
 		"replace", "add":
-			return _op_set(registry[kind][id], str(op.get("field", "")), op.get("value"), verb == "replace")
+			# add 与 replace 都要求字段存在：Resource 不支持新增属性，对不存在的字段
+			# set() 只会刷引擎错误，这里提前告警并跳过。
+			return _op_set(registry[kind][id], str(op.get("field", "")), op.get("value"), true)
 		_:
 			push_warning("[ModPatch] 未知 op：%s" % verb)
 			return false
@@ -51,7 +53,7 @@ static func _op_set(entry: Dictionary, field: String, value, require_existing: b
 		entry["res"] = res
 		entry["_patched"] = true
 	if require_existing and not _has_prop(res, field):
-		push_warning("[ModPatch] 字段不存在（replace）：%s" % field)
+		push_warning("[ModPatch] 字段不存在，已跳过：%s" % field)
 		return false
 	res.set(field, _coerce(res, field, value))
 	return true
