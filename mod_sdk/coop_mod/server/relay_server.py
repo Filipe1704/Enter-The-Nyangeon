@@ -25,7 +25,10 @@ MAX_CLIENTS_PER_ROOM = int(os.environ.get("MAX_CLIENTS_PER_ROOM", "3"))
 ROOM_TIMEOUT_MS = int(os.environ.get("ROOM_TIMEOUT_MS", str(30 * 60 * 1000)))
 HEADER_SIZE = 4
 MAX_PLAYERS_PER_ROOM = 4
-WRITE_HIGH_WATER = 256 * 1024
+# 分级背压水位：软水位先给宽限并继续写可靠帧，硬水位或宽限超时再断开慢端。
+WRITE_SOFT_WATER = 256 * 1024
+WRITE_HARD_WATER = int(os.environ.get("RELAY_WRITE_HARD_WATER", str(4 * 1024 * 1024)))
+WRITE_GRACE_SEC = float(os.environ.get("RELAY_WRITE_GRACE_SEC", "5"))
 COMPACT_THRESHOLD = 65536
 DEBUG = os.environ.get("RELAY_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
 # 连接级心跳：客户端约每 1s 有游戏数据/心跳包，超过该阈值无任何数据即判定半开连接并回收。
@@ -41,7 +44,7 @@ WRITE_TIMEOUT_SEC = 5.0
 # 资源上限：房间总数与在线连接总数，超限拒绝新建（环境变量可配，默认按单机小规模中继估算）。
 MAX_ROOMS = int(os.environ.get("MAX_ROOMS", "256"))
 MAX_TOTAL_CLIENTS = int(os.environ.get("MAX_TOTAL_CLIENTS", "512"))
-# WRITE_OVERFLOW_LIMIT 已退役：可靠帧不能容忍跳过，首次超水位即断开慢端。
+# WRITE_OVERFLOW_LIMIT 已退役：可靠帧不能容忍跳过，改为分级水位——软水位给宽限、硬水位或宽限超时再断开慢端。
 # join 失败（房间不存在）限速：窗口内每连接/每 IP 的失败次数上限，超限进入冷却。
 JOIN_FAIL_WINDOW_SEC = float(os.environ.get("JOIN_FAIL_WINDOW_SEC", "60"))
 MAX_JOIN_FAILS_PER_PEER = int(os.environ.get("MAX_JOIN_FAILS_PER_PEER", "8"))
@@ -74,6 +77,8 @@ class Peer:
     last_seen: float = 0.0
     connected_at: float = field(default_factory=time.monotonic)
     frame_started: float | None = None
+    # 背压：首次超过软水位的时刻（monotonic，0.0 表示未超）；超过宽限仍未回落才断开。
+    over_since: float = 0.0
     # 对端 IP（握手后取 peername），用于每 IP 的 join 限速
     ip: str = ""
     # join 失败时间戳（滑动窗口）与冷却截止点（monotonic），用于每连接限速
@@ -172,22 +177,39 @@ def compact_buffer(peer: Peer):
 async def send(peer: Peer, opcode: int, payload: bytes = b"") -> bool:
     """写入一帧，且绝不等待 drain（避免慢 peer 拖住广播/心跳）。
 
-    控制帧与游戏 RPC 都依赖可靠有序传输。无法继续排队时立即断开该慢端，
-    由读循环 finally 回收并通知其他成员；禁止跳帧后继续发送、制造静默状态分叉。
+    分级背压：超过软水位先记录时刻并继续写入（给瞬时突发一个宽限窗口），
+    持续超过 WRITE_GRACE_SEC 仍未回落、或直接超过硬水位，才断开慢端。
+    控制帧与游戏 RPC 都依赖可靠有序传输，禁止跳帧后继续发送、制造静默状态分叉。
     返回 True 表示帧已排入传输缓冲，False 表示该连接已失败。
     """
     writer = peer.writer
     if writer.is_closing():
         return False
     transport = writer.transport
-    if transport is not None and transport.get_write_buffer_size() >= WRITE_HIGH_WATER:
-        print(
-            f"[BACKPRESSURE] closing peer={peer.id or '?'} role={peer.role or '?'} "
-            f"buffered={transport.get_write_buffer_size()}",
-            flush=True,
-        )
-        writer.close()
-        return False
+    if transport is not None:
+        buffered = transport.get_write_buffer_size()
+        if buffered >= WRITE_HARD_WATER:
+            print(
+                f"[BACKPRESSURE] closing peer={peer.id or '?'} role={peer.role or '?'} "
+                f"buffered={buffered} hard",
+                flush=True,
+            )
+            writer.close()
+            return False
+        if buffered >= WRITE_SOFT_WATER:
+            now = time.monotonic()
+            if peer.over_since == 0.0:
+                peer.over_since = now
+            elif now - peer.over_since >= WRITE_GRACE_SEC:
+                print(
+                    f"[BACKPRESSURE] closing peer={peer.id or '?'} role={peer.role or '?'} "
+                    f"buffered={buffered} over={now - peer.over_since:.1f}s",
+                    flush=True,
+                )
+                writer.close()
+                return False
+        else:
+            peer.over_since = 0.0
     writer.write(encode_frame(opcode, payload))
     return True
 

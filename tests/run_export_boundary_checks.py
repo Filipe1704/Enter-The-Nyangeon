@@ -1,5 +1,6 @@
 """真实本体 PCK 不得含开发 Mod 镜像；独立包的新版脚本必须实际可见。"""
 import argparse
+import os
 from pathlib import Path
 import sys
 from isolated_godot import REPO
@@ -8,7 +9,7 @@ from export_boundary_helpers import export_base, export_shadow
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--godot", default=str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe"))
+    parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe")))
     parser.add_argument("--pck", type=Path, help="复核指定产物；默认从当前预设导出")
     args = parser.parse_args()
     args.output = REPO / ".godot/export_boundary_checks"

@@ -1,10 +1,10 @@
-<#
+﻿<#
 .SYNOPSIS
   从源码快照打包任意 Mod 的 PCK，不启动本体、不安装到 user://mods。
 
 .DESCRIPTION
   与 build_coop_mod.ps1 的区别：不生成 zip、不安装，默认产出 <Source>\<ModId>.pck，支持 -Output。
-  用途：无头回归脚本（tests/run_coop_session_checks.py）需要「源码即被测对象」——
+  用途：无头回归脚本（tests/run_coop_recovery_checks.py / run_coop_extension_contract_checks.py）需要「源码即被测对象」——
   使用最小临时工程打包源目录快照，排除旧 pck，并加入唯一 mod_build.json。
   运行时同路径优先级取决于 replace_files；回归脚本只在隔离 manifest 中显式启用覆盖。
 
@@ -12,7 +12,7 @@
   .\mod_sdk\pack_mod_source.ps1 -Source <源码目录> -ModId <id> -Output <目标.pck>
 #>
 param(
-    [string]$Godot = "E:\Repos\.tools\godot\Godot_v4.7-stable_win64_console.exe",
+    [string]$Godot = $env:GODOT_BIN,
     [string]$Project = (Split-Path -Parent $PSScriptRoot),
     [Parameter(Mandatory = $true)][string]$ModId,
     [Parameter(Mandatory = $true)][string]$Source,
@@ -25,6 +25,9 @@ $OutputEncoding = [Console]::OutputEncoding
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source "mod.json"))) {
     throw "找不到 mod.json：$Source\mod.json"
+}
+if ([string]::IsNullOrWhiteSpace($Godot)) {
+    throw "未指定 Godot 可执行文件：请用 -Godot <路径>，或设置环境变量 GODOT_BIN"
 }
 if (-not (Test-Path -LiteralPath $Godot)) {
     throw "找不到 Godot 可执行文件：$Godot"

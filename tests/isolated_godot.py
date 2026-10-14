@@ -23,7 +23,9 @@ def free_port():
         return sock.getsockname()[1]
 
 
-def run(command, env, log, timeout=50):
+def run(command, env, log, timeout=None):
+    if timeout is None:
+        timeout = int(os.environ.get("ETN_TEST_TIMEOUT", "50"))
     result = subprocess.run(command, env=env, capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=timeout,
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)

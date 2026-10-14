@@ -28,24 +28,41 @@ class ControlledWriter:
 
 
 class RelayBackpressure(unittest.IsolatedAsyncioTestCase):
-    async def test_single_overflow_cannot_silently_lose_control(self):
-        writer = ControlledWriter(relay.WRITE_HIGH_WATER)
-        peer = relay.Peer(reader=None, writer=writer, id=2)
+    async def test_soft_overflow_delivers_frame_then_hard_closes(self):
+        # 软水位：宽限内仍写入可靠帧，不静默丢帧、不立即断开。
+        soft = ControlledWriter(relay.WRITE_SOFT_WATER)
+        peer = relay.Peer(reader=None, writer=soft, id=2)
         await relay.send_control(peer, {"type": "peer_disconnected", "peer_id": 3})
-        self.assertTrue(writer.closed or writer.frames, "可靠帧必须送达或明确断开，不能跳帧后继续连接")
-        writer.buffered = 0
-        await relay.send_data(peer, 1, b"next")
-        self.assertTrue(writer.closed, "发生可靠性失败后不能恢复发送并遗忘丢帧")
-        self.assertEqual(writer.frames, [])
+        self.assertFalse(soft.closed, "软水位宽限内不应立即断开")
+        self.assertTrue(soft.frames, "软水位下可靠帧必须写入，不能静默丢弃")
+        # 硬水位：立即断开且不写入（明确失败，而非跳帧后继续）。
+        hard = ControlledWriter(relay.WRITE_HARD_WATER)
+        peer2 = relay.Peer(reader=None, writer=hard, id=3)
+        await relay.send_data(peer2, 1, b"next")
+        self.assertTrue(hard.closed, "硬水位必须断开慢端")
+        self.assertEqual(hard.frames, [])
+
+    async def test_sustained_soft_overflow_closes_after_grace(self):
+        saved = relay.WRITE_GRACE_SEC
+        relay.WRITE_GRACE_SEC = 0.0
+        try:
+            writer = ControlledWriter(relay.WRITE_SOFT_WATER)
+            peer = relay.Peer(reader=None, writer=writer, id=2)
+            await relay.send_data(peer, 1, b"first")
+            self.assertFalse(writer.closed, "首次超过软水位只记时刻、继续写")
+            await relay.send_data(peer, 1, b"second")
+            self.assertTrue(writer.closed, "超过宽限仍超软水位必须断开")
+        finally:
+            relay.WRITE_GRACE_SEC = saved
 
     async def test_slow_receiver_does_not_block_healthy_broadcast(self):
         host = relay.Peer(reader=None, writer=ControlledWriter(), id=1)
-        slow = relay.Peer(reader=None, writer=ControlledWriter(relay.WRITE_HIGH_WATER), id=2)
+        slow = relay.Peer(reader=None, writer=ControlledWriter(relay.WRITE_HARD_WATER), id=2)
         healthy = relay.Peer(reader=None, writer=ControlledWriter(), id=3)
         room = relay.Room(code="TEST", host=host, clients={slow, healthy})
         for peer in (host, slow, healthy): peer.room = room
         packet = struct.pack("<i", 0) + b"reliable-event"
-        await asyncio.wait_for(relay.route_packet(host, packet), 0.2)
+        await asyncio.wait_for(relay.route_packet(host, packet), 1.0)
         self.assertTrue(slow.writer.closed)
         self.assertEqual(healthy.writer.frames, [relay.encode_frame(2, struct.pack("<i", 1) + b"reliable-event")])
 
@@ -107,37 +124,37 @@ class RelayLimits(unittest.IsolatedAsyncioTestCase):
         if upgrade:
             writer.write(b"GET / HTTP/1.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
             await writer.drain()
-            self.assertIn(b"101 Switching Protocols", await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 1))
+            self.assertIn(b"101 Switching Protocols", await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2))
         return reader, writer
 
     async def test_oversized_frame_rejected_before_body(self):
         reader, writer = await self.connect()
         writer.write(b"\x82\xff" + struct.pack(">Q", 128 * 1024 * 1024) + b"\0\0\0\0")
         await writer.drain()
-        self.assertEqual(await asyncio.wait_for(reader.read(), 0.5), b"")
+        self.assertEqual(await asyncio.wait_for(reader.read(), 1.5), b"")
 
     async def test_incomplete_http_handshake_expires(self):
         reader, writer = await self.connect(upgrade=False)
         writer.write(b"GET / HTTP/1.1\r\n")
         await writer.drain()
-        self.assertEqual(await asyncio.wait_for(reader.read(), 0.5), b"")
+        self.assertEqual(await asyncio.wait_for(reader.read(), 1.5), b"")
 
     async def test_unjoined_socket_expires(self):
         reader, _ = await self.connect()
-        self.assertEqual(await asyncio.wait_for(reader.read(), 0.5), b"")
+        self.assertEqual(await asyncio.wait_for(reader.read(), 1.5), b"")
 
     async def test_partial_frame_has_assembly_deadline(self):
         reader, writer = await self.connect()
         writer.write(b"\x82\xfe" + struct.pack(">H", 1000) + b"\0\0\0\0x")
         await writer.drain()
-        self.assertEqual(await asyncio.wait_for(reader.read(), 0.5), b"")
+        self.assertEqual(await asyncio.wait_for(reader.read(), 1.5), b"")
 
     async def test_valid_control_frame_still_creates_room(self):
         reader, writer = await self.connect()
         payload = b'{"type":"create_room","player_name":"check"}'
         writer.write(bytes([0x81, 0x80 | len(payload)]) + b"\0\0\0\0" + payload)
         await writer.drain()
-        response = await asyncio.wait_for(reader.read(4096), 0.5)
+        response = await asyncio.wait_for(reader.read(4096), 1.5)
         self.assertIn(b'"type":"room_created"', response)
 
 

@@ -11,7 +11,7 @@ from godot_check_output import unexpected_errors
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--godot", default=str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe"))
+    parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe")))
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="etn-upgrade-snapshot-") as directory:
         env = prepare(args.godot, Path(directory) / "user", [])

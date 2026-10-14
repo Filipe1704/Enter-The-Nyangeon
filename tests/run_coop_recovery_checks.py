@@ -17,7 +17,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--godot", default=str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe"))
+    parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe")))
     parser.add_argument("--pack", type=Path, help="仅用于验证回归能捕获旧构建；默认每次从当前源码打包")
     parser.add_argument("--log-dir", type=Path, default=REPO / ".godot/coop_recovery_checks")
     parser.add_argument("--cases", nargs="+", default=["relay_queue", "simultaneous_leave", "cancel_lobby", "cancel_battle", "cancel_new_session", "cancel_client_scene", "late_select", "late_ready", "rejoin3", "relay_rejoin3", "upgrade", "coins", "damage"])

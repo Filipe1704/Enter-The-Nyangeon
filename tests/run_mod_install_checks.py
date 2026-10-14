@@ -13,7 +13,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--godot", default=str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe"))
+    parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", str(REPO.parent / ".tools/godot/Godot_v4.7-stable_win64_console.exe")))
     parser.add_argument("--legacy", action="store_true", help="验证 HEAD 中旧导入实现能使回归失败")
     args = parser.parse_args()
     logs = REPO / ".godot/mod_install_checks"
