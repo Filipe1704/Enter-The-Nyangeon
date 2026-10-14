@@ -4,7 +4,7 @@
 
 ## 伤害修复与兼容（2026-10-14，原标 0.1.12）
 
-- SUPERSEDED: 2026-10-14 用户要求回滚发布版本号，本体恢复为 `v0.5.1.3`，联机 Mod 恢复为 `0.1.10`；以下修复保留，尚未提交上游的协议变更统一为 v4（原计划 v5）。
+- SUPERSEDED: 2026-10-14 用户要求回滚发布版本号，本体恢复为 `v0.5.1.3`，联机 Mod 恢复为 `0.1.10`；以下修复保留，尚未提交上游的协议变更统一为 v4（原计划 v5）。同日再改定：本体发布版本升为 `v0.5.1.4`（导出文件名同步 0.5.1.4），联机 Mod 仍 `0.1.10`。
 
 - 伤害先在归属端按命中时构筑/目标快照计算 `resolved_damage`，再由房主检查目标存活、阵营及无敌状态并扣血；房主不重复乘承伤或自身被动，结算后 proc 仍只回传归属端。独立部件和自管理子弹走同一契约。
 - 本体新增 `enemy_damage_calculating` 前置阶段，角色/藏品增伤改挂该阶段。临时追加的 modifier 和组件倍率按命中消费，不累积到穿透弹下一目标；真实伤害跳过数值修饰并清理暂存倍率。
@@ -315,7 +315,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 
 ### #1 敌人命中预测（客机）
 - **`net/coop_enemy_proxy.gd`（重写）**：维护 `auth_hp` 与 `pending_damage` 列表；`note_predicted_damage(amount)` 即时下调镜像显示血量并返回预测值；`apply_snapshot` 用 host 快照校正/确认 pending；若镜像被预测死亡而快照仍 `hp>0`，`_revive_local_mirror()` 复活（清 `predicted_dead`、`active_state`）。仍按快照速度驱动位置与 `graphics.scale.x` 朝向。
-- **`net/coop_net.gd`**：`_get_predicted_enemy_damage`（叠 `global_hurt_damage`）、`_predict_enemy_death`；`_intercept_enemy_damage` / `_gate_projectile_self_hit` 在命中瞬间 `_replay_hit_feedback`（闪白+飘字）+ `_predict_enemy_death`，随后才转发 host。
+- **`net/coop_net.gd`**：`_get_predicted_enemy_damage`（当前未使用）、`_predict_enemy_death`；`_intercept_enemy_damage` / `_gate_projectile_self_hit` 在命中瞬间 `_replay_hit_feedback`（闪白+飘字）+ `_predict_enemy_death`，随后才转发 host。
 - **回声去重**：`_remote_hit_feedback(net_id, actual, cfg, attacker, predicted)`；`_server_enemy_hit` 发 `predicted=true`（攻击者已本地预测，跳过）、`_on_server_enemy_damage_taken` 发 `predicted=false`（DOT/自然伤害仍回放）。
 
 ### #6 远程表现（纯视觉）
@@ -423,7 +423,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 ## 敌人部件（body_part）：hp / 闪白 / 碎裂 / 预测同步
 - **背景**：部件（`EnemyPart`）此前**完全没同步**——部件镜像没有 `net_id` meta，伤害拦截直接放行，客机打部件只在本地镜像掉血，host 真实部件也各算各的。
 - **识别**：镜像部件打 `coop_owner_net_id`/`coop_part_index` meta；`_net_entity_of` 优先返回部件节点。
-- **客机命中（与根同款即时预测）**：`_handle_part_hit` → `_get_predicted_enemy_damage` + `_replay_hit_feedback`（闪白；部件无飘字节点故无飘字）+ 乐观扣血/预测碎裂 → `rpc_id(1,"_server_enemy_part_hit",...)`。
+- **客机命中（与根同款即时预测）**：`_handle_part_hit` → `_replay_hit_feedback`（闪白；部件无飘字节点故无飘字）+ 乐观扣血/预测碎裂 → `rpc_id(1,"_server_enemy_part_hit",...)`。（原述的 `_get_predicted_enemy_damage` 当前未使用。）
 - **host 权威**：`_server_enemy_part_hit` 用 `take_damage(data,true,false)`（不抑制 → host 原生闪白/受击音 + `damage_taken`）；`_connect_enemy_parts` 连部件 `damage_taken` → 广播 `_remote_enemy_part_hp(net_id,idx,hp,true)`（host 自身打 + 客机转发的单一广播点）。
 - **镜像应用**：写 `predicted_hp`、撤销/触发 `predicted_dead`；`hp<=0` → `stats.hp=0` + `idle_state`（碎裂）；否则写 hp + 限流 `_hurt_flash`；`active_state()` 会重置满血，须在其后再写 hp。
 - **晚加入**：`_enemy_part_hps` 随 `_spawn_enemy_remote(...,part_hps)` 一次性下发（`register_enemy_spawn` / `_send_existing_enemies_to_peer`）。

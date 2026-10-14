@@ -179,7 +179,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 | `"GameUI"`（含 `.support_box`, `.buff_box`） | `support_data.gd:68`、`player.gd:78`、`player_buff_manager.gd:26` |
 | `"BuffBox"` | `PoolManager.gd:46` |
 | `"SELayer"` / `"ForegroundLayer"` | `PoolManager.gd:152,162` |
-| `"EnemiesRoot"` / `"BulletRoot"` / `"CoinRoot"` / `"FloorLayer"` | `main.gd:77,102,108,113,122` |
+| `"EnemiesRoot"` / `"BulletRoot"` / `"CoinRoot"` / `"FloorLayer"` | `main.gd:85,121,110,130` |
 | `"Summoned"` / `"Converted"` | `Faction.of_entity`、召唤/策反逻辑 |
 | `"Interactable"` | `interaction_manager.gd` |
 | `"SummonedManager"` | `machine_part.gd:10` |
@@ -212,7 +212,7 @@ PoolManager.detach(node)
 1. 调用方 `Transition.play_left_start()` 然后 `await Transition.left_end_start`。
 2. 动画 method track → `Transition.is_left_end_start = true`。
 3. 切场景：`GameEvents.change_scene(path, player)`。
-4. `change_scene`（`GameEvents.gd:163-180`）：`change_scene_to_file` → `await tree_changed` → 若 `is_left_end_start` 则 `Transition.play_left_end()` → 若 `player != ""` 实例化到组 `"PlayerRoot"`（deferred）→ `emit_first_round_add.call_deferred()` → `first_round_switch = false`。
+4. `change_scene`（`GameEvents.gd:185`）：`change_scene_to_file` → `await tree_changed` → 若 `is_left_end_start` 则 `Transition.play_left_end()` → 若 `player != ""` 实例化到组 `"PlayerRoot"`（deferred）→ `emit_first_round_add.call_deferred()` → `first_round_switch = false`。
 5. `first_round_add` 被 `main.gd:31,46-67` 消费 → `first_round()`：重置 `PlayerData`、播 BGM、快照+emit 属性、`round_manager.first_round_start()`、`SupportData.game_add_support()`。
 
 > `GameEvents.emit_transition_start` 与 `script/transition_manager.gd` 是**死代码**（未注册、无引用）。
@@ -229,7 +229,7 @@ PoolManager.detach(node)
 - **池载荷（2026-10-08）**：`get_pool` 空闲优先；无空闲且未达 `limit` 返回 `null`、满额静默回收，调用方仍应检查 `is_idle`。`clear_pool`/`erase_pool` 不释放节点。
 - **ExtraDamage 递归**：请求者过滤 `EXTRA_DAMAGE`。
 - **重复遗留物**：`transition_manager.gd`（未注册）、`scenes/game_camera/transition.gd` 均未使用。
-- **窗口尺寸**：`Game._physics_process` 已不再轮询（注释掉）；实时路径为 `get_window_size()`（`Game.gd:59-69`）。
+- **窗口尺寸**：`Game._physics_process` 已不再轮询（注释掉）；实时路径为 `get_window_size()`（`Game.gd:111`）。
 - **相机震动单写者（2026-10-03）**：游戏相机 `scenes/game_camera/gamecamera.tscn`（玩家子节点）由 `_process` 每帧写 `position`（瞄准前导）；屏幕震动必须只写独立 `shake_offset`，在 `_process` 里合成 `position = base + shake_offset`，**禁止** tween `position`（会与 `_process` 互覆盖 → 整屏随机抖动/回弹，疑似"网络丢包"体感）。见 `LEARNINGS.md` [Camera]。
 - **移动端渲染设置（2026-10-03）**：`project.godot` 开 `shader_compiler/shader_cache/enabled`、Android 导出开 `shader_baker/enabled`，减少战斗中新特效首现时的运行期 shader 编译顿挫；帧率上限由 `Game.apply_max_fps` 全平台配置、默认 60（见 §1.5；2026-10-14 核对）。
 - **SoundManager 异步**：`play_bgm_cut` 需 stream 结束并 emit `cut_finish`；`main.gd:53-55` 依赖此启动循环 BGM；`bgm_slow_fade_out` 在 `game_end` 时中止。

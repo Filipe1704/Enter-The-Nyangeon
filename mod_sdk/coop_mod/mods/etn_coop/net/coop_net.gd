@@ -8623,6 +8623,8 @@ func _replay_hit_feedback(enemy: Node, data: DamageData, actual_damage: int, is_
 
 # ---------------- 敌人命中预测（对齐联机版） ----------------
 
+# [DEPRECATED / 未使用] 预测路径已改为直接消费 resolved_damage（见 `_predict_enemy_death`）；
+# 本函数仅被下方同样未被调用的 will_enemy_hit_kill 引用，保留作参考。
 func _get_predicted_enemy_damage(enemy: Node, damage: int) -> int:
 	if damage <= 0:
 		return 0
@@ -8639,6 +8641,7 @@ func _enemy_is_test_target(enemy: Node) -> bool:
 			and enemy.stats != null and bool(enemy.stats.get("is_test_target"))
 
 
+# [DEPRECATED / 未使用] 全仓库无调用点；预测致死现由 `_predict_enemy_death` 承担。保留作参考。
 func will_enemy_hit_kill(enemy: Node, damage: int) -> bool:
 	if not is_lan_game or multiplayer.is_server() or enemy == null or damage <= 0:
 		return false
