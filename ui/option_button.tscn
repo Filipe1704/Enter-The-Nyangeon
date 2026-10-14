@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://sosltotyod01"]
 
 [ext_resource type="Script" uid="uid://bgahm0xcpha3l" path="res://script/option_button.gd" id="1_kvux1"]
+[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="2_font"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_5yi7o"]
 content_margin_left = 6.0
@@ -256,6 +257,19 @@ offset_left = 4.0
 offset_right = 4.0
 offset_bottom = 25.0
 color = Color(0.816135, 0.700574, 0.0237219, 1)
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 19
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=652817156]
 libraries/ = SubResource("AnimationLibrary_8ple8")

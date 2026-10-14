@@ -1,11 +1,21 @@
+@tool
 extends PanelContainer
 
 @export var button_id: String
+@export var text: String = "":
+	set(value):
+		text = value
+		var label := get_node_or_null("Label") as Label
+		if label != null:
+			label.text = value
 @onready var animation_player = $AnimationPlayer
 
 var on_show: bool = false
 
 func _ready():
+	$Label.text = text
+	if Engine.is_editor_hint():
+		return
 	focus_mode = Control.FOCUS_NONE
 	mouse_entered.connect(mouse_entered_anim)
 	mouse_exited.connect(mouse_exitedd_anim)

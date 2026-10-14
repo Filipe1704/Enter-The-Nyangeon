@@ -1,18 +1,19 @@
 """在独立的 Godot 用户目录中运行 UI 回归检查，不接触玩家存档。"""
 
 import argparse
-import json
 import os
 import shutil
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from godot_check_output import unexpected_errors
 
 
 def main():
     # Godot 输出 UTF-8，避免 Windows 默认代码页误解码中文日志。
     sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--godot", required=True, help="Godot 4.7 可执行文件路径")
     parser.add_argument("--screenshots", action="store_true", help="使用渲染窗口输出场景截图到 .godot/ui_ux_checks")
@@ -22,6 +23,7 @@ def main():
     parser.add_argument("--test-item-input-only", action="store_true", help="只检查测试房道具列表的鼠标点击与拖动（需 --screenshots）")
     parser.add_argument("--scroll-input-only", action="store_true", help="只检查列表滚动的鼠标拖动状态（需 --screenshots）")
     parser.add_argument("--level-focus-only", action="store_true", help="只检查难度页支援、难度、模式及返回的键盘导航")
+    parser.add_argument("--settings-only", action="store_true", help="只检查设置页面与统一页签创建接口")
     args = parser.parse_args()
     if args.main_menu_focus_only and not args.screenshots:
         parser.error("--main-menu-focus-only 需要 --screenshots，以验证真实鼠标命中")
@@ -64,13 +66,6 @@ def main():
             installed = Path(os.environ["APPDATA"]) / "Godot/app_userdata/Enter The Nyangeon/mods"
             if installed.exists():
                 shutil.copytree(installed, save_directory / "mods")
-        (probe / "probe.gd").write_text(
-            'extends SceneTree\nfunc _initialize():\n'
-            '\tquit(ResourceSaver.save(Resource.new(), '
-            + json.dumps(str(save_directory / "PlayerData.res")) + '))\n',
-            encoding="utf-8",
-        )
-        subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=30, check=True)
         display = [] if args.screenshots else ["--headless"]
         command = [args.godot, *display, "--path", str(repo), "--script", "res://tests/test_ui_ux_regressions.gd"]
         game_args = []
@@ -86,13 +81,15 @@ def main():
             game_args.append("--ui-ux-scroll-input-only")
         if args.level_focus_only:
             game_args.append("--ui-ux-level-focus-only")
+        if args.settings_only:
+            game_args.append("--ui-ux-settings-only")
         if game_args:
             command += ["--", *game_args]
         result = subprocess.run(command, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=90)
         print(result.stdout, end="")
         print(result.stderr, end="")
         # 函数中断不一定使引擎非零退出，同时检查日志和完成标记。
-        return result.returncode or int("SCRIPT ERROR:" in result.stderr or "UI_UX_RESULT" not in result.stdout)
+        return result.returncode or int(bool(unexpected_errors(result.stdout + result.stderr)) or "UI_UX_RESULT" not in result.stdout)
 
 
 if __name__ == "__main__":
