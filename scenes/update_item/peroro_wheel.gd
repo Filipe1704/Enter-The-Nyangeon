@@ -1,7 +1,7 @@
 extends EquipItem
 
 func _on_equip():
-	GameEvents.enemy_damage_taken.connect(melee_damage_count)
+	GameEvents.enemy_damage_calculating.connect(melee_damage_count)
 
 func melee_damage_count(_final_damage: int, damage_data: DamageData, body_path: NodePath):
 	if damage_data.damage_type.has(GameTags.MELEE_DAMAGE):

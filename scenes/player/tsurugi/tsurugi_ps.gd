@@ -34,7 +34,7 @@ func ps_upgrade(t_num: int):
 		stats.hp_changed.connect(add_dead_buff)
 		GameEvents.player_buff_success.connect(add_player_ability)
 	elif now_t == 2:
-		GameEvents.enemy_damage_taken.connect(count_enemy_distance_to_player)
+		GameEvents.enemy_damage_calculating.connect(count_enemy_distance_to_player)
 	elif now_t == 3:
 		GameEvents.enemy_damage_taken_dead.connect(add_ammo)
 

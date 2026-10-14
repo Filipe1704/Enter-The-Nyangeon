@@ -94,6 +94,7 @@ signal on_selected
 
 signal scoreboard_select(select_name: String, type_name: String)
 
+signal enemy_damage_calculating(final_damage: int, damage_data: DamageData, body_path: NodePath)
 signal enemy_damage_taken(final_damage: int, damage_data: DamageData, body_path: NodePath) #公共敌人DamageData事件
 signal enemy_damage_taken_dead(final_damage: int, damage_data: DamageData, body_path: NodePath) #公共敌人死亡事件
 signal enemy_heal_taken(final_damage: int, damage_data: HealthChangeData, body_path: NodePath) #公共敌人治疗事件
@@ -329,6 +330,9 @@ func emit_on_selected():
 	on_selected.emit()
 
 #敌人事件信号
+func emit_enemy_damage_calculating(final_damage: int, damage_data: DamageData, body_path: NodePath):
+	enemy_damage_calculating.emit(final_damage, damage_data, body_path)
+
 func emit_enemy_damage_taken(final_damage: int, damage_data: DamageData, body_path: NodePath):
 	enemy_damage_taken.emit(final_damage, damage_data, body_path)
 

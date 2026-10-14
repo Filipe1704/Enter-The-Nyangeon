@@ -16,6 +16,7 @@ var _last_diffuse_ms: int = 0
 func _ready():
 	super._ready()
 	GameEvents.enemy_damage_taken.connect(fire_dot_append_damage)
+	GameEvents.enemy_damage_calculating.connect(fire_dot_damage_multiplier)
 	value = [buff_layer, buff_value, buff_erase_timer]
 
 func ps_upgrade(t_num: int):
@@ -45,7 +46,9 @@ func fire_dot_append_damage(_final_damage: int, damage_data: DamageData, body_pa
 			if has_fire and now_t >= 3:
 				enemy_body.enemy_buff_manager.apply_buff(enemy_buff, value)
 		
-	if has_fire:
+func fire_dot_damage_multiplier(_final_damage: int, _data: DamageData, body_path: NodePath):
+	var enemy_body = get_node_or_null(body_path)
+	if enemy_body != null and enemy_body.enemy_buff_manager.current_buff.has("fire_dot"):
 		enemy_body.health_component.damage_multiplier += 0.5
 
 func dot_damage_count():
