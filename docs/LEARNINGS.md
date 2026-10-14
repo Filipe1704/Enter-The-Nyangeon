@@ -2393,3 +2393,15 @@
 - Validation / 验证: 仅安装官方源码 PCK，通用提供者的 21 项生命周期契约和 17 项实际菜单检查通过；未安装任何附属 Mod。
 - Source / 来源: user
 - Date / 日期: 2026-10-14
+
+### [Upgrade] 最高稀有度由回合曲线主导、刷新额外抬升；防御低血加成不随拥有数量归零
+- Evidence / 证据: `scenes/manager/upgrade_manager.tscn`（`round_weight_curve_3` 0.01→0.55，`curve1` 1→0.35，`curve2` 0.05→0.75）；`scenes/manager/upgrade_manager.gd:64-70`（回合基准权重）、`:132/139`（`refresh_mult=(1+x)*1.1-1`，稀有档×`(1+refresh_mult)`）、`:294`（`health_percent` 浮点）；`scenes/manager/item_weight_manager.gd:52`（`DEFENSE` 标签权重 0）、`:150-153`（`max(0, defense_bonus - defense_tag_quantity*0.3)` + 低血项）。
+- Notes / 说明: 用户裁定**升级权重按 PR 保留**。最高稀有度「早期回合抽不到、随回合推进才给权重」由 `round_weight_curve_3`（回合曲线）承担，PR 未改回合边界路径（`round_weight_upgrade`）；PR 只把刷新路径从 `curve3 * refresh_mult`（`refresh_mult` 初值 0、`*=1.1` 恒 0 → 稀有档归零）改为 `curve3 * (1 + refresh_mult)`，故刷新次数也会额外抬升稀有档（且无上限）。防御类由 `max(0, defense_bonus - 0.3×拥有数)` 随获取数量衰减回基准；PR 未改 `item_weight_manager.gd`（与 main 零差异），仅令低血旁路 `(2+now_round)*refresh_mult` 从恒 0 变为生效——该项是加法且与拥有数量无关。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Coop] 命中预测二次乘算与强制断线重复信号（PR #7 合并后修复）
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:2041-2043,2251-2253,5831-5836`（`cfg.resolved_damage` 已含 `global_hurt_damage`+前置修饰）、`:8626-8633`（`_get_predicted_enemy_damage` 再乘一次 `global_hurt_damage`）、`:8658-8666`（`_predict_enemy_death`）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_enet_peer.gd:38-46,127-130`（`_disconnect_peer(force=true)` 手动调用 + 原生 `peer_disconnected` 各排一次事件）；`script/health_component.gd:213-240`。
+- Notes / 说明: ① 客机命中预测把已求值的 `resolved_damage` 又乘一次 `global_hurt_damage` → 镜像血条/致死预测偏大、与飘字不一致；改为 `_predict_enemy_death` 直接取 `maxi(0, damage)`（入参已是最终值）。② ENet 强制断开时断线事件在同一 poll 入队两次 → `peer_disconnected` 双发；`_poll` 断线分支先判 `_admitted.has(id)`、出表即视为重复跳过。③ `resolve_damage` 补 `damage_data==null or stats==null` 空守卫，`_resolve_damage` 对 `owner.get_path()` 判空，防 RPC 路径崩溃。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14

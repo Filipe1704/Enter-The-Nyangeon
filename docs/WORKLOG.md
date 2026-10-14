@@ -271,3 +271,12 @@
 - Summary / 改动摘要: 补交通用注册、页面工厂、交互恢复、状态栏和会话生命周期；不纳入独立附属实现、设计草案与开发配置。
 - Docs synced / 文档同步: `docs/COOP_EXTENSION_API.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/PROJECT_MAP.md`、`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
 - Verified / 验证: 21 项契约与 17 项官方菜单检查通过，测试只安装官方联机包。
+
+## 2026-10-14 — 升级权重判定与 PR #7 合并后联机修复
+- Correction / 修正: 「最高稀有度应完全由回合推进、刷新不应抬升；防御低血加成应随拥有数量归零」的审计判断 → 用户裁定按 PR 保留（`round_weight_curve_3` 回合曲线为主导，刷新额外抬升稀有档；防御低血旁路生效且不随拥有数量归零）（来源：user）。
+- Files / 涉及文件: `scenes/manager/upgrade_manager.gd`、`scenes/manager/upgrade_manager.tscn`、`scenes/manager/item_weight_manager.gd`（仅记录，未改）；`script/health_component.gd`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_enet_peer.gd`（A/B/D 修复）；`.gitattributes`。
+- Summary / 改动摘要: 合并 PR #7（`Merge PR #7: fix: 完善存档与 Mod 管理、联机同步及通用拓展接口`）后补 follow-up：修正客机命中预测二次乘算、ENet 强制断开重复 `peer_disconnected`，并为 `resolve_damage` 补空守卫；`.gitattributes` 为 `ETN_*localization.csv` 声明 CRLF 并规范工作区行尾。
+- Reason / 原因: 用户对升级权重（最高稀有度/防御类）的原意作出裁定并按 PR 保留；审计发现的联机边界问题经用户同意修复。
+- Systems / 影响系统: 升级权重（`upgrade_manager`/`item_weight_manager`）、联机命中预测与断线、伤害求值守卫、本地化行尾。
+- Docs synced / 文档同步: `docs/LEARNINGS.md` 新增 `[Upgrade]` 与 `[Coop]` 两条；`.gitattributes` 的 CRLF 规则落地使 `docs/CONVENTIONS.md` §6.1 描述成立。
+- Verified / 验证: 合并后本机跑通 Python 单测 16/16、persistence 7/7、support 4/4、upgrade/mod-install `failures=0`、UI/UX 133/0、export boundary EXIT=0；`tests/check_localization.py` 5/5 PASS。A/B/D 脚本经 `find_symbols`/`--check-only` 解析无语法错误；伤害契约与联机恢复回归由用户在具备 pwsh 的环境复核。
