@@ -92,6 +92,7 @@ func _ready() -> void:
 	_scan_content()
 	_apply_patches()
 	_inject_supports()
+	Game.load_playerdata()
 	_run_entry_scripts.call_deferred()
 	_index_characters()
 	GameEvents.player_card_id.connect(_on_player_card_id)

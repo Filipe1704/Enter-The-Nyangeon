@@ -17,7 +17,25 @@ var support_data: Dictionary
 var now_support: SupportCard
 var now_lv: int
 
-var game_support: SupportCard
+var selected_support_id: String = "null"
+var game_support: SupportCard:
+	set(value):
+		game_support = value
+		selected_support_id = value.support_id if value != null else "null"
+
+# 资源仅在运行时解析。缺 Mod 的进度及选择 ID 保留，重新启用后可恢复。
+func restore_progress(entries: Dictionary, selected_id: String) -> void:
+	support_data = SceneData.support_progress(entries)
+	for id in support_data:
+		var card: SupportCard = null
+		for candidate in support_pool:
+			if candidate != null and candidate.support_id == id:
+				card = candidate
+				break
+		support_data[id]["resource"] = card
+	var selected = support_data.get(selected_id, {}).get("resource")
+	game_support = selected if selected is SupportCard else null_support
+	selected_support_id = selected_id
 
 @onready var now_exp: int:
 	set(v):
@@ -54,7 +72,9 @@ func _ready() -> void:
 
 func reset_game_support():
 	if game_support == null or !support_data.has(game_support.support_id):
+		var remembered := selected_support_id
 		game_support = null_support
+		selected_support_id = remembered
 
 func game_add_support():
 	if game_support == null or game_support.support_id == "null":
