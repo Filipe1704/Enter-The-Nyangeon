@@ -134,7 +134,7 @@ func apply_melee_damage_data():
 func add_damage_data():
 	if !body_group.is_empty():
 		SoundManager.play_sfx("HurtSounds2")
-		ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", global_position])
+		ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", global_position])
 		for i in body_group:
 			if i == null or not is_instance_valid(i):
 				continue
@@ -165,7 +165,7 @@ func _on_area_2d_body_entered(body):
 		GameEvents.emit_player_melee_hit_enemy(body)
 		body.emit_signal("is_hurt")
 		SoundManager.play_sfx("HurtSounds2")
-		ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", global_position])
+		ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", global_position])
 	
 	if body.is_in_group("Summoned"):
 		
@@ -175,4 +175,4 @@ func _on_area_2d_body_entered(body):
 		
 		body.stats.emit_signal("is_hurt")
 		SoundManager.play_sfx("HurtSounds2")
-		ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", global_position])
+		ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", global_position])

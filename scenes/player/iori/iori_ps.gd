@@ -81,7 +81,7 @@ func _keep_foreign_callbacks(data: DamageData, parent_bullet: Node) -> void:
 func shoot_bullet(bullet_body: Node2D):
 	if !bullet_group.has(bullet_body):
 		SoundManager.play_sfx("HurtSounds2")
-		ExtensionHooks.notify(ExtensionHooks.on_hit_sfx, ["HurtSounds2", bullet_body.global_position])
+		ExtensionHooks.notify_named("on_hit_sfx", ["HurtSounds2", bullet_body.global_position])
 		add_flash(bullet_body)
 		_ious_parent_bullet = bullet_body
 		var arc_rad = deg_to_rad(30)

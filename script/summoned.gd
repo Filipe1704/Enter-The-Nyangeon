@@ -41,12 +41,12 @@ func _ensure_player() -> Node:
 func _ready():
 	player = PlayerRef.resolve(self)
 	_setup_level_display()
-	ExtensionHooks.notify(ExtensionHooks.on_summoned_spawned, [self, str(scene_file_path)])
+	ExtensionHooks.notify_named("on_summoned_spawned", [self, str(scene_file_path)])
 
 func idle_state():
 	reset_physics_interpolation()
 	if is_idle == 0:
-		ExtensionHooks.notify(ExtensionHooks.on_summoned_despawned, [self])
+		ExtensionHooks.notify_named("on_summoned_despawned", [self])
 	self_is_idle.emit()
 	visible = false
 	global_position = Vector2(10000, -10000)
@@ -89,7 +89,7 @@ func _at_max_level() -> bool:
 func add_summon_exp(amount: int, source_id := &"", damage_add_override: int = 0) -> Dictionary:
 	if amount <= 0 or stats == null or not stats.level_enabled:
 		return {}
-	if ExtensionHooks.intercept(ExtensionHooks.summoned_upgrade_interceptor, [self, amount, source_id, damage_add_override]):
+	if ExtensionHooks.intercept_named("summoned_upgrade_interceptor", [self, amount, source_id, damage_add_override]):
 		return {}
 	var gained: int = 0
 	while gained < amount:
@@ -125,7 +125,7 @@ func set_summon_level(level: int, source_id := &"") -> Dictionary:
 	if target == summon_level:
 		return get_summon_level_state()
 	var diff: int = target - summon_level
-	if ExtensionHooks.intercept(ExtensionHooks.summoned_upgrade_interceptor, [self, diff, source_id, 0]):
+	if ExtensionHooks.intercept_named("summoned_upgrade_interceptor", [self, diff, source_id, 0]):
 		return {}
 	summon_level = target
 	summon_exp = 0

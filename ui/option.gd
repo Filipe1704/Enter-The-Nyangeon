@@ -9,7 +9,7 @@ var on_option: bool = false
 
 func _ready():
 	GameEvents.menu_button.connect(menu_button_press)
-	ExtensionHooks.notify(ExtensionHooks.populate_option_pages, [menu_box, option_button_box])
+	ExtensionHooks.notify_named("populate_option_pages", [menu_box, option_button_box])
 	menu_box.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
 	for page in menu_box.get_children():
 		page.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED

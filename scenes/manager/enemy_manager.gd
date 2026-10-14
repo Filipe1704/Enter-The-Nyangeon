@@ -121,7 +121,7 @@ func round_num_changed(now_round_num: int):
 
 func round_enemy_spawn_start():
 	# 联机：客机不本地刷怪（敌人由 host 权威 + 镜像）
-	if ExtensionHooks.intercept(ExtensionHooks.round_enemy_spawn_gate, []):
+	if ExtensionHooks.intercept_named("round_enemy_spawn_gate", []):
 		return
 	var num = enemies_spawn_group[group_num].size() - 1
 	spawn_num = randi_range(0, num)

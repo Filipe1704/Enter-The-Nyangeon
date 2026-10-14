@@ -95,8 +95,8 @@ func _on_round_start():
 	selected_cost_add = 0
 	
 	# 联机：升级页点「继续」后由 mod 自行把过场推进到黑屏并保持；此处跳过前半封面，只播后半揭示
-	if ExtensionHooks.intercept(ExtensionHooks.round_upgrade_cover_hold, []):
-		ExtensionHooks.notify(ExtensionHooks.on_round_upgrade_cover_consumed, [])
+	if ExtensionHooks.intercept_named("round_upgrade_cover_hold", []):
+		ExtensionHooks.notify_named("on_round_upgrade_cover_consumed", [])
 	else:
 		await get_tree().create_timer(0.1, true, false, true).timeout
 		Transition.play_left_start()
@@ -125,7 +125,7 @@ func _on_round_end():
 		return
 	
 	# 联机客机：清场后不本地转场/升级（等 host 广播 round_upgrade 再展示）
-	if ExtensionHooks.intercept(ExtensionHooks.round_end_proceed_gate, []):
+	if ExtensionHooks.intercept_named("round_end_proceed_gate", []):
 		return
 	
 	if now_round_num >= max_round and !PlayerData.game_mode.has("endless"):

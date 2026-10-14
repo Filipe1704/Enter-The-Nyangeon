@@ -50,4 +50,4 @@ func _cast_ring():
 	ring.source_id = item_id
 	ring.global_position = doll.global_position
 	ring.active_state()
-	ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [ring])
+	ExtensionHooks.notify_named("on_visual_activated", [ring])

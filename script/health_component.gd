@@ -29,7 +29,7 @@ func _is_friendly_fire(damage_data: HealthChangeData) -> bool:
 	return not Faction.hostile_to(damage_data.source_type, my_team)
 
 func take_damage(damage_data: HealthChangeData, bypass_hook: bool = false, suppress_feedback: bool = false):
-	if not bypass_hook and ExtensionHooks.intercept(ExtensionHooks.enemy_damage_interceptor, [damage_data, owner]):
+	if not bypass_hook and ExtensionHooks.intercept_named("enemy_damage_interceptor", [damage_data, owner]):
 		return
 	_hit_depth += 1
 	_take_damage_internal(damage_data, suppress_feedback)
@@ -76,7 +76,7 @@ func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: boo
 
 	# 归属压制：本次伤害归属他人（联机客机）时，authority 端不发射本地 enemy_*_proc 全局信号；
 	# 由 mod 回传给归属端在那边发射（避免 host 道具/PS 被客机伤害误触发）
-	var suppress_proc: bool = suppress_feedback or ExtensionHooks.intercept(ExtensionHooks.enemy_proc_owner_suppress, [damage_data])
+	var suppress_proc: bool = suppress_feedback or ExtensionHooks.intercept_named("enemy_proc_owner_suppress", [damage_data])
 
 	var friendly := _is_friendly_fire(damage_data)
 	if friendly:

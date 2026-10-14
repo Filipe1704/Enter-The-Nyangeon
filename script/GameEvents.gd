@@ -183,7 +183,7 @@ signal gamemode_conflicting(gamemode_group: Array)
 
 func change_scene(path: String, player: String):
 	clear_slow()
-	if ExtensionHooks.intercept(ExtensionHooks.change_scene_gate, [path, player]):
+	if ExtensionHooks.intercept_named("change_scene_gate", [path, player]):
 		return
 	change_scene_requested.emit(path, player)
 	var tree := get_tree()
@@ -255,7 +255,7 @@ func emit_round_upgrade_closing():
 	round_upgrade_closing.emit()
 
 func emit_round_upgrade_end():
-	if ExtensionHooks.intercept(ExtensionHooks.round_upgrade_end_gate, []):
+	if ExtensionHooks.intercept_named("round_upgrade_end_gate", []):
 		return
 	round_upgrade_end.emit()
 
@@ -587,7 +587,7 @@ func  emit_floor_layer_group_add(floor_node: Node):
 	floor_layer_group_add.emit(floor_node)
 
 func emit_game_over(player_dead: bool):
-	if ExtensionHooks.intercept(ExtensionHooks.game_over_gate, [player_dead]):
+	if ExtensionHooks.intercept_named("game_over_gate", [player_dead]):
 		return
 	clear_slow()
 	game_over.emit(player_dead)

@@ -70,15 +70,15 @@ func _ready():
 
 # 联机会话判定（未注入 mod 时始终 false → 单机原行为）
 func _is_lan_session() -> bool:
-	return ExtensionHooks.is_lan_session.is_valid() and bool(ExtensionHooks.is_lan_session.call())
+	return ExtensionHooks.intercept_named("is_lan_session", [])
 
 # 是否禁止本端自发 emit_round_end（客机由 host 广播 round_end）
 func _round_end_emit_blocked() -> bool:
-	return ExtensionHooks.intercept(ExtensionHooks.round_end_emit_gate, [])
+	return ExtensionHooks.intercept_named("round_end_emit_gate", [])
 
 # 是否禁止本端本地触发 FEVER/rage（客机由 host 广播 fever_time_start / rage buff）
 func _fever_time_handled() -> bool:
-	return ExtensionHooks.intercept(ExtensionHooks.fever_time_gate, [])
+	return ExtensionHooks.intercept_named("fever_time_gate", [])
 
 func game_ui_visible(now_visible: bool):
 	visible = now_visible

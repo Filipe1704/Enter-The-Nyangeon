@@ -33,7 +33,7 @@ func add_poison_ring():
 			})
 			ring.global_position = doll.global_position
 			ring.active_state()
-			ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [ring])
+			ExtensionHooks.notify_named("on_visual_activated", [ring])
 	else:
 		var ins = poison_ring.instantiate()
 		get_tree().get_first_node_in_group("SELayer").add_child(ins)
@@ -48,7 +48,7 @@ func add_poison_ring():
 
 		ins.global_position = doll.global_position
 		ins.active_state()
-		ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [ins])
+		ExtensionHooks.notify_named("on_visual_activated", [ins])
 		ring = ins
 
 func update_poison_damage():
