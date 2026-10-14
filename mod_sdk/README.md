@@ -260,3 +260,17 @@ members = Array[String](["my_mod_hero", "my_mod_leader"])
 - 打包：`build_mod.ps1`（ModPack 导出）会把 `res://mods/**` 的导入产物（含 `.translation`）打进 pck；若用 `mod_sdk/pack_mod.gd` 原样打包，须把 `.translation` 一并放进源目录（**不做运行时 CSV 解析**）。
 - ⚠ **只保证新增键**：mod 与本体若有**同 locale 同 key**，Godot `TranslationDomain` 将 `Translation` 存于 `HashSet`，同名时按迭代序取（`score >= best_score`），**谁胜不确定**——不要依赖 mod 覆盖本体既有文案。
 - `add_translation` / `register_translation*` **不会**触发 `NOTIFICATION_TRANSLATION_CHANGED`：必须在 `entry`（早于菜单构建）注册；游戏中途注册不会刷新已建 UI。
+
+## 16. 本地开发：项目根 `mods/` + `_mod_template` + `build_local_mod.ps1`
+
+- 项目根 `mods/`（gitignore 的 `/mods/`）是本仓库的「本地 mod 编辑器镜像」：放这里的 mod 源会被编辑器导入（生成 `.uid`）但不入库；运行时 `ModManager` 只扫 `user://mods/`（桌面另扫 exe 同目录 `mods/`），**不扫** `res://mods/`，故需打包安装后才生效。
+- `mods/_mod_template/` 是**可复制的 mod 角色骨架**：复制整目录 → 改名为 `<mod_id>` → 全局替换 `_mod_template`，即得 `PlayerCard`/`PSCard` + 战斗场景（复制自 `momoi.tscn`）+ 选人卡 + 社团卡。用法见 `mods/_mod_template/README.md`；角色制作完整流程见 `CHARACTER_GUIDE.md`。
+- `mods/doom_slayer_izzy/` 是由该骨架生成的示例 mod（角色 `IZZY`）。
+- `build_local_mod.ps1`：跳过工程副本，直接用本体工程 + `pack_mod.gd`(PCKPacker) 把 `mods/<id>/**` 打成 pck；`-Install` 复制 `mod.json`(+`icon.png`)+pck 到 `user://mods/<id>`。pck 输出到 `mods/_build/`（落在 gitignore 的 `/mods/` 下）。
+
+```powershell
+.\mod_sdk\build_local_mod.ps1 -ModId <mod_id> -Install   # 重启游戏生效
+```
+
+- **边界**：`pack_mod` 原样打包，**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）；自带贴图请走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
+- 注意：`build_coop_mod.ps1` 假设源与镜像目录不同（源在 `mod_sdk/coop_mod/mods/`）；源直接放项目根 `mods/` 时它会镜像自拷贝报错，这类 mod 用 `build_local_mod.ps1`。

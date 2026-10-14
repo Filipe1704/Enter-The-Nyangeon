@@ -2131,3 +2131,39 @@
 - Notes / 说明: ①「下拉 + 手输」用 Godot 原生 `PROPERTY_HINT_ENUM_SUGGESTION`（`@export_custom`）——`@export_enum` 只能下拉、不能输入（`core/object/property_info.h` 列有 `PROPERTY_HINT_ENUM_SUGGESTION`）。② `_scan_content()`（`mod_manager.gd:87`）早于 `_run_entry_scripts`（`:90`），mod 在 entry 里注册的类型扫描期不可见 → 合成商店卡只存 `weapon_type` code，名称/图标延迟到 `character_shop_card.get_card()` 用注册表解析（卡片自带非空优先）。③ `register_weapon_type` 的 code 仅允许字母/数字/下划线/短横线（防路径穿越），图标只从“已注册 `icon_path`”加载；内置图标目录固定 `res://ui/weapon/<code>_icon.png`。④ 未知类型：名称回退原 code、图标 null，不崩。⑤ 编辑器 inspection：`@export_custom` 不做语法校验，但 hint 简单无碍。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
+
+### [Mod] 角色 id 必须 `<mod_id>_` 前缀；想「无后缀」只能把 mod_id 取短
+- Evidence / 证据: `script/mod_manager.gd:930-937`（`if not id.begins_with(mod_id + "_"): return "缺少 mod 前缀..."`）
+- Notes / 说明: 自动注册 id 一律要求以 `<mod_id>_` 开头，否则被拒、角色不出现（非致命：push_warning + 跳过）。若想让角色 id 无额外后缀（如 `foo_izzy`），须令 `mod_id=foo` + 角色 id=`foo_izzy`；`mod_id=foo_izzy` + 角色 id=`foo_izzy` 不合法。`overrides` 可绕过该前缀校验（`_validate_id` 开头 `if overrides.has(id): return ""`），但语义不符且丧失 reserved 冲突保护，勿用。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-14
+
+### [Mod] 复制本体角色场景做 mod 角色：删 `[gd_scene]` 的 uid，只改 3 处引用
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_izzy.tscn:1`（`[gd_scene format=3]` 去 uid）、`:4`（`player_card`→mod `.tres`）、`:7`（`ps_card`→mod PS `.tres`）、`:29`（PS 节点→mod `_ps.tscn`）；游戏进程实测 `get_characters()` 含该角色、`mounted=true`、无 `player_card 对齐` 告警。
+- Notes / 说明: 场景 `uid` 全局唯一，复制必须删（编辑器重分配）；指向**新建** mod 资源的 `ext_resource` 只写 `path`（不写 uid），指向本体资源的保留原 uid/path。节点 `unique_id` 是场景内唯一，整树复制安全。PS 节点由 `script/player.gd:169-186` 按**方法名**扫描子节点定位 → 节点名可任意改（如 `MomoiPS`→`PS`）。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Mod] mod 源放项目根 `mods/` 时别用 `build_coop_mod.ps1`（会镜像自拷贝）
+- Evidence / 证据: `mod_sdk/build_coop_mod.ps1:51-67`（`$mirror = <Project>/mods/<ModId>`；Source 与 mirror 同为项目根 `mods/<id>` 时 `Copy-Item` 自我复制报错）；`mod_sdk/build_local_mod.ps1`（PCKPacker 直打 + `-Install`）
+- Notes / 说明: `build_coop_mod.ps1` 假设「源在 `mod_sdk/coop_mod/mods/`、镜像在项目根 `mods/`」两者不同；源若直接放项目根 `mods/`，Source==mirror → `.uid` 同步阶段自我复制报错。改用 `build_local_mod.ps1`（直接 `--script pack_mod.gd` 打 `mods/<id>/**`，无需工程副本/镜像），pck 输出 `mods/_build/`（落在 gitignore 的 `/mods/` 下，保持 git 干净）。边界：PCKPacker 原样打包**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）→ 自带贴图走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Tooling] 含中文的 `.ps1` 必须存为 UTF-8 **带 BOM**（PS 5.1 否则按 ANSI 解析）
+- Evidence / 证据: `mod_sdk/build_local_mod.ps1` 无 BOM 时 `Write-Host "已生成：$pck（...）"` 的中文引号被 ANSI 撕裂 → `TerminatorExpectedAtEndOfString`；`mod_sdk/build_coop_mod.ps1`/`setup_mod_project.ps1` 均为 UTF-8 BOM。
+- Notes / 说明: Windows PowerShell 5.1 读无 BOM 脚本按系统 ANSI(GBK)。写文件用 `[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($true)))` 生成 BOM。同理：从 PS 读含中文的 JSON 用 `[IO.File]::ReadAllText(path,[Text.Encoding]::UTF8)`，别用 `Get-Content`（默认 ANSI，会把合法 JSON 读坏报错）。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Editor] 在 `mods/` 下新增文件后，编辑器 Errors 面板可能残留 stale parse error（游戏进程正常）
+- Evidence / 证据: 新增 mod 文件后编辑器报 `Function "_seed_weapon_types()" not found in base self`（`res://script/mod_manager.gd:86`），但磁盘 `mod_manager.gd:1184` 有该定义；从编辑器运行游戏时 `/root/ModManager` 存在、`doom_slayer_izzy` `mounted=true`、角色注册成功。
+- Notes / 说明: 属编辑器脚本重载缓存滞后（与 AGENTS 所述新增 autoload 的静态分析滞后同类）；重启编辑器可清。判定以「磁盘 grep + 游戏日志/`game_eval`」为准，勿据编辑器残留报错否定改动。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Mod] 聊天窗释放鼠标须按「当前阶段」还原，不能写回过期快照
+- Evidence / 证据: `mods/etn_coop/ui/coop_chat.gd` 与 `mod_sdk/coop_mod/mods/etn_coop/ui/coop_chat.gd`（`_acquire_controls` 记 `_prev_mouse_mode` + 新增 `_prev_overlay_active`；`_release_controls` 仅当 `_pointer_overlay_active()` 与捕获时相同才 `Input.mouse_mode = _prev_mouse_mode`；新增 `_game_over_active` 与 `_pointer_overlay_active()`）；阶段写指针者 `scenes/crosshair/crosshair.gd:33-39`（`round_upgrade`→VISIBLE、`round_start`→CONFINED_HIDDEN）、`ui/game_over_page.gd:105`（VISIBLE）、`scenes/manager/upgrade_manager.gd:60-62`。
+- Notes / 说明: **现象**（user）：升级页（鼠标可见）里用聊天窗发送消息后鼠标被隐藏。**根因**：`_release_controls` 无条件写回**开聊瞬间**的快照 `_prev_mouse_mode`，而快照会随游戏阶段过期——游玩期开聊捕获 `CONFINED_HIDDEN`，随后回合结束、升级页由 `crosshair` 置 `VISIBLE`，发送时又写回过期的 `CONFINED_HIDDEN`；反向（升级页开聊 → 回到游玩）同理会写出错误值。**修法**：释放时仅当「当前是否处于可见指针覆盖层阶段」（`_upgrade_active`/`_game_over_active`）与捕获时一致，才写回快照；阶段已变则**不覆盖**（`crosshair`/结算页等当前持有者已写好正确模式）。纯游玩期发送仍还原为游玩捕获模式（隐藏），符合既有的「发送即释放、游玩态指针隐藏属预期」约定（见 2026-10-07 同主题条目）。不硬编码任何鼠标常量；两处副本同改。验证：`godot-ai_script_patch` 对镜像 `res://mods/etn_coop/ui/coop_chat.gd` 解析 `diagnostics=[]`（无语法错误），两副本 `MD5` 一致。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
