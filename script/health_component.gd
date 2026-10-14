@@ -211,6 +211,9 @@ func _raw_damage(damage_data: HealthChangeData) -> int:
 # 只计算本次命中：不扣血、不发结算 proc、不执行 on_damage_dealt。
 # 客机按命中时自己的构筑及目标快照计算数值，host 仍负责存活/阵营/无敌门控与最终扣血。
 func resolve_damage(damage_data: HealthChangeData) -> int:
+	if damage_data == null or stats == null:
+		damage_multiplier = 1.0
+		return 0
 	if damage_data.is_heal or is_invincible or _is_friendly_fire(damage_data):
 		damage_multiplier = 1.0
 		return 0
@@ -226,10 +229,11 @@ func _resolve_damage(data: HealthChangeData, raw: int, emit_proc: bool, apply_mo
 	var is_true: bool = data.flags.has(GameTags.TRUE_DAMAGE)
 	var result: int = max(1, raw) if is_true else max(1, raw * stats.global_hurt_damage)
 	var original_modifiers: Array[Callable] = data.damage_modifier.duplicate()
+	var body_path: NodePath = owner.get_path() if owner != null else NodePath()
 	if apply_modifiers and not is_true:
-		GameEvents.emit_enemy_damage_calculating(result, data, owner.get_path())
+		GameEvents.emit_enemy_damage_calculating(result, data, body_path)
 	if emit_proc:
-		GameEvents.emit_enemy_damage_taken(result, data, owner.get_path())
+		GameEvents.emit_enemy_damage_taken(result, data, body_path)
 	if not is_true:
 		for modifier in data.damage_modifier:
 			result = modifier.call(owner, result)

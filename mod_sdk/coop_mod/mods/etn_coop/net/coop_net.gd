@@ -8663,7 +8663,9 @@ func _predict_enemy_death(enemy: Node, damage: int, net_id: int) -> void:
 	var stats = enemy.get("stats")
 	if stats == null:
 		return
-	var predicted_damage: int = _get_predicted_enemy_damage(enemy, damage)
+	# 入参 damage 已经是本端 resolve 后的最终伤害（含 global_hurt_damage 与前置修饰），
+	# 不能再乘一次承伤，否则镜像血条/致死预测会与飘字（用 resolved）不一致。
+	var predicted_damage: int = maxi(0, damage)
 	var predicted_hp: int = 0
 	var proxy = enemy_proxy_by_net_id.get(net_id)
 	if proxy != null and is_instance_valid(proxy) and proxy.has_method("note_predicted_damage") and proxy.get("enemy_stats") != null:

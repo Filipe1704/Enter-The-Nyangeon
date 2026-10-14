@@ -65,6 +65,10 @@ func _poll() -> void:
 				_admitted[id] = true
 				peer_connected.emit(id)
 		else:
+			# 强制断开时原生 peer_disconnected 与手动通知可能在同一 poll 各排一次事件；
+			# 先出表即视为重复，跳过以免 peer_disconnected 双发。
+			if not _admitted.has(id):
+				continue
 			_admitted.erase(id)
 			peer_disconnected.emit(id)
 
