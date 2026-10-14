@@ -1,4 +1,4 @@
-﻿extends Control
+extends Control
 
 ## 联机菜单覆盖层（option 菜单式布局：左侧 option_button 页签 + 右侧内容面板）。
 ## 页签复用 `res://ui/option_button.tscn`；颜色统一为绿色。通过 CoopNet.instance 管理连接。
@@ -152,7 +152,18 @@ func _build_room_list() -> void:
 
 func _process(_delta: float) -> void:
 	var coop = CoopNetScript.instance
-	var browsing: bool = visible and _selected_mode == CoopPanelMode.LAN \
+	# 隐藏时只补一次「停广播 + 清房间列表」，其余每帧刷新（房间列表/UPnP 提示）无意义。
+	if not visible:
+		if _browsing:
+			_browsing = false
+			if coop != null and is_instance_valid(coop):
+				coop.call("browse_lan_stop")
+			if _room_list != null:
+				for c in _room_list.get_children():
+					c.queue_free()
+				_room_keys = []
+		return
+	var browsing: bool = _selected_mode == CoopPanelMode.LAN \
 			and (coop == null or not bool(coop.is_lan_game))
 	if browsing != _browsing:
 		_browsing = browsing
@@ -315,13 +326,19 @@ func _get_nav_items() -> Array[Control]:
 			for c in _coop_option.call("get_interactive_controls"):
 				if c is Control:
 					items.append(c)
-	return items
+	var visible_items: Array[Control] = []
+	for item in items:
+		if item.is_visible_in_tree() and not (item is BaseButton and item.disabled):
+			visible_items.append(item)
+	return visible_items
 
 
 func _move_nav(step: int) -> void:
 	var items: Array[Control] = _get_nav_items()
 	if items.is_empty():
 		return
+	# 页签切换后条目数可能变少，先夹取索引，避免 items[nav_index] 越界
+	nav_index = clampi(nav_index, 0, items.size() - 1)
 	_unfocus_nav(items[nav_index])
 	nav_index = posmod(nav_index + step, items.size())
 	_focus_nav(items[nav_index])
@@ -388,6 +405,9 @@ func out_coop_selected() -> void:
 	SoundManager.play_sfx("UISounds2")
 	_close_server_submenu()
 	on_coop = false
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused != null and is_ancestor_of(focused):
+		get_viewport().gui_release_focus()
 	_set_buttons_enabled(false)
 	_play_out()
 
@@ -542,6 +562,8 @@ func _deselect_tab(tab: Node) -> void:
 
 
 func _on_menu_button(button_id: String) -> void:
+	if not on_coop:
+		return
 	if button_id == "coop_lan":
 		if _selected_mode != CoopPanelMode.LAN:
 			SoundManager.play_sfx("ButtonSounds")

@@ -46,6 +46,7 @@ const MESSAGES: Dictionary = {
 	"coop_lan_no_rooms": {"zh_CN": "未发现房间", "en": "No rooms found", "pt": "Nenhuma sala encontrada", "vi_VN": "Không tìm thấy phòng"},
 	# 版本/协议握手
 	"coop_version_mismatch": {"zh_CN": "版本不一致，无法联机", "en": "Version mismatch, cannot join", "pt": "Versão incompatível", "vi_VN": "Phiên bản không khớp"},
+	"coop_session_started": {"zh_CN": "本局已开始选人，请等待下一局后加入", "en": "Selection has started. Please join the next game.", "pt": "A seleção começou. Entre na próxima partida.", "vi_VN": "Đã bắt đầu chọn nhân vật. Hãy tham gia ván tiếp theo."},
 	"coop_status_host_version_old": {"zh_CN": "房主版本过旧，请让对方更新联机 mod", "en": "Host version is outdated; ask them to update the coop mod", "pt": "Versão do host desatualizada; peça para atualizar", "vi_VN": "Chủ phòng cũ; hãy nhờ họ cập nhật mod"},
 	"coop_status_handshake_timeout": {"zh_CN": "联机握手超时，可能版本不匹配", "en": "Handshake timed out (possible version mismatch)", "pt": "Tempo de handshake esgotado (versão incompatível?)", "vi_VN": "Quá hạn bắt tay (có thể lệch phiên bản)"},
 	# 实时战绩面板
@@ -168,7 +169,13 @@ const MESSAGES: Dictionary = {
 }
 
 
+static var _installed: bool = false
+
+
 static func install() -> void:
+	if _installed:
+		return
+	_installed = true
 	for loc in LOCALES:
 		var t := Translation.new()
 		t.locale = loc
@@ -176,4 +183,6 @@ static func install() -> void:
 			var entry: Dictionary = MESSAGES[key]
 			var text: String = str(entry.get(loc, entry.get("en", "")))
 			t.add_message(StringName(key), StringName(text))
-		TranslationServer.add_translation(t)
+		# 经 ModAPI 注册（ModManager 记账，便于统一管理与后续回收）；异常情况下退回直接注册
+		if not ModAPI.register_translation(t):
+			TranslationServer.add_translation(t)

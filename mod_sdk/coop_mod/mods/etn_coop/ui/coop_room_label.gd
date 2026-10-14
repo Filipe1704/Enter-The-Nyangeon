@@ -58,6 +58,8 @@ func _process(_delta: float) -> void:
 	var shown: bool = text != ""
 	if _panel.visible != shown:
 		_panel.visible = shown
+	if not shown:
+		return                     # 隐藏时不重排布局（省掉每帧 reset_size）
 	if _label.text != text:
 		_label.text = text
 	_fit_to_text()

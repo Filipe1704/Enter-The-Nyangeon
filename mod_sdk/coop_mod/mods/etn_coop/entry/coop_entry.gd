@@ -12,7 +12,6 @@ const NetDebugHudScript := preload("res://mods/etn_coop/ui/net_debug_hud.gd")
 const ScoreboardScene := preload("res://mods/etn_coop/ui/coop_scoreboard.tscn")
 const ChatScene := preload("res://mods/etn_coop/ui/coop_chat.tscn")
 const MenuButtonScene := preload("res://ui/menu_button.tscn")
-const OptionButtonScene := preload("res://ui/option_button.tscn")
 const CoopOptionPageScene := preload("res://mods/etn_coop/ui/coop_option_page.tscn")
 const CoopI18n := preload("res://mods/etn_coop/i18n/coop_i18n.gd")
 const MENU_FONT := preload("res://fonts/BoutiqueBitmap9x9_1.9.ttf")
@@ -35,6 +34,9 @@ func _dev_on_netcheck(lines: PackedStringArray) -> void:
 
 
 func _ready() -> void:
+	if not GameEvents.has_signal("enemy_damage_calculating"):
+		push_warning("[etn_coop] 当前联机 Mod 需要本体的前置伤害接口，请同时更新本体")
+		return
 	CoopI18n.install()
 	_coop = CoopNetScript.new()
 	_coop.name = "CoopNet"
@@ -134,23 +136,8 @@ func _populate_option_pages(menu_box: Node, button_box: Node) -> void:
 	page.name = "CoopOptionPage"
 	menu_box.add_child(page)
 
-	var btn = OptionButtonScene.instantiate()
+	var btn := ModAPI.create_option_tab("option_coop", "COOP", false)
 	btn.name = "CoopOptionButton"
-	btn.set("button_id", "option_coop")
-	var label := Label.new()
-	label.name = "coop_option"
-	label.text = "COOP"
-	label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	label.add_theme_font_override("font", MENU_FONT)
-	label.add_theme_font_size_override("font_size", 19)
-	label.add_theme_color_override("font_color", Color(0, 0, 0, 1))
-	label.add_theme_color_override("font_shadow_color", Color(1, 1, 1, 1))
-	label.add_theme_color_override("font_outline_color", Color(1, 1, 1, 1))
-	label.add_theme_constant_override("shadow_offset_x", 0)
-	label.add_theme_constant_override("shadow_offset_y", 3)
-	label.add_theme_constant_override("outline_size", 4)
-	label.add_theme_constant_override("shadow_outline_size", 2)
-	btn.add_child(label)
 	button_box.add_child(btn)
 
 	# 初始隐藏（未被选中）——option.gd 打开时依赖各页 menu_hide 状态
