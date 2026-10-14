@@ -7,6 +7,8 @@ extends Node
 ## 跨脚本访问：const Cooper = preload(...); Cooper.instance。
 
 const TransportScript := preload("res://mods/etn_coop/net/coop_network_transport.gd")
+const ExtensionsScript := preload("res://mods/etn_coop/net/coop_extensions.gd")
+var extensions = ExtensionsScript.new()
 const PlayerProxyScript := preload("res://mods/etn_coop/net/coop_player_proxy.gd")
 const EnemyProxyScript := preload("res://mods/etn_coop/net/coop_enemy_proxy.gd")
 const VisualSyncScript := preload("res://mods/etn_coop/net/coop_visual_sync.gd")
@@ -811,6 +813,8 @@ var _ako_chain_visuals: Dictionary = {}    # "peer|index" -> {"node", "owner", "
 
 
 func _ready() -> void:
+	add_child(extensions)
+	extensions.setup(self)
 	# 网络管理器常驻：选人阶段会全局暂停世界，本节点需在暂停下继续处理 RPC/握手
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	settings.load_settings()
@@ -846,6 +850,8 @@ func _notification(what: int) -> void:
 			if transport != null or is_lan_game or is_relay:
 				close_connection(true)
 		NOTIFICATION_EXIT_TREE, NOTIFICATION_PREDELETE:
+			if is_instance_valid(extensions):
+				extensions.close()
 			# 退出期只做最小释放：不跑完整复位（避免 emit/queue_free 等在销毁路径上的副作用）
 			if transport != null and transport.peer != null:
 				transport.peer.close()
@@ -1405,6 +1411,10 @@ func dev_freeze_probe() -> Dictionary:
 
 # 仅 LAN 主机播报；其它情形停止
 func _update_lan_advertise() -> void:
+	if extensions.is_active():
+		if _discovery != null:
+			_discovery.call("advertise_stop")
+		return
 	if _discovery == null:
 		return
 	if is_lan_game and not is_relay and multiplayer.is_server() and multiplayer.multiplayer_peer != null:
@@ -9302,6 +9312,8 @@ func _refresh_all_ready_tags() -> void:
 func get_room_display_text() -> String:
 	if not is_lan_game:
 		return ""
+	if extensions.is_active():
+		return tr("coop_room_ip") + " " + extensions.get_share_text()
 	if is_relay:
 		if relay_room_code != "":
 			return tr("coop_room_number") + " " + relay_room_code
@@ -9327,6 +9339,8 @@ func _public_address_text() -> String:
 
 # 供剪贴板复制：LAN=IP:端口；Relay=房间码；无会话=""
 func get_room_share_text() -> String:
+	if extensions.is_active():
+		return extensions.get_share_text()
 	if not is_lan_game:
 		return ""
 	if is_relay:
@@ -9833,10 +9847,10 @@ func _on_relay_error(message: String) -> void:
 
 # 中继建房/加入是否仍在进行中（供 UI 禁用按钮；握手完成或失败后解除）
 func is_connect_in_flight() -> bool:
-	return _relay_connect_in_flight
+	return _relay_connect_in_flight or extensions.is_preparing()
 
 
-# UI 主动结束会话时，同时取消重连并清理旧会话状态。
+# 拓展及 UI 主动结束会话：取消重连也必须释放外部组网进程。
 func close_session() -> void:
 	_abort_reconnect_for_new_session()
 	close_connection()
@@ -9856,9 +9870,16 @@ func _abort_reconnect_for_new_session() -> void:
 	_freeze_local_player_for_reconnect(false)
 
 
+# 外部连接设施故障仍由官方会话编排统一返回菜单。
+func return_to_menu_after_disconnect() -> void:
+	extensions.close()
+	_abort_reconnect_to_menu()
+
+
 func close_connection(silent: bool = false) -> void:
 	if not _reconnecting:
 		_session_generation += 1
+	extensions.close(_reconnecting)
 	if transport != null and transport.peer != null:
 		transport.peer.close()
 	transport = null

@@ -6,6 +6,9 @@ extends RefCounted
 const LOCALES: Array[String] = ["zh_CN", "en", "pt", "vi_VN"]
 
 const MESSAGES: Dictionary = {
+	"coop_status_extension_preparing": {"zh_CN": "正在准备组网…", "en": "Preparing network…", "pt": "Preparando a rede…", "vi_VN": "Đang chuẩn bị mạng…"},
+	"coop_status_extension_ready": {"zh_CN": "组网已就绪，正在建立游戏连接", "en": "Network ready; establishing game connection", "pt": "Rede pronta; conectando ao jogo", "vi_VN": "Mạng sẵn sàng; đang kết nối trò chơi"},
+	"coop_status_extension_failed": {"zh_CN": "组网失败，请检查连接设置", "en": "Network setup failed; check connection settings", "pt": "Falha na rede; verifique as configurações", "vi_VN": "Thiết lập mạng thất bại; kiểm tra cài đặt"},
 	"coop_title": {"zh_CN": "联机", "en": "CO-OP", "pt": "CO-OP", "vi_VN": "CO-OP"},
 	"coop_mode_lan": {"zh_CN": "局域网", "en": "LAN", "pt": "LAN", "vi_VN": "LAN"},
 	"coop_mode_lan_label": {"zh_CN": "公网/局域网", "en": "Internet/LAN", "pt": "Internet/LAN", "vi_VN": "Internet/LAN"},
