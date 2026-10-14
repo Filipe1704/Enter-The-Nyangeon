@@ -2431,3 +2431,9 @@
 - Notes / 说明: ① `3e21ac0` 全局开启物理插值后，凡「由 `_process` 每帧写自身 transform」的视觉节点都须关插值（`CONVENTIONS.md:102` 规则①），否则插值会在物理 tick 间把它渲染在上一次位置 → 准星/指示器滞后、与真实瞄准点错位；该提交漏了准星、Momoi EX 指示器、交互气泡、serina aura、救生衣护盾。② `SceneTree.physics_interpolation` 可在运行期安全赋值，故做成 Graphics 设置项、默认关（迁移期仍可能有个别视觉错位），无需重启；用户 2026-10-14 裁定默认关。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-14
+
+### [Render] 物理插值开启时射击特效“频闪”——调查结论（暂不修，保留开关）
+- Evidence / 证据: 现象（user）：开插值后玩家/炮塔开火时枪口火焰、子弹烟、子弹“频闪（一闪一闪）/偏移”，关闭插值即消失。尝试 B（射击栈 FX 根 `physics_interpolation_mode=OFF` + `turret_summoned._shoot_bullet` 由 `call_deferred` 改物理 tick 内直接调用）**实测无效**；未验证 A（射击栈 `GPUParticles2D` 转 `CPUParticles2D`）。Godot 4.7 文档：2D 物理插值只支持 `CPUParticles2D`、GPU 粒子不插值；物理 tick 外写被插值对象 transform 会 jitter。
+- Notes / 说明: 根因**未定位**。处理=保留 `Game.physics_interp` 设置项（默认关，Graphics 页 `RowPhysicsInterp` 可开，见 `9ffece1`），由玩家自行取舍；后续若要根治，优先评估 A（转 `CPUParticles2D`，射击栈粒子量小、代价可忽略）。**勿重复 B**。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
