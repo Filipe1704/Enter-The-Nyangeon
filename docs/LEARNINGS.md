@@ -2419,3 +2419,15 @@
 - Notes / 说明: 原场景动画可能重新启用碰撞；只在生成时禁用形状不足以隔离远端伤害。复制材质与动画库后过滤方法/音频及碰撞/计时器/Label 轨道，避免 seek 改动拥有者的共享材质。远端绕行和护盾/触发动画来自拥有者快照，不能依赖已剥离的 EquipItem 脚本。
 - Source / 来源: code
 - Date / 日期: 2026-10-14
+
+### [Combat] `PlayerRef.ensure` 形参不能用强类型 `Node`：已释放实例会在入参检查处就崩
+- Evidence / 证据: `script/player_ref.gd:27`（`static func ensure(from: Node, cached: Variant)`）；崩溃点 `script/summoned.gd:38`（`player = PlayerRef.ensure(self, player)`），经 `script/summoned_follower.gd:146 get_direction_to_player()` 触发，报 `MobSummoned._ensure_player: Invalid type in function 'ensure' in base 'GDScript'. The Object-derived class of argument 2 (previously freed) is not a subclass of the expected argument class.`，游戏开局即 `game_status.status=break`（`can_debug=false`，无法继续）。
+- Notes / 说明: `PlayerRef` 收口（2026-10-09 条目）只防了「读属性时 previously freed」，漏了「把已释放实例当实参传给强类型形参」——Godot 在**进入函数前的入参类型检查**就抛错，函数体内的 `is_instance_valid(cached)` 根本执行不到。修法：`cached` 改弱类型 `Variant`，但**必须先判 `is_instance_valid` 再判类型**——写成 `cached is Node and is_instance_valid(cached)` 时，`cached is Node` 会在已释放实例上先抛 `Left operand of 'is' is a previously freed instance.`，函数体内的判定同样执行不到；正确顺序为 `is_instance_valid(cached) and cached is Node and cached.is_inside_tree()`（`is_instance_valid` 对已释放实例安全），一处收口即覆盖全部 65 处调用点。通用：任何「接收可失效对象缓存」的工具函数，形参都别用具体 Object 类型，一律收成 `Variant` 再运行期校验。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Render] 2D 物理插值改为设置项（默认关）；逐帧驱动视觉须关插值（`3e21ac0` 遗漏项）
+- Evidence / 证据: `script/Game.gd`（`var physics_interp: bool = false`、`apply_physics_interp()` 运行期设 `get_tree().physics_interpolation`；`config.ini` 的 `[game] physics_interp`）；`ui/game_option.tscn` / `script/game_option.gd`（Graphics 页开关 `%PhysicsInterp`，移动端隐藏）；`scenes/crosshair/crosshair.gd:_ready`、`scenes/player/momoi/momoi_ex_range.gd:_ready`、`scenes/manager/interact_prompt.gd:_ready`、`scenes/player_support/serina/serina_as.gd:_on_ready`（`aura`）、`scenes/update_item/life_jacket.gd:_on_equip`（`Node2D2`）均设 `physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF`。
+- Notes / 说明: ① `3e21ac0` 全局开启物理插值后，凡「由 `_process` 每帧写自身 transform」的视觉节点都须关插值（`CONVENTIONS.md:102` 规则①），否则插值会在物理 tick 间把它渲染在上一次位置 → 准星/指示器滞后、与真实瞄准点错位；该提交漏了准星、Momoi EX 指示器、交互气泡、serina aura、救生衣护盾。② `SceneTree.physics_interpolation` 可在运行期安全赋值，故做成 Graphics 设置项、默认关（迁移期仍可能有个别视觉错位），无需重启；用户 2026-10-14 裁定默认关。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14

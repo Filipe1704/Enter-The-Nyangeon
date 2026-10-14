@@ -11,6 +11,11 @@ extends Node2D
 @onready var marker_2d_4 = $Marker2D4
 
 
+func _ready() -> void:
+	# 朝向/标记由 _process 每帧跟随鼠标写入，属"逐帧驱动视觉"，须关物理插值。
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 func _process(delta):
 	
 	look_at(get_global_mouse_position())

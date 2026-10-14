@@ -11,6 +11,9 @@ var x_movement: float
 var y_movement: float
 
 func _ready():
+	# 位置由 _process 每帧跟随鼠标/摇杆写入，属"逐帧驱动视觉"，须关物理插值；
+	# 否则插值会在物理 tick 间把它渲染在上一次位置 → 准星滞后于真实瞄准点。
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 	GameEvents.player_shot_position.connect(_shock)
 	GameEvents.game_over.connect(game_over_hide)

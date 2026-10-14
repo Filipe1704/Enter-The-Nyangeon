@@ -36,6 +36,10 @@ var effect_freq: int = 4
 # 受击闪白频率上限（设置项）：0=关 / 1=×4间隔 / 2=×3 / 3=×2 / 4=×1(最高,默认)。独立于 effect_freq。
 var hit_flash_freq: int = 4
 
+# 2D 物理插值（设置项，默认关）：高刷屏下让物理体在物理 tick 间平滑、消除 judder；
+# 迁移期部分视觉仍有错位风险，故默认关，运行期经 SceneTree.physics_interpolation 生效。
+var physics_interp: bool = false
+
 var control_mode: int = 0
 
 var game_language: String
@@ -53,6 +57,8 @@ func _ready():
 	# 帧率上限由设置项（max_fps_index）决定：全平台默认 60（索引 1），0=无限制；
 	# 启用 2D 物理插值后高刷下不再需要强制对齐物理 60Hz。
 	apply_max_fps()
+	# 2D 物理插值由设置项（physics_interp）决定，全平台默认关；运行期覆写 SceneTree 属性。
+	apply_physics_interp()
 	# ModManager 挂载/注册支援后同步读档，避免旧 Resource 存档在挂载前加载失败。
 	reset_control_mode()
 	GameEvents.round_start.connect(reset_control_mode)
@@ -68,6 +74,12 @@ func apply_max_fps():
 	var idx: int = clampi(max_fps_index, 0, FPS_CHOICES.size() - 1)
 	max_fps_index = idx
 	Engine.max_fps = FPS_CHOICES[idx]
+
+# 运行期应用 2D 物理插值开关（默认关）。SceneTree 属性可在运行期安全切换。
+func apply_physics_interp():
+	var tree := get_tree()
+	if tree != null:
+		tree.physics_interpolation = physics_interp
 
 func pause_press():
 	var event = InputEventAction.new()
@@ -274,6 +286,7 @@ func save_config():
 	config.set_value("game", "resolution", resolution)
 	config.set_value("game", "vsync_mode", vsync_mode)
 	config.set_value("game", "max_fps_index", max_fps_index)
+	config.set_value("game", "physics_interp", physics_interp)
 	config.set_value("game", "game_language", game_language)
 	config.set_value("game", "damage_text_freq", damage_text_freq)
 	config.set_value("game", "effect_freq", effect_freq)
@@ -302,6 +315,7 @@ func load_config():
 	resolution = config.get_value("game", "resolution", 0)
 	vsync_mode = config.get_value("game", "vsync_mode", true)
 	max_fps_index = int(config.get_value("game", "max_fps_index", 1))
+	physics_interp = bool(config.get_value("game", "physics_interp", false))
 	game_language = config.get_value("game", "game_language", "zh_CN")
 	damage_text_freq = config.get_value("game", "damage_text_freq", 4)
 	effect_freq = config.get_value("game", "effect_freq", 4)
