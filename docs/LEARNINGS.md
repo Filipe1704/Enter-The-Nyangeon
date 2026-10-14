@@ -2372,6 +2372,7 @@
 - Source / 来源: user
 - Date / 日期: 2026-10-14
 - SUPERSEDED: 2026-10-14 用户确认本批变更尚未提交上游，联机协议由 v5 统一调整为 v4；存档格式 v3 及其他版本约定不变。
+- SUPERSEDED: 2026-10-14 用户改定本体发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4），联机 Mod 仍 `0.1.10`；本条回滚结论仅适用于当时。（来源：user）
 
 ### [Coop/Version] 尚未提交上游的联机协议变更统一为 v4
 - Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:32`（`PROTOCOL_VERSION = 4`）；上游基线 `78ed5ad` 同字段为 3。

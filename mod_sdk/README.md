@@ -297,7 +297,7 @@ members = Array[String](["my_mod_hero", "my_mod_leader"])
 
 ## 17. 命中前伤害修饰（协议 v4）
 
-2026-10-14 用户要求将发布版本恢复为本体 `v0.5.1.3` / 官方联机 `0.1.10`，尚未提交上游的协议变更统一为 v4；本节接口保留。SUPERSEDED: 本节修复原标本体 `v0.5.1.4` / 官方联机 `0.1.12` / 协议 v5，不能仅按发布版本字符串判断接口是否存在。
+2026-10-14 用户改定发布版本为本体 `v0.5.1.4` / 官方联机 `0.1.10`，尚未提交上游的协议变更统一为 v4；本节接口保留。SUPERSEDED: 期间曾回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），不能仅按发布版本字符串判断接口是否存在。
 
 自定义角色或藏品若要修改**本次伤害**，订阅 `GameEvents.enemy_damage_calculating(final_damage, damage_data, body_path)`，在其中调整目标 HealthComponent 的 `damage_multiplier` 或临时追加 `damage_data.damage_modifier`。前置阶段只负责数值计算，勿在此扣血、生成副作用或触发结算 proc。该阶段在客机预测/发送之前执行一次，临时修饰在结算后恢复，不跨穿透命中累积。
 

@@ -10,7 +10,7 @@ const CONFIG_PATH := "user://config.ini"
 var _save_store = SAVE_STORE.new()
 var _loading_playerdata := false
 
-var version_number: String = "v0.5.1.3"
+var version_number: String = "v0.5.1.4"
 
 var size_x: float = 0
 var size_y: float = 0

@@ -280,3 +280,10 @@
 - Systems / 影响系统: 升级权重（`upgrade_manager`/`item_weight_manager`）、联机命中预测与断线、伤害求值守卫、本地化行尾。
 - Docs synced / 文档同步: `docs/LEARNINGS.md` 新增 `[Upgrade]` 与 `[Coop]` 两条；`.gitattributes` 的 CRLF 规则落地使 `docs/CONVENTIONS.md` §6.1 描述成立。
 - Verified / 验证: 合并后本机跑通 Python 单测 16/16、persistence 7/7、support 4/4、upgrade/mod-install `failures=0`、UI/UX 133/0、export boundary EXIT=0；`tests/check_localization.py` 5/5 PASS。A/B/D 脚本经 `find_symbols`/`--check-only` 解析无语法错误；伤害契约与联机恢复回归由用户在具备 pwsh 的环境复核。
+
+## 2026-10-14 — 发布版本改定 v0.5.1.4 与文档锚点清理
+- Correction / 修正: 本体发布版本 `v0.5.1.3` → `v0.5.1.4`（`Game.version_number` 与三平台导出文件名同步 0.5.1.4，路径统一 `../GodotExport/`）；官方联机 Mod 仍 `0.1.10`（来源：user）。
+- Files / 涉及文件: `script/Game.gd`、`export_presets.cfg`；`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`；`docs/SYSTEMS.md`/`docs/ARCHITECTURE.md`（锚点）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（死代码注释）。
+- Summary / 改动摘要: 统一本体与导出文件名为 0.5.1.4；抽查并修正 `SYSTEMS`/`ARCHITECTURE`/coop README 的 `文件:行号` 锚点（审计 92 处、错 17 处 → 0，含 2 处越界）；给未用的 `will_enemy_hit_kill`/`_get_predicted_enemy_damage` 加 deprecation 注释；`SYSTEMS.md:227` 的 `SceneData` 字段表补 `game_support_id`；删除 6 个生成的 `tests/*.gd.uid` 并在 `.git/info/exclude` 本地忽略；删除本地 `pr-7` 分支。
+- Reason / 原因: 用户改定发布版本并采纳 H1/H2/死代码注释的审计处理。
+- Docs synced / 文档同步: 本文件、`docs/LEARNINGS.md`（`[Version]` 追加 SUPERSEDED）、`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
