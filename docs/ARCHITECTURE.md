@@ -137,6 +137,14 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - `script/projectile_spawner.gd`（`class_name ProjectileSpawner`）：把「取池/新建 → 配置 → 入树 → 激活 → 通知」收敛为 `spawn_core(...)`（位置参数、零 Dictionary 分配）。顺序语义用 `add_before_activate`/`deferred_add`/`pre_activate`(transform 后、activate 前)/`post` 复刻各生成点：`player_gun` 用 add→emit→activate；`bullet_launcher*` 用 activate→add；`bullet_launcher_2` 分支 2 用 deferred；爆炸类用 `pre_activate` 设 `hit_box_center`。`scale=Vector2.ZERO` 表示不改写缩放。`notify_local()` 供无法走 `spawn_core` 的特例（如 `self.duplicate()`）手动触发通知；`mark_remote()` 标记 mod 生成的远程视觉副本避免回环。⚠️ **顺序若为 activate→add（`add_before_activate=false`），消费方的 `active_state()` 必须在入树前可安全空转**（`@onready` 为 null、`get_path()` 无效）——统一用 `is_ready` 门（`_ready → is_on_ready → active_state`）；否则会踩「动画不播/`source_node` 空」的坑（`cross_bullet` 残留事故，见 `LEARNINGS.md` 2026-10-10）。
 - 本体生成点已统一迁移至 `ProjectileSpawner`（玩家武器/道具/PS/支援、敌人炮台、爆炸/范围伤害、`laser_launcher`/`player_laser_beam` 持久激光经 `notify_local`）。
 
+### 1.13 Coop item visuals / 联机道具表现
+
+- **显示快照（2026-10-14）**：`mod_sdk/coop_mod/mods/etn_coop/net/coop_item_state.gd:12` 采样小小凯伊的绕行进度、速度、范围和朝向，救生衣的护盾显隐，以及四种内部道具固定节点的动画状态；`sanitize` 仅保留固定道具/动画清单并校验类型、钳制数值。
+- **传输与重建**：`coop_net.gd:_send_local_player_state` 随既有玩家快照发送 `items`，房主校验后转发；`_apply_item_states` 缓存最近状态并补建缺失动态外观，`_rebuild_peer_item_visuals` 重放缓存。现有房主身份迁移路径同时迁移道具 id、外观列表与状态缓存。
+- **外观唯一性**：`coop_net.gd:_ensure_item_visual` 按 peer + item_id 复用节点，先登记 id 再等待镜像生成；重复升级更新显示状态，不重复挂载外观。
+- **瞄准与玩法隔离**：`coop_player_proxy.gd:130` 回填远端 `crosshair_pos`，菜刀支持世界原点瞄准并先应用翻面/高度再旋转。`coop_item_visuals.gd:_prepare_visual_resources` 复制材质和动画库，过滤方法、音频、碰撞、计时器和 Label 轨道，关闭 Timer.autostart；副本不运行 EquipItem 玩法脚本。
+- **兼容与验证**：玩家状态 RPC 增加道具快照，协议相对上游 v3 升为 v4，联机双方须使用配套构建；发布版本保持 `0.1.10`。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 从当前源码打包，隔离 user://，检查 LAN/Relay 双向与原点瞄准、动态范围/动画、碰撞隔离、重复升级、补建和镜像重建。
+
 ## 2. Save & config / 存档与配置
 
 ### Save: `user://PlayerData.res` (`Resource` of class `SceneData`)

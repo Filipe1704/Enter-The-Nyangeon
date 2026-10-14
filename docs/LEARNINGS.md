@@ -2407,3 +2407,15 @@
 - Notes / 说明: ① 客机命中预测把已求值的 `resolved_damage` 又乘一次 `global_hurt_damage` → 镜像血条/致死预测偏大、与飘字不一致；改为 `_predict_enemy_death` 直接取 `maxi(0, damage)`（入参已是最终值）。② ENet 强制断开时断线事件在同一 poll 入队两次 → `peer_disconnected` 双发；`_poll` 断线分支先判 `_admitted.has(id)`、出表即视为重复跳过。③ `resolve_damage` 补 `damage_data==null or stats==null` 空守卫，`_resolve_damage` 对 `owner.get_path()` 判空，防 RPC 路径崩溃。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-14
+
+### [Git/Scope] 当前分支仅保留远端道具动态表现同步与重复外观修复
+- Evidence / 证据: 用户 2026-10-14 明确要求；本地备份分支 `backup/before-items-only-20261014`；`tests/coop_item_visual_checks.gd`。
+- Notes / 说明: 本轮以 `upstream/main` 的 `78ed5ad` 重建分支，只保留菜刀瞄准回填、内部道具显示快照/驱动、外观去重/补建/重建、必要的道具缓存迁移、协议 v4 及专用回归和说明。此前本体存档、伤害、Mod 生命周期、设置页签、中继加固、通用联机拓展及分享标签等改动保存在备份分支，不属于本分支交付范围；主线已有内容保留。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Coop/Visual] 纯视觉道具动画必须隔离资源并过滤玩法轨道
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_item_visuals.gd:_prepare_visual_resources`、`coop_visual_driver.gd:apply_state`；`tests/coop_item_visual_checks.gd:_item_visual_case`。
+- Notes / 说明: 原场景动画可能重新启用碰撞；只在生成时禁用形状不足以隔离远端伤害。复制材质与动画库后过滤方法/音频及碰撞/计时器/Label 轨道，避免 seek 改动拥有者的共享材质。远端绕行和护盾/触发动画来自拥有者快照，不能依赖已剥离的 EquipItem 脚本。
+- Source / 来源: code
+- Date / 日期: 2026-10-14

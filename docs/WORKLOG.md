@@ -287,3 +287,12 @@
 - Summary / 改动摘要: 统一本体与导出文件名为 0.5.1.4；抽查并修正 `SYSTEMS`/`ARCHITECTURE`/coop README 的 `文件:行号` 锚点（审计 92 处、错 17 处 → 0，含 2 处越界）；给未用的 `will_enemy_hit_kill`/`_get_predicted_enemy_damage` 加 deprecation 注释；`SYSTEMS.md:227` 的 `SceneData` 字段表补 `game_support_id`；删除 6 个生成的 `tests/*.gd.uid` 并在 `.git/info/exclude` 本地忽略；删除本地 `pr-7` 分支。
 - Reason / 原因: 用户改定发布版本并采纳 H1/H2/死代码注释的审计处理。
 - Docs synced / 文档同步: 本文件、`docs/LEARNINGS.md`（`[Version]` 追加 SUPERSEDED）、`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 当前分支收敛为远端道具显示修复
+- Correction / 修正: 当前分支包含本体与官方联机整批修复 → 仅保留“远端道具动态表现同步与重复外观”相关改动及必要回归、说明（来源：user）。
+- Files / 涉及文件: 官方联机 `net/coop_item_state.gd`、`coop_item_visuals.gd`、`coop_net.gd`、`coop_player_proxy.gd`、`coop_visual_driver.gd`；`tests/coop_item_visual_checks.gd`、`run_coop_item_visual_checks.py`。
+- Summary / 改动摘要: 从上游 `78ed5ad` 重建，仅保留道具显示快照、菜刀瞄准、外观去重/补建/重建及道具缓存迁移；协议为 v4，Mod 版本仍为 `0.1.10`。
+- Reason / 原因: 用户明确缩小当前分支范围；原整批提交保留于 `backup/before-items-only-20261014`。
+- Systems / 影响系统: 官方联机道具纯视觉同步。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §1.13、`docs/LEARNINGS.md`、`mod_sdk/coop_mod/README.md`。
+- Verified / 验证: 独立主线候选工作区从当前源码打包，LAN / Relay 双端道具回归通过，包含房主道具缓存迁移断言；精确豁免主线缺失本地开发插件的三条加载日志及既有退出资源计数，其余 SCRIPT ERROR / ERROR 严格判失败。日志位于本地 `.godot/items_only_final/` 与 `.godot/items_only_final_relay/`。
