@@ -296,3 +296,11 @@
 - Systems / 影响系统: 官方联机道具纯视觉同步。
 - Docs synced / 文档同步: `docs/ARCHITECTURE.md` §1.13、`docs/LEARNINGS.md`、`mod_sdk/coop_mod/README.md`。
 - Verified / 验证: 独立主线候选工作区从当前源码打包，LAN / Relay 双端道具回归通过，包含房主道具缓存迁移断言；精确豁免主线缺失本地开发插件的三条加载日志及既有退出资源计数，其余 SCRIPT ERROR / ERROR 严格判失败。日志位于本地 `.godot/items_only_final/` 与 `.godot/items_only_final_relay/`。
+
+## 2026-10-15 — 合并 PR #9（远端瞄准插值与菜刀伤害数字一致）
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd`、`coop_player_proxy.gd`、`coop_net.gd`、`mod_sdk/coop_mod/README.md`、`tests/coop_item_visual_checks.gd`、`tests/coop_knife_damage_checks.gd`（含 `.uid`）、`tests/run_coop_item_visual_checks.py`、`docs/LEARNINGS.md`、`docs/SYSTEMS.md`。
+- Summary / 改动摘要: 双亲合并 PR #9（`Merge PR #9: fix(coop): 修复菜刀远端转向卡顿与双端伤害数字差异`，第二父 `0400055`）。快照缓冲 `push/sample` 新增可选 `look`，与位置共用时间戳与插值系数；`CoopPlayerProxy` 改用逐帧采样的 `render_look_position` 驱动镜像准星/身体/武器/道具。主机 `_server_enemy_hit` 从权威 `on_damage_dealt` 回调采集本次结算伤害用于飘字与归属回放，记分仍按有效扣血 `hp_before-hp_after`。新增 `tests/coop_knife_damage_checks.gd` 与 runner 的 `--damage` 选项。
+- Reason / 原因: 用户反馈远端菜刀连续转向呈台阶式卡顿；菜刀斩杀同一目标时客机显示完整伤害、主机显示剩余生命。
+- Systems / 影响系统: 官方联机远端瞄准插值、客机菜刀命中飘字/归属/记分。
+- Docs synced / 文档同步: 合并自带 `docs/LEARNINGS.md` 三条（瞄准插值、命中数字取值、PR #9 以主线契约为准）、`docs/SYSTEMS.md` §2.3 与联机菜刀瞄准段、`mod_sdk/coop_mod/README.md` 两处。
+- Verified / 验证: `python tests/run_coop_item_visual_checks.py --godot H:\Godot_v4.7-stable_win64_console.exe` 的 items / relay_items 均 PASS；加 `--damage` 后 items / relay_items 亦均 PASS。平滑探针 LAN client `mirror_hold=0.000 max_step=0.0429 max_error=0.0429`、Relay client `mirror_hold=0.042 max_step=0.0544`（阈值 hold≤0.15 / step≤0.15 / error≤0.2）；伤害用例两端一致：neutral/resistance/vulnerability=`45`、execute=`99999`（权威扣血 `50`）、ordinary_damage=`90`、ordinary_overkill=`45`（权威扣血 `30`）、execute_reset=`99999`（权威扣血 `50`），各 `COOP_ITEMS ... failures=0`。日志位于 `.godot/coop_item_visual_checks/`。
