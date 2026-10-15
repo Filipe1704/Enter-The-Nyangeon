@@ -2456,3 +2456,15 @@
 - Validation / 验证: 对齐主线后的 LAN/Relay 道具视觉及菜刀伤害双端回归均通过；主线伤害契约断言 `DAMAGE_CONTRACT_RESULT failures=0`，本机只按既有道具 runner 精确豁免缺失 godot_ai 的三条日志与退出资源计数。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-15
+
+### [Mod/UI] 旧 `replace_files` 覆盖包会把新版 `ui/option_button.tscn` 打回无 `Label` 版本 → 设置页内置页签文字全空、只剩 COOP
+- Evidence / 证据: 本机 `user://mods/etn_coop/mod.json`（`"name":"ETN Coop (skeleton)"`、`"replace_files":true`、`replace_paths:["res://ui/round_timer.gd","res://scenes/item/pyroxenes.gd"]`）；`logs/ETN_debug2026-10-16T01.54.55.log` 的 `[ModManager] etn_coop 使用 replace_files 覆盖本体文件`；安装包 `etn_coop.pck` 目录表除 `mods/etn_coop/**` 外还含 `ui/option_button.tscn`、`script/option_button.gd`、`ui/option_toggle.tscn`、`script/ScrollBox.gd`、`script/Game.gd`、`script/extension_hooks.gd` 等本体文件；该 pck 内 `ui/option_button.tscn` 节点仅 `Game/Node2D/ColorRect/AnimationPlayer`（**无 `Label`**），而现行 `ui/option_button.tscn:261` 有 `Label`、`script/option_button.gd:5` 的 `@export var text` 把标题写入该 `Label`。
+- Notes / 说明: `ui/option_button.tscn` 本是 `coop_menu.tscn`（覆盖层页签）的依赖，`ModPackReplace` 预设 `export_filter="resources"` 会连带导出依赖，被 `replace_files=true` 一并覆盖到用户机 → 新版本体 UI 被旧快照回退。本体 `ui/option.tscn` 仍实例化 3 个内置页签并设 `text="GAME"/"CONTROLS"/"MOD"`，但旧组件无 `Label`，文字无处可写 → 内置页签渲染为空白；只有 mod 自建 COOP 页签（自带 `Label`）可见，表现为「option 里只剩 COOP」。根源是覆盖型打包把本体依赖当覆盖文件（同类事故见本文件 2084/2213）。修复=删除旧安装目录 + 用当前源码重打（`mod_sdk/build_coop_mod.ps1`，源码 `mod.json` 已去 `replace_files`，走 `pack_mod.gd` 的 PCKPacker 路线；新包 87 文件、目录表仅 `mods/etn_coop/**`、无本体覆盖）。实测（`game_eval` 实例化 `ui/option.tscn`）：四页签 `option_game=GAME / option_controls=CONTROLS / option_mod=MOD / option_coop=COOP` 全部有文字。注意编辑器下 `res://mods/etn_coop/` 镜像会遮蔽 pck，镜像仍为旧实现（`mod.json` 带 `replace_files`、entry 手搓额外 `Label`），与运行期 pck 不同源，需另行同步。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod] replace_files 挂载前目录审计：未声明本体覆盖降级为不覆盖
+- Evidence / 证据: `script/pck_directory.gd:list_paths`（只读解析 PCK v4 目录表，校验 magic/version/flags/dir_offset，异常返回 `null`）；`script/mod_manager.gd:_mount_one`（`replace_files` 分支调 `_audit_replace`，未声明则置 `replace_files=false` + `push_error`）、`_audit_replace`/`_covered`。
+- Notes / 说明: 承接同日「旧覆盖包打回本体 UI」事故，加运行期守卫：`replace_files=true` 的包挂载前核对目录表，`res://mods/<id>/` 之外且未在 `manifest.replace_paths` 声明的路径判为未声明覆盖 → 降级挂载（mod 内容照常加载、本体零覆盖）；已声明则保留 `replace_files=true` 放行。匹配含 `<decl>.` 前缀（覆盖 `.gdc/.remap/.import` 边车），避免精确匹配误判。目录无法解析（非 v4/目录加密/损坏）时跳过守卫不误拦。**仅写日志**，不改 MOD 管理页。隔离 user:// 实测三情形：坏包(未声明)→降级、无 `replace_files`→不动作、全量声明→放行。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-16

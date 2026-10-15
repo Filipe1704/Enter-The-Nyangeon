@@ -24,6 +24,8 @@ const DEFAULT_SHOP_CHARACTER_COST := 6
 const WEAPON_TYPE_ICON_DIR := "res://ui/weapon"
 # 内置武器类型短名（图标 = res://ui/weapon/<code>_icon.png；mod 可 register_weapon_type 追加/覆盖）。
 const BUILTIN_WEAPON_TYPES: Array[String] = ["AR", "FT", "GL", "HG", "MG", "MT", "RG", "RL", "SG", "SMG", "SR"]
+# 覆盖包（replace_files=true）挂载前的目录审计工具。
+const PckDirectoryScript := preload("res://script/pck_directory.gd")
 
 # kind -> 期望的 class_name（用于类型校验）
 const KIND_CLASS := {
@@ -556,12 +558,56 @@ func _mount_one(rec: Dictionary) -> String:
 	if gv != "" and is_instance_valid(Game) and not _version_gte(Game.version_number, gv):
 		push_warning("[ModManager] %s 要求本体 >= %s，本体=%s" % [rec.id, gv, Game.version_number])
 	var replace_files := bool(manifest.get("replace_files", false))
+	if replace_files:
+		var audit := _audit_replace(pck_path, str(rec.id), manifest)
+		if audit.get("blocked", false):
+			# pck 含未在 manifest.replace_paths 声明的本体文件（多为打包时连带的本体依赖）：
+			# 降级为不覆盖——mod 自身内容照常加载，本体文件零覆盖，避免旧快照打回本体。
+			replace_files = false
+			push_error("[ModManager] %s 覆盖包含未声明本体文件，已降级为不覆盖：%s" % [rec.id, audit.get("undeclared", [])])
+		elif audit.has("declared"):
+			push_warning("[ModManager] %s replace_files 已声明覆盖：%s" % [rec.id, audit["declared"]])
 	if not ProjectSettings.load_resource_pack(pck_path, replace_files):
 		return "load_resource_pack 失败（引擎版本/文件损坏）"
-	if replace_files:
-		push_warning("[ModManager] %s 使用 replace_files 覆盖本体文件" % rec.id)
 	rec["mounted"] = true
 	return ""
+
+
+# replace_files 挂载前审计：核对 pck 目录表实际覆盖的本体文件是否都在 manifest.replace_paths 声明内。
+# 无法校验（非 v4 / 目录加密 / 损坏）时返回空字典，调用方按原样挂载（不误拦）。
+func _audit_replace(pck_path: String, mod_id: String, manifest: Dictionary) -> Dictionary:
+	var paths = PckDirectoryScript.new().list_paths(pck_path)
+	if paths == null:
+		push_warning("[ModManager] %s 无法校验覆盖包目录，跳过守卫" % mod_id)
+		return {}
+	var own := "mods/%s/" % mod_id
+	var decl: Array = []
+	for rp in manifest.get("replace_paths", []):
+		var s := str(rp)
+		if s.begins_with("res://"):
+			s = s.substr("res://".length())
+		if s != "":
+			decl.append(s)
+	var declared: Array = []
+	var undeclared: Array = []
+	for p in paths:
+		var ps := String(p)
+		if ps.begins_with(own):
+			continue
+		if _covered(ps, decl):
+			declared.append(ps)
+		else:
+			undeclared.append(ps)
+	return {"blocked": not undeclared.is_empty(), "declared": declared, "undeclared": undeclared}
+
+
+# 声明路径是否覆盖该 pck 路径：精确命中，或以 `<decl>.` 开头
+# （覆盖编译产物 .gdc/.remap 与贴图 .import 等边车，避免把已声明覆盖误判为未声明）。
+func _covered(p: String, decl: Array) -> bool:
+	for d in decl:
+		if p == d or p.begins_with(d + "."):
+			return true
+	return false
 
 
 # 版本段解析：去掉前导 v、丢弃 `-` 及其后后缀（-test 等）、按 `.` 取整、去尾零。
