@@ -6050,11 +6050,14 @@ func _server_enemy_hit(net_id: int, cfg: Dictionary, victim_pos: Vector2) -> voi
 	last_attacker_by_net_id[net_id] = attacker
 	# 抑制本体自然表现（飘字/闪白），由 mod 按来源频率统一回放（host 侧客机命中 = 远程来源）
 	var hp_before: int = int(enemy.stats.hp) if enemy.get("stats") != null else 0
+	# 命中数字取真实结算回调；HP 差只用于记分，避免截断斩杀的过量伤害。
+	var hit_amount: Array[int] = [0]
+	data.on_damage_dealt.append(func(_target, amount): hit_amount[0] = int(amount))
 	component.take_damage(data, true, true, int(safe_cfg.get("resolved_damage", -1)))
 	var hp_after: int = int(enemy.stats.hp) if enemy.get("stats") != null else 0
-	var actual: int = maxi(0, hp_before - hp_after)
+	var actual: int = hit_amount[0]
 	if actual > 0:
-		_add_team_damage(attacker, actual)
+		_add_team_damage(attacker, maxi(0, hp_before - hp_after))
 		var killed: bool = hp_before > 0 and hp_after <= 0
 		_replay_hit_feedback(enemy, data, actual, true)
 		rpc("_remote_hit_feedback", net_id, actual, safe_cfg, attacker, true)

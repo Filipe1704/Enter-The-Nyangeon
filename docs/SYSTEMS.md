@@ -101,6 +101,8 @@
 - Hina 距离闭包保持子弹内求值；Kotori、Tsurugi、Utaha、Momoi 的数值增伤及近战藏品迁到前置阶段。Momoi 的施加燃烧仍留在原 proc，避免预计算产生双重副作用；Mint 在命中瞬间写入倍率，由同一数值路径消费。
 - 版本：2026-10-14 用户改定发布版本为本体 v0.5.1.4 / 官方 Mod 0.1.10，尚未提交上游的协议变更统一为 v4；期间曾回滚至 v0.5.1.3（原标 v0.5.1.4 / 0.1.12 / 协议 v5）的修复保留。本体与 Mod 需配套更新，无前置接口的旧本体停止注入。证据：`health_component.gd:31,213,225`、`GameEvents.gd:97,333`、`coop_net.gd:_prepare_enemy_hit/_server_enemy_hit/_server_enemy_part_hit`。守卫：`run_damage_contract_checks.py` 与联机 `damage` 实际双端场景。
 
+- **客机菜刀伤害数字一致性（mod，2026-10-15）**：沿用主线 `_prepare_enemy_hit → resolve_damage → resolved_damage` 数值契约；`_server_enemy_hit` 额外在权威 `on_damage_dealt` 回调采集本次结算伤害，用于飘字和归属 proc，记分继续使用有效 HP 差。菜刀对剩余 `50` 生命的目标造成 `99999` 斩杀伤害时，两端均显示 `99999`，实际扣血和记分仍为 `50`。沙袋的 `on_dead()` 延迟回血，回归须记录命中瞬间的 HP，不能跨帧比较。`tests/coop_knife_damage_checks.gd`（`python tests/run_coop_item_visual_checks.py --damage`）覆盖 LAN/Relay 的正常命中、减伤/易伤、斩杀、普通过量伤害、沙袋回血及记分。
+
 ### 2.4 玩家血量 — `script/player_health_component.gd`
 - `is_invincible` 早退；`base_damage<=0` 时改走“仅击退”分支（有 `knockback_force` 则只结算击退，不扣血 / 不吃 `hurt_invalid` / 不进无敌帧 / 不触发 `on_hit_effects`）；正常伤害下 `hurt_invalid>0` 消耗一次免疫并显示 "IMMUNE!"（`:67-78`）。
 - 护甲减伤走指数曲线 `_armor_reduction() = armor_cap * (1 - exp(-hurt_resis / armor_k))`（`armor_cap=0.8`、`armor_k=20`，脚本默认值；`player_health_component.gd:34-35`）；`mitigated = max(1, floor(raw * (1 - reduction)))` × `hurt_mult` × `damage_multiplier`（`:79-95`）。前期陡、后期趋近 80% 上限（`armor_k` 越小前期越快；2026-09-27 由旧 `1/(1+hurt_resis*0.02)` 替换）。
@@ -425,6 +427,7 @@
 - `UpgradeManager.build_pool` 用 `AliasMethod` 建池；`get_triple_choice` 取 3 个不重复选项。
 - **刷新权重（2026-10-14，AUD-LOOT-001 已修）**：refresh_mult 表示额外增益，初始/选择后为 0；刷新更新 `(1+bonus)*1.1-1`，最高稀有度权重乘 `(1+bonus)`，因此中性时不归零、每次刷新总倍率增长 10%。其他加法使用处仍把它视为额外增益。health_percent 使用浮点除法；`run_upgrade_snapshot_checks.py` 覆盖连续刷新、选择复位和非满血比例。
 - `apply_upgrade` 记录数量/顺序、镜像到 `PlayerData.current_upgrades`、实例化 `res://scenes/update_item/<id>.tscn` 到玩家、记录选择、emit `ability_upgrade_added`；`EquipItem` 基类处理装备/叠加。
+- **联机菜刀瞄准平滑（mod，2026-10-15）**：拥有者的 `crosshair_pos` 随玩家快照发送；镜像不能只在收包时回填，否则菜刀转向会随网络更新呈台阶。`coop_snapshot_buffer.gd:85` 的可选 `look` 与位置共用时间戳和插值系数，`coop_player_proxy.gd:170` 采样后统一回填镜像准星、身体及武器朝向，道具驱动继续读取镜像准星。瞄准目标 `Vector2.ZERO` 合法，欠载时保持最后目标，不猜测后续转向；敌人/召唤物原有三参数调用兼容。`tests/coop_item_visual_checks.gd:_knife_smoothness_probe` 在双端连续扫动准星，按 60 FPS 检查刀刃停帧比例、最大角度步长和对准误差，覆盖 LAN/Relay。
 - **救生圈清弹联机（mod，2026-10-09）**：`lifebuoy.gd` 受伤触发时经新增 `ExtensionHooks.on_enemy_bullet_clear(pos, radius)` 通知 mod；mod 本机即时按半径清 `group EnemyBullet`（普通弹 `bullet_clear`、导弹 `enemy_missile_1` 无 `bullet_clear` → `idle_state`），非 host 再 `rpc_id(1, "_server_enemy_bullet_clear", pos, radius)` 请求 host 权威清理——host 清真子弹经既有 `on_projectile_despawned`(`net_visual_id`) 广播 `_despawn_visual_bullet`，各端一致消失。带 `source_faction==ENEMY_SIDE` 过滤 + `_rate_allow_tokens` + 归属校验（距发送者玩家 ≤400）；**不清**激光/狙击/爆炸 AoE（不在 `EnemyBullet` 组）。本体侧另修 `lifebuoy.tscn` 的 `Area2D.collision_mask` `65536`→`128`（恢复单机清普通弹；快照曾把 `128` 改 `65536`，而标准敌弹是 `128`）。
 - 拾取（瞬时）：`coin.gd`（池 `"coins"`，组 `PickItem`，`pick_up` 后归位并加 `coin*coin_mult`）；`pyroxenes.gd`（加 `PlayerData.player_pyroxenes`）。
 - **联机共享金币（来源：user，2026-10-13）**：按拾取者的 `coin_mult` 向上取整后共享全队；客机在可靠 channel 0 先同步有限、受范围约束的倍率，再提交拾取。房主对已知 net_id 仅使用自己的原始币值与已保存倍率计算，忽略客机上报总额；零倍率仍消费金币，重复拾取不重复结算（`coop_net.gd:6941,6954`、`_server_pickup_coin`）。倍率沿用本项目客机属性自报的信任模型，并非完整属性反作弊；房主掌握原始币值及消费去重。回归覆盖 2 倍、小数向上取整、零倍率、伪造总额与重复请求。

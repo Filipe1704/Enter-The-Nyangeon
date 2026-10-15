@@ -2437,3 +2437,22 @@
 - Notes / 说明: 根因**未定位**。处理=保留 `Game.physics_interp` 设置项（默认关，Graphics 页 `RowPhysicsInterp` 可开，见 `9ffece1`），由玩家自行取舍；后续若要根治，优先评估 A（转 `CPUParticles2D`，射击栈粒子量小、代价可忽略）。**勿重复 B**。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-14
+
+### [Coop/Visual] 远端瞄准必须与位置共用插值时间
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd:85`、`coop_player_proxy.gd:170`；`tests/coop_item_visual_checks.gd:_knife_smoothness_probe`；用户 2026-10-15 反馈另一客户端菜刀卡顿。
+- Notes / 说明: 用户确认症状为「菜刀移动或挥砍画面跳动，但角色移动正常」。静态方向检查通过不能证明连续转向平滑。已提交版本在双进程 LAN、60 FPS 连续扫动准星时，远端菜刀 75% 帧保持不动，而拥有者持续转动；原因是镜像准星只在收包时回填。瞄准点与位置一起入缓冲并按同一时间采样后，镜像准星和身体/武器统一读取采样值，避免位置滞后但瞄准超前。世界原点也是有效目标，不能用 `Vector2.ZERO` 作为未初始化哨兵。已有在制插值只完成入缓冲、未接回表现时，远端菜刀会完全停止转向，故回归必须覆盖实际镜像道具驱动。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-15
+
+### [Coop/Damage] 命中伤害数字不能用目标 HP 差替代
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_server_enemy_hit`、`_get_predicted_enemy_damage`、`_predict_enemy_death`；`script/health_component.gd:_take_damage_internal`；`tests/coop_knife_damage_checks.gd`。
+- Notes / 说明: 用户确认「客机玩家的菜刀，同次命中的伤害数字在主机与客机视角不同」。双端回归复现：减伤目标主机 `45`/客机 `22`，易伤目标主机 `45`/客机 `90`，斩杀主机 `50`/客机 `99999`。预测遗漏 TRUE_DAMAGE 且血条路径重复乘承伤倍率；主机以 HP 差作为飘字又截断了过量伤害。统一从真实结算取得命中数值、保留有效扣血记分后，两端数字一致。沙袋回血经 `Enemy._on_is_dead → on_dead.call_deferred()` 发生，回归若跨帧取 HP 差会误把回血计入同次命中。契约已上提 `SYSTEMS.md` §2.3。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-15
+
+### [Coop/Integration] PR #9 以最新主线求值契约为准，移除重复预测修复
+- Evidence / 证据: `upstream/main@0b7e446`；主线提交 `7cc6cc3`、`8a992ff`、`7dd2470`；`coop_net.gd:_prepare_enemy_hit`、`_server_enemy_hit`；`coop_snapshot_buffer.gd:sample`。
+- Notes / 说明: 核对主线后确认：主线已统一 `resolve_damage` 与 `resolved_damage`、支持真实伤害并修正预测二次乘算。本分支旧版数值修复与其重叠，合并时沿用主线；新增差异仅保留瞄准插值与主机命中数字取值，不恢复旧预测助手。快照欠载外推沿用主线的积分位移，追加瞄准目标保持。上条菜刀数值复现描述针对更新主线前的旧分支，不能当作最新主线仍存在全部问题的证据。
+- Validation / 验证: 对齐主线后的 LAN/Relay 道具视觉及菜刀伤害双端回归均通过；主线伤害契约断言 `DAMAGE_CONTRACT_RESULT failures=0`，本机只按既有道具 runner 精确豁免缺失 godot_ai 的三条日志与退出资源计数。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-15

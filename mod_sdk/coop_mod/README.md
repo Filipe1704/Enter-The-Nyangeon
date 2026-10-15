@@ -110,6 +110,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - 玩家同步：各端在 `first_round_add` 时交换 roster，互相生成对方角色（移出 `Player` 组、加入 `RemotePlayer`），挂 `CoopPlayerProxy`（禁用输入/相机/UI/碰撞/信号、按快照插值位置/朝向/动画/血量）；本机以 ~20Hz 上报状态，经服务端转发。
 - 敌人同步（服务端权威）：host 在 `on_enemy_spawned` 登记 net_id 并广播；client 生成镜像（挂 `CoopEnemyProxy`，禁物理、按快照插值位置/速度/血量）；host 以 ~8Hz 发快照；死亡经 `is_dead` → despawn 广播；client 镜像不本地判死。
 - 敌人伤害权威：client 的子弹命中经 `enemy_damage_interceptor` 转交 host（序列化 DamageData 字段），host 结算并快照回传；client 不本地结算（镜像血量只来自快照）。
+- **菜刀伤害数字一致（2026-10-15）**：沿用既有 `resolved_damage` 计算，主机从结算回调取得命中伤害用于飘字，记分仍按有效扣血计算，避免菜刀斩杀在两端显示为 `99999` 与剩余生命值。`python tests/run_coop_item_visual_checks.py --damage` 验证 LAN/Relay 同次命中的数字、斩杀、沙袋回血与记分。
 - 子弹广播：任意端的本地弹道经 `on_projectile_spawned` 按帧批量广播（scene/位置/朝向/缩放/速度/kill_time）；其它端用 `CoopVisualSync` 生成**纯视觉弹**（从本体池移除、清零碰撞、禁伤害、自带 kill_time 回池）；`on_projectile_despawned` 广播**提前终止**（撞墙/命中）让对方立即消失，`ended` 集合防迟到复活。
 - 爆炸/特效广播：`on_projectile_spawned` 中**无 velocity** 的作用域走特效通道（scene/位置/朝向/缩放/所属组 + **白名单属性** `explosion_range/damage_mult/range_mult/scale_mult/is_crit/color/modulate/bullet_scale`），对方生成不池化、超时释放的纯视觉特效（禁伤害）。
 - 敌人→玩家伤害：client 的**敌方视觉弹**对本地玩家开放"伤害洞"（置 `enemy_bullet` 层 + monitorable、合成 enemy DamageData），玩家 HurtBox 正常结算；镜像敌人物理/AI 停用，不会二次开火。
@@ -341,6 +342,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - **A 常驻图标**：follow 15 / hat 8 / rail 6 / muzzle 4（id→`<id>_icon.tscn`），挂到**镜像子树内**的对应标记（follow 因镜像 Follow 已移出全局组，按字段查找）。实例化后 `_sanitize_groups` 把图标内嵌挂点移出全局组。
 - **内部视觉 7**：`cathedral_candle/energy_supplement/ginseng_doll/kitchen_knife/spiked_shell/life_jacket/little_kei`，`set_script(null)` + 递归剥玩法（Area2D/CollisionShape2D/Timer/Label），`net/coop_visual_driver.gd` 做最小位置驱动。
 - **动态显示同步（2026-10-14）**：菜刀随远端瞄准旋转，世界原点也是合法目标；小小凯伊同步绕行/范围/朝向，救生衣、人形参、特制营养剂同步触发动画和护盾状态。视觉副本使用独立材质/动画库并过滤玩法轨道。
+- **菜刀转向平滑（2026-10-15）**：瞄准点与玩家位置共用快照插值时间，镜像准星、身体和武器统一使用采样目标，避免菜刀只在收包时跳动。无需增加发包频率或修改协议；回归在 60 FPS 连续扫动准星，检查远端刀刃的停帧比例、角度步长及对准误差。
 - **外观唯一性与重建**：按 peer + item_id 复用外观；动态快照可补建缺失副本，镜像重建后恢复缓存。现有房主迁移路径同时迁移道具缓存。
 - **兼容与道具回归**：协议 v4，双方需配套更新，Mod 发布版本仍为 `0.1.10`。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 检查 LAN/Relay 双端道具显示及重复外观。
 - **持久身体**：`utaha_turret`（已由召唤同步覆盖）；`shiroko_drone`/`robotic_vacuum_cleaner` 经 `_hook_visual_roots` 检测后接入召唤通道（`PERSISTENT_BODY_SCENES` + `_register_persistent_body`），仅视觉镜像 + 变换同步。
