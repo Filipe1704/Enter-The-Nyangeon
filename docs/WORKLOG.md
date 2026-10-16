@@ -304,3 +304,32 @@
 - Systems / 影响系统: 官方联机远端瞄准插值、客机菜刀命中飘字/归属/记分。
 - Docs synced / 文档同步: 合并自带 `docs/LEARNINGS.md` 三条（瞄准插值、命中数字取值、PR #9 以主线契约为准）、`docs/SYSTEMS.md` §2.3 与联机菜刀瞄准段、`mod_sdk/coop_mod/README.md` 两处。
 - Verified / 验证: `python tests/run_coop_item_visual_checks.py --godot H:\Godot_v4.7-stable_win64_console.exe` 的 items / relay_items 均 PASS；加 `--damage` 后 items / relay_items 亦均 PASS。平滑探针 LAN client `mirror_hold=0.000 max_step=0.0429 max_error=0.0429`、Relay client `mirror_hold=0.042 max_step=0.0544`（阈值 hold≤0.15 / step≤0.15 / error≤0.2）；伤害用例两端一致：neutral/resistance/vulnerability=`45`、execute=`99999`（权威扣血 `50`）、ordinary_damage=`90`、ordinary_overkill=`45`（权威扣血 `30`）、execute_reset=`99999`（权威扣血 `50`），各 `COOP_ITEMS ... failures=0`。日志位于 `.godot/coop_item_visual_checks/`。
+
+## 2026-10-16 — 设置导航边界黑线修正
+- Correction / 修正: 前轮检查认为设置基础布局正常、漏检侧栏边缘 → 用户指出导航与内容之间存在明显黑色竖线，不应当作阴影忽略（来源：user）。
+- Files / 涉及文件: `ui/option.tscn`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: 移除侧栏右侧从不透明黑色开始的渐变贴图及专用资源，补充四个设置页面的边缘像素回归；实际渲染确认黑线消失，82 项设置断言通过。
+- Correction / 修正（2026-10-16）: 移除导航右侧全部阴影 → 用户要求重新添加，现采用 14 宽、最大不透明度 35%（alpha=0.35）的柔和渐变，绘制于内容后方，继续避免纯黑竖线；82 项设置断言通过（来源：user）。
+- Reason / 原因: 用户纠正实际渲染中的漏检问题。
+- Systems / 影响系统: 设置页面背景绘制；主菜单和暂停页共用设置场景。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置侧栏边界、`docs/LEARNINGS.md` 用户修正条目。
+
+## 2026-10-16 — COOP 已安装页签样式来源核对
+- Correction / 修正: 仅根据共享按钮组件及交互回归判断导航样式统一 → 用户指出 COOP 仍有细微差异；当前安装的 0.1.10 只共享根组件，文字由 Mod 单独创建，未使用本体 Label 的新留白与排版（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd`、`script/mod_api.gd`、`ui/option_button.tscn`（只读核对）；本机安装的 `etn_coop.pck`（隔离目录挂载核对）。
+- Summary / 改动摘要: 明确设置页注入链路及本体容器、共享组件、Mod 自建文字各自的控制范围；核实工作区源码已用工厂，已安装包仍需重新构建安装。未修改 Mod、未重新安装。
+- SUPERSEDED: 2026-10-16 进一步在空工程挂载重装前备份包，确认旧 PCK 已采用工厂；此前读到的是项目内旧镜像，误归因于安装包。用户指出的文字差异仍成立，根因改为镜像遮蔽。按用户要求已完成当前源码重新打包安装及镜像同步，保留旧文件备份，82 项设置断言通过；用户数据及 project.godot 哈希未变（来源：code | test）。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 页签样式边界、`docs/LEARNINGS.md` 页签工厂条目的后续观察。
+
+## 2026-10-16 — 设置关闭图标居中与缩小
+- Correction / 修正: 前版用文字字形显示 × → 用户要求图标与按钮居中并略微缩小，现改为独立 12×12 像素图标，通过 Button 的图标水平/垂直对齐居中（来源：user）。
+- Files / 涉及文件: `ui/option.tscn`、`ui/close_pixel.svg`、`ui/close_pixel.svg.import`。
+- Summary / 改动摘要: 使用最近邻采样保留像素边缘；按钮仍为 26×26 并保留原关闭交互。1280×720 渲染中图标实际范围为 `(222,54)–(246,78)`，中心 `(234,66)` 与按钮中心一致；82 项设置断言通过，既有插件和退出资源报错仍在。
+- Correction / 修正（2026-10-16）: 左栏标题和关闭按钮紧贴顶部装饰条 → 用户截图要求图标与导航列表略微下移；标题、关闭按钮和页签起点统一下移 8 个设计像素，顶部留出 8 像素间距，滚动区底边及 Esc 提示固定；渲染复核及 82 项设置断言通过（来源：user）。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置菜单布局。
+
+## 2026-10-16 — 滚动条视觉反馈修正
+- Correction / 修正: 像素滚动条使用描边、可见轨道和金色反馈 → 用户要求去除描边、隐藏轨道，并以灰色表示高亮反馈（来源：user）。
+- Files / 涉及文件: `ui/pixel_scrollbar_theme.tres`。
+- Summary / 改动摘要: 轨道与焦点外框改为不绘制，保留原尺寸；滑块无描边，普通、悬停和按下状态分别使用灰度 0.58、0.70、0.80。实际渲染复核及 82 项设置断言通过，既有插件和退出资源报错仍在。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置菜单布局、`docs/CONVENTIONS.md` 设置滚动条样式。

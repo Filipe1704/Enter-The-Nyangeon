@@ -2124,6 +2124,9 @@
 ### [UI/Mod] 页签工厂只统一采用接口的控件，旧安装包不会自动变样式
 - Evidence / 证据: 用户确认目标为已安装 COOP；直接挂载其 `etn_coop.pck` 核对 `entry/coop_entry.gd:138`、`ui/coop_ui_style.gd:23`，与工作区 `mods/etn_coop/` 副本一致；`script/mod_api.gd:13`；`tests/test_ui_ux_regressions.gd:_check_settings`。
 - Notes / 说明: 已安装 COOP 0.1.14 自建 `Button`，使用 11 号字、独立绿色主题和 32 像素最小高度；本体页签为带动画的 `PanelContainer` 和 19 号文字。隔离验证确认即使移除 mod 主题，组件和动画差异仍在。新增 `ModAPI.create_option_tab` 后，本体与采用接口的 mod 页签共用场景；带原安装包的渲染检查中，测试页签外观统一，旧 COOP 页签仍保持其自定义样式。SDK 示例更新不会替换玩家已有 `.pck`，需 mod 作者采用接口并重新发布。不要把“共存检查通过”写成“旧 COOP 样式已修复”。
+- Follow-up / 后续（2026-10-16，来源：user | code | test）：用户指出当前 COOP 导航仍有细微差异。隔离复制并挂载当前安装的 **0.1.10** 后，运行时确认它与本体共用 `res://ui/option_button.tscn` 根组件，但其已打包 entry 仍自行 `Label.new()`，节点名 `coop_option`，字体/字号/描边由 Mod 写死；本体的 `Label` 文本为空。两者同为 19 号字，差异来自新共享 Label 的内部留白、裁切及垂直排版：本体 Label 局部矩形 `(6,3,116,25)`、`clip_text=true`，Mod 自建 Label 为 `(6,5,116,22)`、`clip_text=false` 且未采用内部留白；因此仅根节点一致不能证明文字一致。工作区 `mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:139` 已用 `ModAPI.create_option_tab`，需重新打包安装才影响实际游戏。此次 0.1.10 与此前 0.1.14 是不同安装包的观察，不能混写为同一实现。核对记录：`.godot/settings_nav_audit_20261016/installed-tab-inspection.log`。
+- SUPERSEDED: 2026-10-16 上述将旧文字实现归因于“当前已安装 PCK”的结论不成立。空工程独立挂载重装前备份 `installed-backup/etn_coop.pck`，输出 `OLD_PCK_USES_FACTORY=true`、`OLD_PCK_MANUAL_LABEL=false`；旧实现实际来自项目内 `mods/etn_coop/` 镜像。此前只隔离了 user://，未隔离 res://，读取的虚拟路径不能证明来自安装包。用户指出的视觉差异仍成立，原因修正为旧镜像遮蔽安装包（来源：code | test）。
+- Follow-up / 后续（2026-10-16，来源：code | test）：按用户“重新安装”要求，已用当前 SDK 源构建 87 文件 PCK，并替换用户安装目录，同时备份并同步项目镜像。空工程校验新 PCK entry 与源文件 SHA-256 一致；运行时 COOP 只有共享 Label，矩形、字体、留白与本体一致。82 项设置断言通过，存档、联机配置、Mod 状态和 project.godot 哈希不变；旧包/镜像保留于 `.godot/coop_reinstall_20261016/2db82db4/`。现有插件及退出资源报错仍保留。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
 
@@ -2467,4 +2470,26 @@
 - Evidence / 证据: `script/pck_directory.gd:list_paths`（只读解析 PCK v4 目录表，校验 magic/version/flags/dir_offset，异常返回 `null`）；`script/mod_manager.gd:_mount_one`（`replace_files` 分支调 `_audit_replace`，未声明则置 `replace_files=false` + `push_error`）、`_audit_replace`/`_covered`。
 - Notes / 说明: 承接同日「旧覆盖包打回本体 UI」事故，加运行期守卫：`replace_files=true` 的包挂载前核对目录表，`res://mods/<id>/` 之外且未在 `manifest.replace_paths` 声明的路径判为未声明覆盖 → 降级挂载（mod 内容照常加载、本体零覆盖）；已声明则保留 `replace_files=true` 放行。匹配含 `<decl>.` 前缀（覆盖 `.gdc/.remap/.import` 边车），避免精确匹配误判。目录无法解析（非 v4/目录加密/损坏）时跳过守卫不误拦。**仅写日志**，不改 MOD 管理页。隔离 user:// 实测三情形：坏包(未声明)→降级、无 `replace_files`→不动作、全量声明→放行。
 - Source / 来源: code + test
+- Date / 日期: 2026-10-16
+
+### [UI/Layout] 滚动容器会被内容最小宽度反向撑开，页签动画不能写死容器位置
+- Evidence / 证据: `ui/game_option.tscn:320`、`ui/option_button.tscn:12`、`tests/test_ui_ux_regressions.gd` 的 `_check_settings_layout`。
+- Notes / 说明: GAME 的横向滚动禁用，内容最小宽度超过预留空间时，`grow_horizontal=2` 会让滚动区向左右扩张；仅增大左边距后实测内容从 x=143 开始，而非目标 x=162。同步收紧首行标签及频率滑条的最小宽度后，滚动区稳定为 `(162,40)`、宽 450。VBox 管理页签位置，RESET 中的绝对 `position=(24,40)` 应移除，`on_out` 的绝对位移须改为等量相对 `offset_transform_position`，避免改布局后动画覆盖排版；高亮轨道及样式不变。
+- SUPERSEDED: 2026-10-16 页签改为固定位置，动画仅缩放背景，不再使用 `offset_transform_position`；GAME 的内容最小宽度结论仍适用。详见下方长扩展标题条目及 `ARCHITECTURE.md` 设置菜单布局（来源：code | test）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-15
+
+### [UI/Layout] 长扩展页签会撑宽导航内容，焦点跟随可使整列横向偏移
+- Evidence / 证据: 修复前 `ui/option.tscn:200-213`（横纵滚动均为模式 3、`follow_focus=true`）、`ui/option_button.tscn:244-261`（Label 无宽度收敛或省略）、`script/option_button.gd:5-10`（标题直接传给 Label）；2026-10-16 当前工作区 Godot 4.7 渲染复现，截图 `.godot/settings_nav_audit_20261016/07-long-title.png`。
+- Notes / 说明: 用 `ModAPI.create_option_tab` 加入 `NETWORK SETTINGS` 后，导航项宽度从 128 增至 184；聚焦长标题后，不仅长标题裁切，原有 CONTROLS 也出现左侧裁切，整列内容发生横向偏移。导航隐藏滚动条不等于禁止横向滚动，`follow_focus` 也会影响横轴。现有设置布局回归只覆盖短标题 CUSTOM / EXTRA，60 项断言通过不能证明长标题安全。后续修复应同时约束共享页签的文字最小宽度和导航横向滚动策略，并保留完整标题的可获取方式；本次仅检查，未改实现。
+- Follow-up / 后续（2026-10-16，来源：code | test）：已禁用横向滚动，并让共享 Label 单行省略、根 tooltip 同步完整标题；纵向溢出显示滚动条。页签与文字位置固定，仅背景按行尺寸缩放，消除动画打断导致的对齐差异。`clip_text` 会连像素字的外描边一起裁掉，须用 Label 的 `normal` StyleBox 内部留白保护描边和阴影，不能只增加父容器外边距。首次打开自动显示 GAME，重开聚焦当前页。新增回归在修复前捕获 9 项失败，修复后断言全部通过；测试命令仍因本地 godot_ai 缺失及既有退出资源日志判为非零，未改本地插件配置。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Rendering] 设置导航右缘的黑色竖线是需修复的绘制缺陷
+- Evidence / 证据: 用户明确指出“导航栏与右侧内容区有一条明显的黑色竖线，不是阴影”；修复前 `ui/option.tscn` 的 `Node2D/TextureRect` 在 x=140–156 绘制黑色到透明的渐变，起始颜色为 `(0,0,0,1)`；`tests/test_ui_ux_regressions.gd:_check_settings_seam`；截图 `.godot/settings_nav_audit_20261016/seam-before.png` / `seam-after.png`。
+- Notes / 说明: 前轮“基础布局正常”的检查漏掉该边界缺陷；用户修正为权威输入，不能以阴影设计解释而忽略。像素复核确认 1280×720 渲染的 x=280 起始列为 `(0,0,0)`，右侧背景为 `(18,18,18)`。移除额外贴图及其资源后，x=280–310 与右侧背景一致；GAME / MOD / CONTROLS / COOP 的新增像素断言均通过，设置专项 82 项断言通过。整次运行仍因本地 godot_ai 缺失和已有退出资源报错返回非零，未修改插件配置。
+- SUPERSEDED: 2026-10-16 用户明确要求重新添加右侧阴影；“移除全部阴影”的处理改为“保留柔和阴影，避免纯黑竖线”，此前黑线观察仍成立（来源：user）。
+- Follow-up / 后续（2026-10-16，来源：code | test）：新增宽 14、最大 alpha=0.35 的渐变 `SidebarShadow`，置于内容后方且忽略鼠标；纹理使用 `expand_mode=1`，避免 64 宽资源撑大节点。实际像素从 `(12,12,12)` 平滑回到背景 `(18,18,18)`，四页阴影像素检查通过；设置专项 82 项断言通过。截图：`.godot/settings_nav_audit_20261016/soft-shadow-game.png`。
+- Source / 来源: user | code | test
 - Date / 日期: 2026-10-16

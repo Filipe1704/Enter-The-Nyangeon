@@ -36,6 +36,8 @@
 | `tests/` | MCP 测试套件（`test_*.gd`，`extends McpTestSuite`），由编辑器内 `test_run` 运行（`addons/godot_ai`）；另有独立 UI 回归入口 `run_ui_ux_checks.py` + `test_ui_ux_regressions.gd`，不依赖插件，隔离用户目录运行，`--screenshots` 可输出局部场景渲染。 |
 | `docs/` | **本知识库**（本项目新增）。 |
 
+- **设置布局（2026-10-16）**：`ui/option.tscn` 保持通用菜单与扩展页容器职责，左栏采用顶部标题 / 像素 × 关闭按钮、独立纵向滚动页签和底部 Esc 提示；共享页签沿用像素字体与金色反馈，文字位置固定，长标题省略并提供完整提示，溢出显示滚动条。首次自动显示 GAME，再次打开恢复当前页焦点。主菜单和暂停页共用；设置专项入口为 `python tests/run_ui_ux_checks.py --godot <Godot路径> --settings-only`，可追加 `--screenshots` / `--installed-mods`；长标题及再次打开回归见 `_check_settings_navigation_states` 和 `_check_settings`。
+
 - **存档/安装边界（2026-10-13）**：`script/scene_data_store.gd` 管主档/备份读取与文件替换，`Game.gd` 管元进度赋值；`script/mod_installer.gd` 管 ZIP 暂存/验证/目录交换，`ModManager` 保留公开入口与挂载/注册职责。两者均为 RefCounted helper，不增加 autoload。
 - **独立回归（2026-10-13）**：`tests/run_persistence_checks.py`、`run_mod_install_checks.py`、`run_coop_recovery_checks.py` 与既有 UI / 联机拓展入口使用隔离 user://；`test_relay_limits.py` 为回环服务测试；`check_localization.py` 为源格式防护，`godot_check_output.py` 统一原生错误分类。
 
