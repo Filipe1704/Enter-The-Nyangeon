@@ -54,14 +54,13 @@ func mouse_exitedd_anim():
 func menu_button_press(event: InputEvent):
 	if mouse_filter == Control.MOUSE_FILTER_IGNORE or event.is_echo():
 		return
-	
-	if event as InputEventScreenTouch and event.pressed:
-		SoundManager.play_sfx("ButtonSounds")
-		GameEvents.emit_menu_button(button_id)
-		set_selected(true)
-	
-	if event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept"):
-		accept_event()
-		SoundManager.play_sfx("ButtonSounds")
-		GameEvents.emit_menu_button(button_id)
-		set_selected(true)
+	if not ((event is InputEventScreenTouch and event.pressed)
+			or event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		return
+	accept_event()
+	# 激活项继续消费输入，但不重复播放音效或发出切页事件。
+	if on_show:
+		return
+	SoundManager.play_sfx("ButtonSounds")
+	GameEvents.emit_menu_button(button_id)
+	set_selected(true)

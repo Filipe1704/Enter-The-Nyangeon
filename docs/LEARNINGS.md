@@ -2493,3 +2493,9 @@
 - Follow-up / 后续（2026-10-16，来源：code | test）：新增宽 14、最大 alpha=0.35 的渐变 `SidebarShadow`，置于内容后方且忽略鼠标；纹理使用 `expand_mode=1`，避免 64 宽资源撑大节点。实际像素从 `(12,12,12)` 平滑回到背景 `(18,18,18)`，四页阴影像素检查通过；设置专项 82 项断言通过。截图：`.godot/settings_nav_audit_20261016/soft-shadow-game.png`。
 - Source / 来源: user | code | test
 - Date / 日期: 2026-10-16
+
+### [UI/Input] 设置页签的选中动画去重不会阻止重复切页事件
+- Evidence / 证据: `script/option_button.gd:54`、`ui/option.gd:menu_button_press`、`tests/test_ui_ux_regressions.gd:_check_settings_repeat_activation`；`.godot/settings_repeat_before.log` / `.godot/settings_repeat_final.log`。
+- Notes / 说明: 用户报告重复点击激活项仍触发事件。原 `set_selected()` 虽对相同状态直接返回，但执行在音效及 `GameEvents.menu_button` 发出之后，无法阻止页面重新显示或刷新。修复在点击入口消费激活输入后检查 `on_show`，对当前项直接返回。鼠标、触屏、Enter 的修复前检查共捕获 6 项失败；修复后带已安装 MOD 副本的隔离设置专项 41 项断言通过，含关闭/重开与切页。测试命令仍因已有 godot_ai 文件缺失及退出资源错误返回非零，不能宣称整次运行无错误；未改 `project.godot`。本地 tests 改动按约定不提交。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-16

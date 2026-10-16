@@ -179,6 +179,8 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - **共用纵向列表拖动（2026-10-11）**：`script/ScrollBox.gd` 被测试房角色/道具/敌人列表、主菜单社团列及多个菜单复用。鼠标仅由真实左键按下启动拖动，移动事件还须带左键掩码；滚轮交给原生滚动，不改变拖动状态。`_input` 在 GUI 分发前清理左键或当前触点的释放，列表隐藏和窗口失焦也清理；触屏按 index 跟踪，其他手指不能接管或结束当前手势。专项命令：`python tests/run_ui_ux_checks.py --godot <Godot路径> --screenshots --scroll-input-only`。本机 `etn_coop 0.1.9` 包含 `res://script/ScrollBox.gd.remap → ScrollBox.gdc`，会覆盖本地源码；该包需另行同步修复。
 - 分数记录用 JSON-lines：`save_record_as_json` / `load_all_records_as_json`（`:92-118`），文件 `user://scorebound/game_score.json`。
 
+- **设置页签重复激活（2026-10-16）**：共享页签在 `script/option_button.gd:54` 统一处理触屏、`shoot`（鼠标）与 `ui_accept`，先消费激活输入，再检查 `on_show`；当前激活项直接返回，不重复播放点击音效、发出 `GameEvents.menu_button` 或触发页面刷新。切换其他页签后可再次激活，关闭/重开仍沿用容器的页面刷新与焦点恢复流程。此规则覆盖本体与 `ModAPI.create_option_tab` 创建的共享页签；旧 Mod 自定义控件需自行处理。回归：`tests/test_ui_ux_regressions.gd:_check_settings_repeat_activation`。
+
 ## 3. Group-name contracts / 组名契约
 
 这些组名是隐式 API，缺失会导致空引用：
