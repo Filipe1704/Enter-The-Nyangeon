@@ -58,6 +58,8 @@ func menu_button_press(event: InputEvent):
 			or event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
 		return
 	accept_event()
+	# 触屏不会自动转移键盘焦点，激活页签时同步交还导航焦点。
+	grab_focus()
 	# 激活项继续消费输入，但不重复播放音效或发出切页事件。
 	if on_show:
 		return

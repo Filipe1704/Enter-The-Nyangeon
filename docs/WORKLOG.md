@@ -19,6 +19,14 @@
 
 ---
 
+## 2026-10-17 — 移动端设置页签焦点修正
+- Correction / 修正: 设置页签事件去重检查已通过 → 用户指出触屏切到其他页签后 GAME 仍残留背景，须另外验证触屏切页后的导航焦点与绘制状态（来源：user）。
+- Files / 涉及文件: `script/option_button.gd`。
+- Summary / 改动摘要: 激活页签时先同步焦点，避免初始 GAME 因持有旧焦点保留背景；重复激活继续消费输入且不重复切页。
+- Verified / 验证: 隔离设置渲染回归从 4 项失败变为 49 项断言通过；进程仍有既有退出资源和临时目录清理错误。
+- Device / 真机: Pixel 5 / Android 14 已更新安装修复版，CONTROLS / MOD / COOP 切换及 GAME 往返均无背景残留。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「设置页签激活与焦点」、`docs/LEARNINGS.md` 对应触屏焦点条目。
+
 ## 2026-10-11 — 支援主卡焦点边框修正
 - Correction / 修正: 前轮焦点框视觉验证仅覆盖列表项目 → 用户截图指出主卡展开时圆角断边、侧边被列表遮住；已按主卡持有焦点的真实展开状态复现并补充像素检查（来源：user）。
 - Files / 涉及文件: `ui/level_select.gd`、`tests/test_ui_ux_regressions.gd`。

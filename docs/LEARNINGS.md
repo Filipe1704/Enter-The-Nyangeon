@@ -2500,6 +2500,14 @@
 - Source / 来源: user | code | test
 - Date / 日期: 2026-10-16
 
+### [UI/Input] 触屏切换设置页签必须同步导航焦点
+- Evidence / 证据: 用户报告移动端切到其他页签后 GAME 仍有选中态；`ui/option.gd:button_open`、`script/option_button.gd:34-43,54-69`；`.godot/settings_touch_before.log`、`.godot/settings_touch_focus_probe.log`、`.godot/settings_touch_after.log`。
+- Notes / 说明: 设置打开时 GAME 持有焦点，ScreenTouch 不会自动把焦点交给新页签。原逻辑虽把 GAME 的 `on_show` 置 false，仍因 `has_focus()` 播放 `on_select`，留下宽度 4% 的金色背景。隔离渲染回归通过真实触屏输入复现 4 项失败；只释放旧焦点即可消除背景，鼠标不在 GAME 区域，动画等待结束后结果相同。修复在激活入口先 `grab_focus()`，再处理重复点击及切页。此前重复激活检查通过不代表触屏切页焦点正确；原有结论仅覆盖事件去重。稳定职责见 `ARCHITECTURE.md` 的「设置页签激活与焦点」。
+- Validation / 验证: 修复后设置专项 49 项断言通过，覆盖本体/扩展页签触屏往返、唯一高亮、重复触摸去重、鼠标及 Enter；测试仍有既有退出渲染资源错误和临时目录清理错误，不能宣称测试进程无错误。本地测试不提交。
+- Device / 真机: Pixel 5 / Android 14 同签名覆盖安装成功，保留应用数据与已安装 Mod。修复前实际点击 CONTROLS 可见 GAME 左缘金色残留；修复后 CONTROLS / MOD / COOP 以及返回 GAME 再切出均无残留。截图与 APK 在 `.godot/settings_touch_20261017/`。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-17
+
 
 ### [Godot/GDScript] 脚本里的空字符转义字面量会在 Godot 4.5+ 刷 "Unexpected NUL character"
 - Evidence / 证据: 修复前 `script/pck_directory.gd:66` 的 `path.ends_with("\u0000")`；本机 Godot v4.7.stable 无头复现：含该字面量的脚本会让启动日志多出该报错，去掉 `pck_directory.gd` 中唯一一处后，完整启动（`--headless --verbose --quit`）由 3 条降为 0 条（连续两次）。
