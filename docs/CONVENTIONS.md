@@ -95,7 +95,8 @@ layer N = bit `1<<(N-1)`：
 
 - `default_texture_filter=3`, `viewport/hdr_2d=true`, shader cache disabled（`project.godot:236-243`）。
 - 全局 UI 主题 `res://fonts/theme.tres`，`default_font_antialiasing=0`。
-- 设置左侧页签统一用 `ModAPI.create_option_tab(button_id, title, auto_translate=true)` 创建，返回未挂载的本体 `ui/option_button.tscn` 实例；加入扩展点提供的 `button_box`，并让 `button_id` 对应页面 `option_id`。文字样式集中在共享场景，标题为根节点 `text` 属性；禁止在此入口复制一套字体/描边或附加 mod 独立主题。右侧内容页样式不受此约定限制。见 `script/mod_api.gd:13`、`mod_sdk/README.md` §12.1。
+- 设置页滚动条样式集中在 `ui/pixel_scrollbar_theme.tres`，由 `ui/option.tscn` 的导航 ScrollContainer 和右侧 `menu_box` 分别挂载，并向内容页继承；仅定义 HScrollBar / VScrollBar，避免改变其他界面的全局样式。轨道和焦点外框使用 StyleBoxEmpty 不绘制，保留轨道尺寸以维持布局；滑块使用无圆角、无描边、关闭抗锯齿的 StyleBoxFlat，宽 8，普通 / 悬停 / 按下使用灰度 0.58 / 0.70 / 0.80，不使用金色；保持原滚动策略和输入逻辑。
+- 设置左侧页签统一用 `ModAPI.create_option_tab(button_id, title, auto_translate=true)` 创建，返回未挂载的本体 `ui/option_button.tscn` 实例；加入扩展点提供的 `button_box`，并让 `button_id` 对应页面 `option_id`。文字样式集中在共享场景，标题为根节点 `text` 属性；长标题按原版直接裁切，不设置 tooltip，也不靠文字最小宽度撑开导航。悬停/选中动画沿用原版：只改子节点 `ColorRect` 的 position/size 与 `offset_transform_position`（纯视觉偏移），不改按钮自身 position/size，不影响容器排版。未使用的 `on_out` 动画及 `RESET`/`selected` 中的 `position`/`rotation` 轨道不再保留。禁止在此入口复制一套字体/描边或附加 mod 独立主题。右侧内容页样式不受此约定限制。见 `script/mod_api.gd:13`、`script/option_button.gd`、`ui/option_button.tscn`、`mod_sdk/README.md` §12.1。
 - 按语言切换字体：`vi_VN` 时**只把显示本地化文本的文字控件**换成 Roboto（数字/符号/硬编码英文/CJK 保持像素字），由 autoload `LocaleFont`（`script/locale_font.gd`）运行时按节点替换（`ARCHITECTURE.md` §1.10）。原因：像素字（`BoutiqueBitmap*`）只含 `đ/ă` 等少量越南语字形，缺 `ơ ư ộ ế…`，只能整段替换而非 fallback。判定＝文本是翻译键（`TranslationServer.translate(text) != text`）或含像素字缺失的越南语字形。
 - 文件日志开启：`user://logs/ETN_debug.log`（最多 20 份）。
 - 设计分辨率 640×360，`stretch/mode="canvas_items"`。

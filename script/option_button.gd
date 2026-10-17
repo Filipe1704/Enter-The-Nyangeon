@@ -23,6 +23,17 @@ func _ready():
 	focus_exited.connect(mouse_exitedd_anim)
 	gui_input.connect(menu_button_press)
 
+func set_selected(selected: bool) -> void:
+	if on_show == selected:
+		return
+	on_show = selected
+	if selected:
+		animation_player.play("selected")
+	elif has_focus() or get_global_rect().has_point(get_global_mouse_position()):
+		animation_player.play("on_select")
+	else:
+		animation_player.play_backwards("on_select")
+
 func mouse_entered_anim():
 	if on_show == false:
 		SoundManager.play_sfx("ButtonSounds2")
@@ -35,16 +46,15 @@ func mouse_exitedd_anim():
 func menu_button_press(event: InputEvent):
 	if mouse_filter == Control.MOUSE_FILTER_IGNORE or event.is_echo():
 		return
-	
-	if event as InputEventScreenTouch and event.pressed:
-		SoundManager.play_sfx("ButtonSounds")
-		GameEvents.emit_menu_button(button_id)
-		animation_player.play("selected")
-		on_show = true
-	
-	if event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept"):
-		accept_event()
-		SoundManager.play_sfx("ButtonSounds")
-		GameEvents.emit_menu_button(button_id)
-		animation_player.play("selected")
-		on_show = true
+	if not ((event is InputEventScreenTouch and event.pressed)
+			or event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		return
+	accept_event()
+	# 触屏不会自动转移键盘焦点，激活页签时同步交还导航焦点。
+	grab_focus()
+	# 激活项继续消费输入，但不重复播放音效或发出切页事件。
+	if on_show:
+		return
+	SoundManager.play_sfx("ButtonSounds")
+	GameEvents.emit_menu_button(button_id)
+	set_selected(true)

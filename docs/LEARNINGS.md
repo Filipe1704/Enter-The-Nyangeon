@@ -2125,6 +2125,9 @@
 ### [UI/Mod] 页签工厂只统一采用接口的控件，旧安装包不会自动变样式
 - Evidence / 证据: 用户确认目标为已安装 COOP；直接挂载其 `etn_coop.pck` 核对 `entry/coop_entry.gd:138`、`ui/coop_ui_style.gd:23`，与工作区 `mods/etn_coop/` 副本一致；`script/mod_api.gd:13`；`tests/test_ui_ux_regressions.gd:_check_settings`。
 - Notes / 说明: 已安装 COOP 0.1.14 自建 `Button`，使用 11 号字、独立绿色主题和 32 像素最小高度；本体页签为带动画的 `PanelContainer` 和 19 号文字。隔离验证确认即使移除 mod 主题，组件和动画差异仍在。新增 `ModAPI.create_option_tab` 后，本体与采用接口的 mod 页签共用场景；带原安装包的渲染检查中，测试页签外观统一，旧 COOP 页签仍保持其自定义样式。SDK 示例更新不会替换玩家已有 `.pck`，需 mod 作者采用接口并重新发布。不要把“共存检查通过”写成“旧 COOP 样式已修复”。
+- Follow-up / 后续（2026-10-16，来源：user | code | test）：用户指出当前 COOP 导航仍有细微差异。隔离复制并挂载当前安装的 **0.1.10** 后，运行时确认它与本体共用 `res://ui/option_button.tscn` 根组件，但其已打包 entry 仍自行 `Label.new()`，节点名 `coop_option`，字体/字号/描边由 Mod 写死；本体的 `Label` 文本为空。两者同为 19 号字，差异来自新共享 Label 的内部留白、裁切及垂直排版：本体 Label 局部矩形 `(6,3,116,25)`、`clip_text=true`，Mod 自建 Label 为 `(6,5,116,22)`、`clip_text=false` 且未采用内部留白；因此仅根节点一致不能证明文字一致。工作区 `mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:139` 已用 `ModAPI.create_option_tab`，需重新打包安装才影响实际游戏。此次 0.1.10 与此前 0.1.14 是不同安装包的观察，不能混写为同一实现。核对记录：`.godot/settings_nav_audit_20261016/installed-tab-inspection.log`。
+- SUPERSEDED: 2026-10-16 上述将旧文字实现归因于“当前已安装 PCK”的结论不成立。空工程独立挂载重装前备份 `installed-backup/etn_coop.pck`，输出 `OLD_PCK_USES_FACTORY=true`、`OLD_PCK_MANUAL_LABEL=false`；旧实现实际来自项目内 `mods/etn_coop/` 镜像。此前只隔离了 user://，未隔离 res://，读取的虚拟路径不能证明来自安装包。用户指出的视觉差异仍成立，原因修正为旧镜像遮蔽安装包（来源：code | test）。
+- Follow-up / 后续（2026-10-16，来源：code | test）：按用户“重新安装”要求，已用当前 SDK 源构建 87 文件 PCK，并替换用户安装目录，同时备份并同步项目镜像。空工程校验新 PCK entry 与源文件 SHA-256 一致；运行时 COOP 只有共享 Label，矩形、字体、留白与本体一致。82 项设置断言通过，存档、联机配置、Mod 状态和 project.godot 哈希不变；旧包/镜像保留于 `.godot/coop_reinstall_20261016/2db82db4/`。现有插件及退出资源报错仍保留。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
 
@@ -2476,3 +2479,53 @@
 - Source / 来源: user + test
 - Date / 日期: 2026-10-17
 - SUPERSEDED: 2026-10-17 初版悬停用 Tween 做高度 28→30；已改为照搬本体社团卡动画；ColorRect IGNORE 结论不变。
+### [UI/Layout] 滚动容器会被内容最小宽度反向撑开，页签动画不能写死容器位置
+- Evidence / 证据: `ui/game_option.tscn:320`、`ui/option_button.tscn:12`、`tests/test_ui_ux_regressions.gd` 的 `_check_settings_layout`。
+- Notes / 说明: GAME 的横向滚动禁用，内容最小宽度超过预留空间时，`grow_horizontal=2` 会让滚动区向左右扩张；仅增大左边距后实测内容从 x=143 开始，而非目标 x=162。同步收紧首行标签及频率滑条的最小宽度后，滚动区稳定为 `(162,40)`、宽 450。VBox 管理页签位置，RESET 中的绝对 `position=(24,40)` 应移除，`on_out` 的绝对位移须改为等量相对 `offset_transform_position`，避免改布局后动画覆盖排版；高亮轨道及样式不变。
+- SUPERSEDED: 2026-10-16 页签改为固定位置，动画仅缩放背景，不再使用 `offset_transform_position`；GAME 的内容最小宽度结论仍适用。详见下方长扩展标题条目及 `ARCHITECTURE.md` 设置菜单布局（来源：code | test）。
+- SUPERSEDED: 2026-10-17 用户要求页签间距/动画保留 main 原版：恢复 `on_select`/`selected`，删除未被调用的 `on_out` 及 `RESET`/`selected` 中的 `position`/`rotation` 轨道，不再使用 scale 动画（来源：user）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-15
+
+### [UI/Layout] 长扩展页签会撑宽导航内容，焦点跟随可使整列横向偏移
+- Evidence / 证据: 修复前 `ui/option.tscn:200-213`（横纵滚动均为模式 3、`follow_focus=true`）、`ui/option_button.tscn:244-261`（Label 无宽度收敛或省略）、`script/option_button.gd:5-10`（标题直接传给 Label）；2026-10-16 当前工作区 Godot 4.7 渲染复现，截图 `.godot/settings_nav_audit_20261016/07-long-title.png`。
+- Notes / 说明: 用 `ModAPI.create_option_tab` 加入 `NETWORK SETTINGS` 后，导航项宽度从 128 增至 184；聚焦长标题后，不仅长标题裁切，原有 CONTROLS 也出现左侧裁切，整列内容发生横向偏移。导航隐藏滚动条不等于禁止横向滚动，`follow_focus` 也会影响横轴。现有设置布局回归只覆盖短标题 CUSTOM / EXTRA，60 项断言通过不能证明长标题安全。后续修复应同时约束共享页签的文字最小宽度和导航横向滚动策略，并保留完整标题的可获取方式；本次仅检查，未改实现。
+- Follow-up / 后续（2026-10-16，来源：code | test）：已禁用横向滚动，并让共享 Label 单行省略、根 tooltip 同步完整标题；纵向溢出显示滚动条。页签与文字位置固定，仅背景按行尺寸缩放，消除动画打断导致的对齐差异。`clip_text` 会连像素字的外描边一起裁掉，须用 Label 的 `normal` StyleBox 内部留白保护描边和阴影，不能只增加父容器外边距。首次打开自动显示 GAME，重开聚焦当前页。新增回归在修复前捕获 9 项失败，修复后断言全部通过；测试命令仍因本地 godot_ai 缺失及既有退出资源日志判为非零，未改本地插件配置。
+- SUPERSEDED: 2026-10-17 用户要求保留原版页签间距与动画并移除悬停 tooltip：恢复 main 的 Label 排版（不省略、无内部留白），长标题直接裁切；页签只保留 `on_select`/`selected`，删除 `on_out` 与未用轨道（来源：user）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Rendering] 设置导航右缘的黑色竖线是需修复的绘制缺陷
+- Evidence / 证据: 用户明确指出“导航栏与右侧内容区有一条明显的黑色竖线，不是阴影”；修复前 `ui/option.tscn` 的 `Node2D/TextureRect` 在 x=140–156 绘制黑色到透明的渐变，起始颜色为 `(0,0,0,1)`；`tests/test_ui_ux_regressions.gd:_check_settings_seam`；截图 `.godot/settings_nav_audit_20261016/seam-before.png` / `seam-after.png`。
+- Notes / 说明: 前轮“基础布局正常”的检查漏掉该边界缺陷；用户修正为权威输入，不能以阴影设计解释而忽略。像素复核确认 1280×720 渲染的 x=280 起始列为 `(0,0,0)`，右侧背景为 `(18,18,18)`。移除额外贴图及其资源后，x=280–310 与右侧背景一致；GAME / MOD / CONTROLS / COOP 的新增像素断言均通过，设置专项 82 项断言通过。整次运行仍因本地 godot_ai 缺失和已有退出资源报错返回非零，未修改插件配置。
+- SUPERSEDED: 2026-10-16 用户明确要求重新添加右侧阴影；“移除全部阴影”的处理改为“保留柔和阴影，避免纯黑竖线”，此前黑线观察仍成立（来源：user）。
+- Follow-up / 后续（2026-10-16，来源：code | test）：新增宽 14、最大 alpha=0.35 的渐变 `SidebarShadow`，置于内容后方且忽略鼠标；纹理使用 `expand_mode=1`，避免 64 宽资源撑大节点。实际像素从 `(12,12,12)` 平滑回到背景 `(18,18,18)`，四页阴影像素检查通过；设置专项 82 项断言通过。截图：`.godot/settings_nav_audit_20261016/soft-shadow-game.png`。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Input] 设置页签的选中动画去重不会阻止重复切页事件
+- Evidence / 证据: `script/option_button.gd:46`、`ui/option.gd:menu_button_press`、`tests/test_ui_ux_regressions.gd:_check_settings_repeat_activation`；`.godot/settings_repeat_before.log` / `.godot/settings_repeat_final.log`。
+- Notes / 说明: 用户报告重复点击激活项仍触发事件。原 `set_selected()` 虽对相同状态直接返回，但执行在音效及 `GameEvents.menu_button` 发出之后，无法阻止页面重新显示或刷新。修复在点击入口消费激活输入后检查 `on_show`，对当前项直接返回。鼠标、触屏、Enter 的修复前检查共捕获 6 项失败；修复后带已安装 MOD 副本的隔离设置专项 41 项断言通过，含关闭/重开与切页。测试命令仍因已有 godot_ai 文件缺失及退出资源错误返回非零，不能宣称整次运行无错误；未改 `project.godot`。本地 tests 改动按约定不提交。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Input] 触屏切换设置页签必须同步导航焦点
+- Evidence / 证据: 用户报告移动端切到其他页签后 GAME 仍有选中态；`ui/option.gd:button_open`、`script/option_button.gd:26-35,46-58`；`.godot/settings_touch_before.log`、`.godot/settings_touch_focus_probe.log`、`.godot/settings_touch_after.log`。
+- Notes / 说明: 设置打开时 GAME 持有焦点，ScreenTouch 不会自动把焦点交给新页签。原逻辑虽把 GAME 的 `on_show` 置 false，仍因 `has_focus()` 播放 `on_select`，留下宽度 4% 的金色背景。隔离渲染回归通过真实触屏输入复现 4 项失败；只释放旧焦点即可消除背景，鼠标不在 GAME 区域，动画等待结束后结果相同。修复在激活入口先 `grab_focus()`，再处理重复点击及切页。此前重复激活检查通过不代表触屏切页焦点正确；原有结论仅覆盖事件去重。稳定职责见 `ARCHITECTURE.md` 的「设置页签激活与焦点」。
+- Validation / 验证: 修复后设置专项 49 项断言通过，覆盖本体/扩展页签触屏往返、唯一高亮、重复触摸去重、鼠标及 Enter；测试仍有既有退出渲染资源错误和临时目录清理错误，不能宣称测试进程无错误。本地测试不提交。
+- Device / 真机: Pixel 5 / Android 14 同签名覆盖安装成功，保留应用数据与已安装 Mod。修复前实际点击 CONTROLS 可见 GAME 左缘金色残留；修复后 CONTROLS / MOD / COOP 以及返回 GAME 再切出均无残留。截图与 APK 在 `.godot/settings_touch_20261017/`。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-17
+
+
+### [Godot/GDScript] 脚本里的空字符转义字面量会在 Godot 4.5+ 刷 "Unexpected NUL character"
+- Evidence / 证据: 修复前 `script/pck_directory.gd:66` 的 `path.ends_with("\u0000")`；本机 Godot v4.7.stable 无头复现：含该字面量的脚本会让启动日志多出该报错，去掉 `pck_directory.gd` 中唯一一处后，完整启动（`--headless --verbose --quit`）由 3 条降为 0 条（连续两次）。
+- Notes / 说明: Godot 4.5/4.7 给字符串解析加上 NUL 检查后，GDScript 里写 `"\u0000"` 这种含空字符的字符串字面量，会被当成非法字符处理并打印 `Unicode parsing error ... Unexpected NUL character`（实测一个字面量约 3 条）。启动日志开头那 3 条报错即来自 `pck_directory.gd`（被 `mod_manager.gd:28` 以 `preload` 引入，ModManager autoload 编译时触发）。PCK 目录表的路径字段按 4 字节对齐并以 NUL 填充、`path_len` 含填充，正确做法是按**字节**裁掉尾部 NUL 再 `get_string_from_utf8()`，不要用含空字符的字符串字面量比较。与本地 godot_ai 缺失、PCK 挂载本身无关。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-17
+
+### [UI] 设置页签保留 main 原版间距/动画，清理未用轨道并移除悬停 tooltip
+- Evidence / 证据: `ui/option_button.tscn`（保留 `on_select` 三条轨道与 `selected` 的 size/position；删除未被调用的 `on_out`；`RESET` 仅留 `Node2D/ColorRect:position`/`size` 与 `.:offset_transform_position`；`selected` 删除 `ColorRect:rotation`）；`ui/option.tscn` 移除 VBox 的 `size_flags_horizontal=3` 与显式 `separation=4`，回到原版自然行高/间距；`script/option_button.gd:26-35,46-58`（删除 `_resize_highlight` 与两处 `tooltip_text`，`set_selected(false)` 回退为 `play_backwards("on_select")`）；`ui/menu_button.tscn` 的 `RESET` 三条轨道均被 `on_select` 使用，未改。
+- Notes / 说明: 用户（source）指出页签按钮重做过，实际只用 `on_select`（悬停）与 `selected`（点击后整条金色底）；`on_out`、`RESET` 及 `.:position`/`rotation` 属遗留未用部分。`offset_transform_position` 在 Godot 4.7 默认 `offset_transform_visual_only=true`，只做视觉偏移，不改按钮自身 position/size，不影响 VBox 排版。长标题不再省略且无 tooltip，超出导航区直接裁切。设置专项回归与截图见 `tests/run_ui_ux_checks.py --settings-only`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17

@@ -18,6 +18,9 @@ func _ready():
 func on_option_selected():
 	animation_player.play("option_in")
 	on_option = true
+	var tab := _current_tab()
+	if tab != null:
+		menu_button_press(tab.button_id)
 
 func out_option_selected():
 	button_close()
@@ -32,8 +35,21 @@ func button_open():
 	for i in buttons:
 		i.mouse_filter = Control.MOUSE_FILTER_STOP
 		i.focus_mode = Control.FOCUS_ALL
-	if not buttons.is_empty():
-		buttons[0].grab_focus()
+	var tab := _current_tab()
+	if tab != null:
+		tab.grab_focus()
+
+func _current_tab() -> Control:
+	var first: Control = null
+	for tab in option_button_box.get_children():
+		for page in menu_box.get_children():
+			if tab.button_id != page.option_id:
+				continue
+			if first == null:
+				first = tab
+			if page.shown:
+				return tab
+	return first
 
 func button_close():
 	menu_box.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
@@ -63,7 +79,12 @@ func botton_out_anim(button_id: String):
 	var buttons: Array = option_button_box.get_children()
 
 	for i in buttons:
-		if i.button_id != button_id and i.on_show:
+		if i.has_method("set_selected"):
+			i.set_selected(i.button_id == button_id)
+		elif i.button_id == button_id:
+			i.on_show = true
+		elif i.on_show:
+			# 保留旧 Mod 自定义页签的显隐契约。
 			i.on_show = false
 			i.mouse_exitedd_anim()
 

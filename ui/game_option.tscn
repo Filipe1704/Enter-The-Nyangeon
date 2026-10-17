@@ -322,8 +322,8 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 90.0
-offset_top = 20.0
+offset_left = 142.0
+offset_top = 40.0
 offset_right = 4.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -373,7 +373,7 @@ mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/Graphics/RowFullScreen/FieldA" unique_id=1875833896]
-custom_minimum_size = Vector2(170, 22)
+custom_minimum_size = Vector2(132, 22)
 layout_mode = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -703,7 +703,7 @@ min_font_size = 7
 
 [node name="MaxFps" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000003 instance=ExtResource("6_dns6n")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+custom_minimum_size = Vector2(152, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -751,7 +751,7 @@ min_font_size = 7
 
 [node name="DamageFreq" parent="Scroll/Content/Graphics/RowDamageFreq" unique_id=194191420 instance=ExtResource("6_dns6n")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+custom_minimum_size = Vector2(152, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -798,7 +798,7 @@ min_font_size = 7
 
 [node name="EffectFreq" parent="Scroll/Content/Graphics/RowEffectFreq" unique_id=860500583 instance=ExtResource("6_dns6n")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+custom_minimum_size = Vector2(152, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -845,7 +845,7 @@ min_font_size = 7
 
 [node name="HitFlashFreq" parent="Scroll/Content/Graphics/RowHitFlashFreq" unique_id=110924564 instance=ExtResource("6_dns6n")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+custom_minimum_size = Vector2(152, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
