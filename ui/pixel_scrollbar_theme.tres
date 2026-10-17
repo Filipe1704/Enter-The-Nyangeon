@@ -1,10 +1,4 @@
-[gd_resource type="Theme" format=3]
-
-[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_track"]
-content_margin_left = 4.0
-content_margin_top = 4.0
-content_margin_right = 4.0
-content_margin_bottom = 4.0
+[gd_resource type="Theme" format=3 uid="uid://hn8wfogubms0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_grabber"]
 content_margin_left = 4.0
@@ -19,7 +13,7 @@ content_margin_left = 4.0
 content_margin_top = 4.0
 content_margin_right = 4.0
 content_margin_bottom = 4.0
-bg_color = Color(0.70, 0.70, 0.70, 1)
+bg_color = Color(0.7, 0.7, 0.7, 1)
 anti_aliasing = false
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pressed"]
@@ -27,19 +21,25 @@ content_margin_left = 4.0
 content_margin_top = 4.0
 content_margin_right = 4.0
 content_margin_bottom = 4.0
-bg_color = Color(0.80, 0.80, 0.80, 1)
+bg_color = Color(0.8, 0.8, 0.8, 1)
 anti_aliasing = false
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_track"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_focus"]
 
 [resource]
-HScrollBar/styles/scroll = SubResource("StyleBoxEmpty_track")
-HScrollBar/styles/scroll_focus = SubResource("StyleBoxEmpty_focus")
 HScrollBar/styles/grabber = SubResource("StyleBoxFlat_grabber")
 HScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_hover")
 HScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_pressed")
-VScrollBar/styles/scroll = SubResource("StyleBoxEmpty_track")
-VScrollBar/styles/scroll_focus = SubResource("StyleBoxEmpty_focus")
+HScrollBar/styles/scroll = SubResource("StyleBoxEmpty_track")
+HScrollBar/styles/scroll_focus = SubResource("StyleBoxEmpty_focus")
 VScrollBar/styles/grabber = SubResource("StyleBoxFlat_grabber")
 VScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_hover")
 VScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_pressed")
+VScrollBar/styles/scroll = SubResource("StyleBoxEmpty_track")
+VScrollBar/styles/scroll_focus = SubResource("StyleBoxEmpty_focus")
