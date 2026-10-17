@@ -2499,3 +2499,10 @@
 - Notes / 说明: 用户报告重复点击激活项仍触发事件。原 `set_selected()` 虽对相同状态直接返回，但执行在音效及 `GameEvents.menu_button` 发出之后，无法阻止页面重新显示或刷新。修复在点击入口消费激活输入后检查 `on_show`，对当前项直接返回。鼠标、触屏、Enter 的修复前检查共捕获 6 项失败；修复后带已安装 MOD 副本的隔离设置专项 41 项断言通过，含关闭/重开与切页。测试命令仍因已有 godot_ai 文件缺失及退出资源错误返回非零，不能宣称整次运行无错误；未改 `project.godot`。本地 tests 改动按约定不提交。
 - Source / 来源: user | code | test
 - Date / 日期: 2026-10-16
+
+
+### [Godot/GDScript] 脚本里的空字符转义字面量会在 Godot 4.5+ 刷 "Unexpected NUL character"
+- Evidence / 证据: 修复前 `script/pck_directory.gd:66` 的 `path.ends_with("\u0000")`；本机 Godot v4.7.stable 无头复现：含该字面量的脚本会让启动日志多出该报错，去掉 `pck_directory.gd` 中唯一一处后，完整启动（`--headless --verbose --quit`）由 3 条降为 0 条（连续两次）。
+- Notes / 说明: Godot 4.5/4.7 给字符串解析加上 NUL 检查后，GDScript 里写 `"\u0000"` 这种含空字符的字符串字面量，会被当成非法字符处理并打印 `Unicode parsing error ... Unexpected NUL character`（实测一个字面量约 3 条）。启动日志开头那 3 条报错即来自 `pck_directory.gd`（被 `mod_manager.gd:28` 以 `preload` 引入，ModManager autoload 编译时触发）。PCK 目录表的路径字段按 4 字节对齐并以 NUL 填充、`path_len` 含填充，正确做法是按**字节**裁掉尾部 NUL 再 `get_string_from_utf8()`，不要用含空字符的字符串字面量比较。与本地 godot_ai 缺失、PCK 挂载本身无关。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-17

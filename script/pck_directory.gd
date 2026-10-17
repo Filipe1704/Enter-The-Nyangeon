@@ -53,9 +53,15 @@ func list_paths(pck_path: String):
 		if path_len <= 0 or f.get_position() + path_len + ENTRY_TAIL > total:
 			return null
 		var raw := f.get_buffer(path_len)
-		var path := raw.get_string_from_utf8()
-		while path.length() > 0 and path.ends_with("\u0000"):
-			path = path.substr(0, path.length() - 1)
-		out.append(path)
+		# 路径字段按 4 字节对齐、以 NUL 填充，path_len 含填充，必须先按字节裁掉尾部 NUL 再解码。
+		# 注意：这里只能按字节裁，不要用「含空字符的字符串字面量」比较——Godot 4.5+ 的字符串
+		# 解析会把这种字面量当成非法字符，每次求值都打印
+		# "Unicode parsing error ... Unexpected NUL character"（每次字面量约 3 条）。
+		var end := raw.size()
+		while end > 0 and raw[end - 1] == 0:
+			end -= 1
+		if end != raw.size():
+			raw.resize(end)
+		out.append(raw.get_string_from_utf8())
 		f.seek(f.get_position() + ENTRY_TAIL)
 	return out
