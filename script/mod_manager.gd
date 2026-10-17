@@ -1333,20 +1333,53 @@ func list_mods() -> Array:
 	var ids: Array = _mods.keys()
 	ids.sort_custom(_cmp_order)
 	var out: Array = []
+	var current_version := str(Game.version_number) if is_instance_valid(Game) else ""
 	for id in ids:
 		var rec: Dictionary = _mods[id]
+		var manifest: Dictionary = rec.manifest
+		var required_version := str(manifest.get("game_version", ""))
+		var version_ok := required_version == "" or current_version == "" or _version_gte(current_version, required_version)
 		out.append({
 			"id": id,
-			"name": str(rec.manifest.get("name", id)),
-			"version": str(rec.manifest.get("version", "")),
-			"author": str(rec.manifest.get("author", "")),
-			"description": str(rec.manifest.get("description", "")),
+			"name": str(manifest.get("name", id)),
+			"version": str(manifest.get("version", "")),
+			"author": str(manifest.get("author", "")),
+			"description": str(manifest.get("description", "")),
 			"enabled": rec.enabled,
 			"mounted": rec.mounted,
 			"error": rec.error,
 			"dir": rec.dir,
 			"icon": _mod_icon_path(rec),
+			"game_version": required_version,
+			"game_version_ok": version_ok,
+			"dependencies": _manifest_array(manifest, "dependencies"),
+			"overrides": _manifest_array(manifest, "overrides"),
+			"replace_paths": _manifest_array(manifest, "replace_paths"),
+			"adds": _content_counts(id),
 		})
+	return out
+
+
+func _manifest_array(manifest: Dictionary, key: String) -> Array:
+	var value = manifest.get(key, [])
+	return value.duplicate() if value is Array else []
+
+
+func _content_counts(mod_id: String) -> Dictionary:
+	var out: Dictionary = {}
+	for kind in _registry:
+		var count := 0
+		for id in _registry[kind]:
+			if str(_registry[kind][id].get("mod", "")) == mod_id:
+				count += 1
+		if count > 0:
+			out[kind] = count
+	var societies := 0
+	for s in _societies:
+		if str(s.get("mod", "")) == mod_id:
+			societies += 1
+	if societies > 0:
+		out["societies"] = societies
 	return out
 
 

@@ -954,6 +954,7 @@
 ### [Mod/UI] MOD 管理迁入 option 页签：排序持久化 + 图标 + 共享 toggle；页签列会遮挡左对齐内容
 - Evidence / 证据: `script/mod_manager.gd`（`ORDER_PATH=user://mods/mods_order.json`；`_load_order`/`_save_order`/`get_order`/`set_order`；`_cmp_order` 先用户序、后 `(load_order,id)`；`list_mods()` 返回 `icon` 并按 `_cmp_order` 排序；`_mod_icon_path` 先 loose `rec.dir/icon.png` 再 `manifest.icon`）；`script/mod_option.gd`（`extends OptionMenu`；行 = SelectBar + `TextureRect` 图标 + Label + `ui/option_toggle.tscn`；`_input` 手写鼠标/触屏拖动 + `_target_index`/spacer 换位；`_move_selected` 上下箭头；`Image.load`→`ImageTexture`）；`script/option_toggle.gd`（`set_on(v, animate)`，`seek(current_animation_length, true)` 无动画定位）；`ui/mod_option.tscn`（`Scroll.offset_left=122` 避开页签列、`Content.size_flags_horizontal=3`）；`ui/option.tscn`（`menu_box/Mod` + 第三个 `option_button.tscn`，`button_id=option_mod`）；`scenes/main/menu_screen.gd`（删自建 MOD 按钮，`ensure_unlocked()` 移入 `_ready`）；`ETN_localization.csv`（`mod_*`）。
 - Notes / 说明: ① **页签列遮挡**：`ui/option.tscn` 内页签列 `Node2D`（含 `ColorRect` x 0..139）排在 `menu_box` **之后** → 绘制在子页内容之上；GAME 页靠 Label `horizontal_alignment=2`（右对齐）+ `offset_transform_position` 规避，**左对齐的新子页**必须把 `Scroll.offset_left` 推到页签列（≈139）之外，否则开头被裁（本次 MOD 提示首两字消失即此因）。② `user://` 下的裸 PNG **不能用 `load()`**（未 import），须 `Image.load(path)`→`ImageTexture.create_from_image()`；`res://`（pck 内）才走 `load()`。③ 用户排序只作**同级 tie-break**，依赖/冲突仍由拓扑强约束；且与启停一样**重启生效**（pck 不可卸载）。④ 小坑：`@onready var x: Button = %UpBtn` 若节点实为 `TextureButton` → 运行时 `Trying to assign value of type 'TextureButton' to a variable of type 'Button'`（断点），类型须写 `TextureButton`/`BaseButton`。⑤ 共享 `ui/option_toggle.tscn` 抽自 game_option 的开关三件套，仅 MOD 页使用（未重构 game 页）。
+- SUPERSEDED: 2026-10-18 管理页改为分栏布局（Content 左 144、左侧分组列表/右侧详情），旧 `Scroll.offset_left=122`、`SelectBar` 与行内 tooltip 描述失效；页签列遮挡仍需保持内容左边界在 139 之外。（来源：code）
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-04
 
@@ -1668,12 +1669,14 @@
 - Notes / 说明: 需求（user）：MOD 行悬停显示跟随鼠标的描述框（名字+版本+作者+描述）、触屏点按显示/再点或点空白隐藏/拖动隐藏。**复用模式**：① 鼠标悬停用 `_process` 每帧 `get_global_mouse_position()` + 整行 `get_global_rect().has_point()` 轮询（比 `mouse_entered/exited` 稳，且覆盖行内开关等子控件），并用 `_touch_mode`（`_input` 里 `InputEventScreenTouch` 置真、真实 `InputEventMouse`（`device != DEVICE_ID_EMULATION`）置假）在触屏时关闭轮询；② 触屏点按切换、点列表空白/拖动隐藏。**坐标要点**：MOD 面板挂在 `CanvasLayer` 下且无缩放，`get_global_mouse_position()` 与 `get_global_rect()` 同系可直接比较；列表空白处用 `list_scroll.get_global_transform_with_canvas() * event.position` 把 `gui_input` 本地坐标换算到画布（同 `enemy_test_menu`）。tooltip 节点是场景静态节点（便于可视化编辑），描述为空时隐藏描述行、不加新本地化键。`game_eval` 实测：悬停跟随、触摸点按切换、`_row_at` 整行命中、长描述自动换行均正常。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-08
+- SUPERSEDED: 2026-10-18 管理页改为右侧常驻详情，tooltip 节点、`_process` 轮询与触屏点按显隐逻辑已移除；描述改由详情页 Label 常驻显示。（来源：code）
 
 ### [Mod] MOD 描述本地化用「中文原句作翻译键」+ PowerShell 读 mod.json 必须 UTF-8
 - Evidence / 证据: `mods/etn_coop/mod.json`、`mod_sdk/coop_mod/mods/etn_coop/mod.json`（`author` / `description`）；`mods/etn_coop/i18n/coop_i18n.gd` 与打包源同名文件（`MESSAGES` 新增「中文原句」为键 + en，`install()` 对缺失语言回落 en）；`mod_sdk/build_coop_mod.ps1`（原 `Get-Content -Raw | ConvertFrom-Json` 改为 `[System.IO.File]::ReadAllText(path, UTF8) | ConvertFrom-Json`）。
 - Notes / 说明: ① 本体 MOD 面板 tooltip 的 `TipDesc` 是**默认自动翻译的 Label**，故 mod.json `description` 可直接填中文原句（它同时作为翻译键），mod 侧在 `coop_i18n.gd` 以该原句为 key 提供 en 即可中英切换。相比用语义键（如 `coop_description`）：这样在 mod 未挂载/未启用、i18n 未注册时仍显示可读中文，而非露出原始键。未给 pt/vi 时 `install()` 自动回落 en。② **坑**：`mod.json` 一旦含中文，`build_coop_mod.ps1` 原用 `Get-Content -Raw | ConvertFrom-Json` 在 PowerShell 5.1 下按 ANSI(GBK) 读取 → JSON 解析失败、`$version` 变空（漏生成版本化 zip）并刷 `ConvertFrom-Json` 报错；改 `ReadAllText(..., UTF8)` 后正常。**通用规则：脚本/工具读取可能含非 ASCII 的 UTF-8 文件必须显式指定 UTF-8。**
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-08
+- SUPERSEDED: 2026-10-18 `description` 现由 MOD 管理页右侧详情常驻展示；自动翻译规则与中文原句作 key 的用法不变。（来源：code）
 
 ### [Buff] buff 场景→组件重构丢失 `player_buff_success` 广播：tsurugi PS[1] 濒死复活加成失效
 - Evidence / 证据: 旧 `scenes/player_buff/last_stand_buff.gd:clear_buff()` 调 `GameEvents.emit_player_buff_success(self)`；新组件 `resources/buff/components/last_stand_component.gd` 成功路径 `check_player_hp()`→`_remove_self()`→`deactivate()` 未再发。`GameEvents.emit_player_buff_success` 定义于 `script/GameEvents.gd`，全仓仅 `scenes/player/tsurugi/tsurugi_ps.gd:35` 订阅（`add_player_ability`）。修法：组件在 `deactivate()` 非超时分支 `manager.buff_success.emit(resource)`，`scenes/manager/player_buff_manager.gd:_relay_buff_success` 转发到 `GameEvents.player_buff_success(buff: Buff)`；payload 由 Node 改为 Buff（无其它订阅者/mod 引用）。
@@ -2355,8 +2358,15 @@
 ### [UI/Mod] 已挂载不代表脚本入口已运行，兼容信息需区分最低本体版本与 API 要求
 - Evidence / 证据: `script/mod_manager.gd:538,976`；`mod_sdk/README.md` §2。
 - Notes / 说明: game_version 是最低本体版本声明，不足时只告警；api_version 超过本体支持版本时跳过 entry，但此前资源包可能已经 mounted=true，列表 error 也未因此写入错误。兼容 UI 不能仅凭 mounted 显示“完整运行正常”，也不能将这两类检查统一标为整包拒载。当前 list_mods 尚未公开版本要求与 entry 执行结果，新增详情须补相应数据契约。
+- SUPERSEDED: 2026-10-18 `list_mods()` 现已返回 `game_version`/`game_version_ok`/`dependencies`/`overrides`/`replace_paths`/`adds`，详情页以「支持版本」展示最低支持本体版本并做兼容判定；entry 执行结果仍未单独暴露，UI 不把 `mounted` 写成 entry 已成功运行。（来源：code）
 - Source / 来源: code
 - Date / 日期: 2026-10-14
+
+### [Mod/UI] 管理页分栏详情的数据与交互边界
+- Evidence / 证据: `script/mod_manager.gd:list_mods/_content_counts/_manifest_array`；`script/mod_option.gd`（`_refresh`/`_group_key`/`_make_row`/`_update_detail`/`_update_restart_bar`/`_on_undo`/`_move_spacer_to`）；`ui/mod_option.tscn`（`Summary`/`RestartBar`/`ListPanel`/`DetailPanel`）。
+- Notes / 说明: ① `list_mods()` 的兼容字段必须同时暴露声明值与判定结果（`game_version` + `game_version_ok`）；仅给声明值会让 UI 自行重复版本解析，且 `Game` 未就绪时容易误判。② 分组只影响展示：`_current_ids()` 只收 `is_row` 行，上下按钮/拖动按用户顺序写 `mods_order.json`，`set_order()` 的 `mods_changed` 会在拖动结束后重建列表并重新分组。③ 带分组头时 spacer 的 `get_index()` 含表头，拖动目标索引必须先按行计算、再按 spacer 是否位于目标前修正，否则会插到错误位置；`_cancel_drag()` 应恢复到 `_drag_origin_index`，不能使用当前 spacer 位置。④ 待重启是 UI 会话态：启停/排序可撤销到本次基线；导入/卸载不可逆（pck 运行期不可卸），仍计入待重启。⑤ “重启游戏”只能退出进程（`get_tree().quit()`），引擎运行期无法真正热重载 pck。⑥ 列表行与详情无图标时均显示名称首字符（中文首字、英文转大写，跳过空白/标点），不要用 mod id 代替显示名。⑦ 描述/详情 Label 自动翻译，mod 可用中文原句作翻译键。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-18
 
 ### [Git] 本地忽略 `.import`，不提交 `.gitignore` 改动
 - Evidence / 证据: `docs/CONVENTIONS.md` §6.1；本地 `.git/info/exclude` 的 `*.import` 与索引 `skip-worktree` 标记。

@@ -26,7 +26,7 @@ res://mods/example/defs/characters/example_hero.tscn
 |---|---|
 | `id` | **必需**，`^[a-z0-9_]+$`，且必须等于目录名/前缀 |
 | `name` / `version` / `author` | 显示用 |
-| `description` | 可选，Mod 描述；直接字符串。MOD 管理面板悬停该行时显示（`name` + 版本 + 作者 + `description`）。文本会经 Label 自动翻译，恰好等于翻译键时命中，否则原样显示 |
+| `description` | 可选，Mod 描述；直接字符串。MOD 管理面板右侧常驻详情显示（`name` + 版本 + 作者 + `description`）。文本会经 Label 自动翻译，恰好等于翻译键时命中，否则原样显示 |
 | `icon` | 可选，包内图标资源路径；管理页优先使用安装目录的 `icon.png`，其次使用此字段指向的有效资源 |
 | `api_version` | 脚本入口所需 API 版本；高于本体支持版本时跳过 `entry` 并告警，不等于拒绝整包挂载 |
 | `game_version` | 声明**最低支持**的本体版本；本体低于它才告警（忽略 `-test` 等后缀），不阻断挂载 |

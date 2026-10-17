@@ -141,3 +141,35 @@ option_max_fps,帧率上限,Max Frame Rate,Limite de FPS,Giới hạn FPS
 fps_unlimited,无限制,Unlimited,Ilimitado,Không giới hạn
 option_physics_interp,物理插值,Physics Interpolation,Interpolação Física,Nội suy vật lý
 option_title,设置,Settings,Configurações,Cài đặt
+mod_summary,已安装 %d · 已生效 %d · 待重启 %d,Installed %d · Active %d · Restart pending %d,Instalados %d · Ativos %d · Reinício pendente %d,Đã cài %d · Đang hoạt động %d · Chờ khởi động lại %d
+mod_group_attention,需要处理 (%d),Needs Attention (%d),Requer Atenção (%d),Cần xử lý (%d)
+mod_group_enabled,启用中 (%d),Enabled (%d),Ativados (%d),Đang bật (%d)
+mod_group_disabled,已停用 (%d),Disabled (%d),Desativados (%d),Đã tắt (%d)
+mod_restart_bar,! %d 项改动待重启生效,! %d change(s) need a restart,! %d alteração(ões) precisam reiniciar,! %d thay đổi cần khởi động lại
+mod_undo,撤销,Undo,Desfazer,Hoàn tác
+mod_restart_now,重启游戏,Restart Game,Reiniciar Jogo,Khởi động lại game
+mod_restart_confirm,重启需要退出游戏，确定现在退出吗？,Restarting requires quitting the game. Quit now?,Reiniciar exige sair do jogo. Sair agora?,Khởi động lại cần thoát game. Thoát ngay?
+mod_detail_dependencies,依赖：%s,Dependencies: %s,Dependências: %s,Phụ thuộc: %s
+mod_detail_adds,新增内容：%s,Adds: %s,Adiciona: %s,Nội dung thêm: %s
+mod_detail_override_scripts,覆盖本体脚本：%s,Overrides scripts: %s,Sobrescreve scripts: %s,Ghi đè script gốc: %s
+mod_detail_overrides,覆盖声明：%s,Override declarations: %s,Declarações de sobrescrita: %s,Khai báo ghi đè: %s
+mod_detail_min_game_version,支持版本：%s,Supported version: %s,Versão suportada: %s,Phiên bản hỗ trợ: %s
+mod_detail_min_met,当前本体 %s，满足要求,Current game %s meets the requirement,Versão atual %s atende ao requisito,Game hiện tại %s đáp ứng yêu cầu
+mod_detail_min_unmet,当前本体 %s，低于最低要求,Current game %s is below the minimum,Versão atual %s está abaixo do mínimo,Game hiện tại %s thấp hơn mức tối thiểu
+mod_detail_undeclared,未声明,Not declared,Não declarado,Không khai báo
+mod_detail_none,无,None,Nenhum,Không có
+mod_detail_dir,目录：%s,Directory: %s,Diretório: %s,Thư mục: %s
+mod_detail_pending,待重启,Restart pending,Pendente de reinício,Chờ khởi động lại
+mod_detail_empty,未安装任何 MOD,No mods installed,Nenhum mod instalado,Chưa cài MOD nào
+mod_detail_select,选择左侧 MOD 查看详情,Select a mod on the left,Selecione um mod à esquerda,Chọn MOD bên trái để xem chi tiết
+mod_up,上移,Move Up,Mover para Cima,Di chuyển lên
+mod_down,下移,Move Down,Mover para Baixo,Di chuyển xuống
+mod_kind_characters,角色,Characters,Personagens,Nhân vật
+mod_kind_societies,社团,Groups,Grupos,Nhóm
+mod_kind_upgrades,道具,Items,Itens,Vật phẩm
+mod_kind_enemies,敌人,Enemies,Inimigos,Kẻ địch
+mod_kind_supports,支援,Supports,Suportes,Hỗ trợ
+mod_kind_clothes,服装,Outfits,Trajes,Trang phục
+mod_kind_shop_characters,商店角色,Shop Characters,Personagens da Loja,Nhân vật cửa hàng
+mod_kind_game_modes,游戏模式,Game Modes,Modos de Jogo,Chế độ chơi
+mod_kind_levels,关卡,Levels,Níveis,Màn chơi
