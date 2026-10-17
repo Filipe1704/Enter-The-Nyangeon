@@ -484,6 +484,7 @@
 - Notes / 说明: `ui/society_card.gd` **没有 `class_name`**，子类必须用 `extends "res://ui/society_card.gd"`（路径继承）而非标识符继承。MOD 社团卡覆写 `check_group()`（按 `ModManager.get_characters()` 是否非空显隐，绕过 `PlayerData.group` 门）与 `mouse_select_anim`/`mouse_out_anim`/`on_select_handle`/`out_select_card`（避免依赖 AnimationPlayer 动画资源）。通用卡实例化后**必须在 `add_child` 前**设 `player_card`（否则 `_ready` 读到 null）。`game_eval` 验证：`society_card_box` 出现 MOD 卡、`populate_player_cards` 填入 1 张卡、`_on_pressed` 后 `LevelSelect.player == card.player`。
 - Source / 来源: test
 - Date / 日期: 2026-10-04
+- SUPERSEDED: 2026-10-17 通用「MOD」卡现于 `ui/mod_society_card.gd` 照搬本体社团卡的悬停/选中动画；`mod_society_base` 的空实现仍适用于 mod 自带卡。
 
 ### [Mod] 补丁/依赖引擎（P0.5）：注册表内存合并 + 拓扑排序
 - Evidence / 证据: `script/mod_patch.gd`（`class_name ModPatch`；`apply_all`/`apply_one`/`_op_set`/`_op_inherit`）、`script/mod_manager.gd`（`_resolve_order`/`_apply_patches`/`_collect_patch_files`/`_register_path` 覆盖分支）。
@@ -2468,3 +2469,10 @@
 - Notes / 说明: 承接同日「旧覆盖包打回本体 UI」事故，加运行期守卫：`replace_files=true` 的包挂载前核对目录表，`res://mods/<id>/` 之外且未在 `manifest.replace_paths` 声明的路径判为未声明覆盖 → 降级挂载（mod 内容照常加载、本体零覆盖）；已声明则保留 `replace_files=true` 放行。匹配含 `<decl>.` 前缀（覆盖 `.gdc/.remap/.import` 边车），避免精确匹配误判。目录无法解析（非 v4/目录加密/损坏）时跳过守卫不误拦。**仅写日志**，不改 MOD 管理页。隔离 user:// 实测三情形：坏包(未声明)→降级、无 `replace_files`→不动作、全量声明→放行。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-16
+
+### [UI] 通用「MOD」社团卡不可点/无悬停：整卡 ColorRect 默认 STOP 吞事件 + base 悬停为空实现
+- Evidence / 证据: `ui/mod_society_card.tscn`（旧版 `Node2D/ColorRect` 未设 `mouse_filter`，默认 `STOP`；对照本体卡 `ui/ED_card.tscn:258` 设 `mouse_filter = 2`）、`ui/mod_society_base.gd:12-17`（`mouse_select_anim`/`mouse_out_anim` 为 `pass`）、`ui/mod_society_card.gd`（现照搬 `ui/society_card.gd:68-100` 的四个交互方法，播放 `select_anim`/`out_anim`/`on_select_anim`/`out_select_anim`）。
+- Notes / 说明: 根 `PanelContainer` 的 `gui_input`/`mouse_entered` 会被覆盖其上的子 `ColorRect` 拦截（只有右侧十几像素空白可点）；任何整卡覆盖层都必须 `MOUSE_FILTER_IGNORE`。通用卡改为**照搬本体社团卡场景**（`StyleBoxEmpty` 主题、深色条、渐变、完整 `AnimationPlayer` 动画库），仅把图标 `TextureRect` 换成页码 `Label`（`MOD`/`MOD 2`）；悬停可见效果为本体卡同款底部 2px 白色下划线 + `ButtonSounds2`。`mod_society_base` 的空悬停实现仍只用于 mod 自带卡。实测：`hovered=ModSociety`、`current_animation=select_anim`、点击后 `on_select=true`/`on_select_anim`、`Node2D.position.x` 动画到 -24。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-17
+- SUPERSEDED: 2026-10-17 初版悬停用 Tween 做高度 28→30；已改为照搬本体社团卡动画；ColorRect IGNORE 结论不变。

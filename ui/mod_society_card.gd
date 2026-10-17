@@ -8,6 +8,32 @@ extends "res://ui/mod_society_base.gd"
 
 # 设置页码标签：单页显示 "MOD"，多页显示 "MOD <n>"。
 func set_page(index: int, total: int) -> void:
-	var lbl := get_node_or_null("Node2D/Label")
+	var lbl := get_node_or_null("Node2D/ColorRect/Label")
 	if lbl != null:
 		lbl.text = "MOD" if total <= 1 else "MOD %d" % (index + 1)
+
+
+func mouse_select_anim() -> void:
+	if on_select == false:
+		SoundManager.play_sfx("ButtonSounds2")
+		card_anim.play("select_anim")
+
+
+func mouse_out_anim() -> void:
+	if on_select == false:
+		card_anim.play("out_anim")
+
+
+func on_select_handle() -> void:
+	on_select = true
+	card_anim.play("on_select_anim")
+	GameEvents.emit_society_card_selected(self)
+	close_card()
+
+
+func out_select_card() -> void:
+	if on_select == true:
+		on_select = false
+		card_anim.play("out_select_anim")
+		await get_tree().create_timer(0.3).timeout
+		open_card()
