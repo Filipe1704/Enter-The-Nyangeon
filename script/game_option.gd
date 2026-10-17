@@ -1,8 +1,8 @@
 extends OptionMenu
 
-@onready var full_screen: Control = %FullScreen
-@onready var shake: Control = %Shake
-@onready var v_sync: Control = %VSync
+@onready var full_screen = %FullScreen
+@onready var shake = %Shake
+@onready var v_sync = %VSync
 @onready var damage_freq: HSlider = %DamageFreq
 @onready var damage_freq_value: Label = %DamageFreqValue
 @onready var effect_freq: HSlider = %EffectFreq
@@ -14,22 +14,22 @@ extends OptionMenu
 @onready var resolutions: OptionButton = %Resolutions
 @onready var max_fps: HSlider = %MaxFps
 @onready var max_fps_value: Label = %MaxFpsValue
-@onready var physics_interp: Control = %PhysicsInterp
+@onready var physics_interp = %PhysicsInterp
+@onready var row_display: Control = %RowDisplay
+@onready var row_advanced: Control = %RowAdvanced
+@onready var full_screen_label: Control = %FullScreenLabel
+@onready var v_sync_label: Control = %VSyncLabel
+@onready var physics_interp_label: Control = %PhysicsInterpLabel
 
 func _ready():
-	setting_status()
-	full_screen.mouse_entered.connect(mouse_on_full_screen)
-	full_screen.mouse_exited.connect(mouse_out_full_screen)
-	full_screen.gui_input.connect(mouse_selected_full_screen)
-	shake.mouse_entered.connect(mouse_on_shake)
-	shake.mouse_exited.connect(mouse_out_shake)
-	shake.gui_input.connect(mouse_selected_shake)
-	v_sync.mouse_entered.connect(mouse_on_vs)
-	v_sync.mouse_exited.connect(mouse_out_vs)
-	v_sync.gui_input.connect(mouse_selected_vs)
-	physics_interp.mouse_entered.connect(mouse_on_physics_interp)
-	physics_interp.mouse_exited.connect(mouse_out_physics_interp)
-	physics_interp.gui_input.connect(mouse_selected_physics_interp)
+	_bind_toggle(full_screen, Game.on_full_screen, _set_full_screen, false)
+	_bind_toggle(shake, Game.shake_screen, _set_shake)
+	_bind_toggle(v_sync, Game.vsync_mode, _set_vsync, false)
+	_bind_toggle(physics_interp, Game.physics_interp, _set_physics_interp)
+	_bind_toggle_label(full_screen, full_screen_label)
+	_bind_toggle_label(shake, shake.get_parent().get_node("Label"))
+	_bind_toggle_label(v_sync, v_sync_label)
+	_bind_toggle_label(physics_interp, physics_interp_label)
 	resolutions.item_selected.connect(_on_resolutions_item_selected)
 	damage_freq.value_changed.connect(_on_damage_freq_value_changed)
 	effect_freq.value_changed.connect(_on_effect_freq_value_changed)
@@ -39,30 +39,68 @@ func _ready():
 	resolutions_block.mouse_filter = (
 		Control.MOUSE_FILTER_STOP if OS.has_feature("mobile") else Control.MOUSE_FILTER_IGNORE
 	)
-	for toggle in [full_screen, shake, v_sync, physics_interp]:
-		toggle.focus_mode = Control.FOCUS_ALL
-		var label: Label = toggle.get_parent().get_node("Label")
-		label.mouse_filter = Control.MOUSE_FILTER_STOP
-	full_screen.focus_entered.connect(mouse_on_full_screen)
-	full_screen.focus_exited.connect(mouse_out_full_screen)
-	shake.focus_entered.connect(mouse_on_shake)
-	shake.focus_exited.connect(mouse_out_shake)
-	v_sync.focus_entered.connect(mouse_on_vs)
-	v_sync.focus_exited.connect(mouse_out_vs)
-	physics_interp.focus_entered.connect(mouse_on_physics_interp)
-	physics_interp.focus_exited.connect(mouse_out_physics_interp)
-	full_screen.get_parent().get_node("Label").gui_input.connect(mouse_selected_full_screen)
-	shake.get_parent().get_node("Label").gui_input.connect(mouse_selected_shake)
-	v_sync.get_parent().get_node("Label").gui_input.connect(mouse_selected_vs)
-	physics_interp.get_parent().get_node("Label").gui_input.connect(mouse_selected_physics_interp)
+	setting_status()
 	if OS.has_feature("mobile"):
-		full_screen.get_parent().get_parent().hide()
-		v_sync.get_parent().hide()
-		physics_interp.get_parent().hide()
+		row_display.hide()
+		row_advanced.hide()
 
 func menu_show():
 	super()
 	setting_status()
+
+func _bind_toggle(toggle, value: bool, apply: Callable, allow_mobile: bool = true) -> void:
+	toggle.focus_mode = Control.FOCUS_ALL
+	toggle.set_on(value, false)
+	toggle.toggled.connect(func(on: bool):
+		_on_toggle_changed(toggle, on, apply, allow_mobile)
+	)
+
+func _bind_toggle_label(toggle, label_target: Control) -> void:
+	label_target.mouse_filter = Control.MOUSE_FILTER_STOP
+	label_target.gui_input.connect(func(event: InputEvent):
+		_on_toggle_label_input(toggle, label_target, event)
+	)
+
+func _on_toggle_changed(toggle, on: bool, apply: Callable, allow_mobile: bool) -> void:
+	# 移动端由导出预设接管全屏/垂直同步；若防御性入口仍可达，则回滚并提示。
+	if not allow_mobile and OS.has_feature("mobile"):
+		toggle.set_on(not on, false)
+		_show_mobile_notice()
+		return
+	SoundManager.play_sfx("ButtonSounds")
+	apply.call(on)
+
+func _on_toggle_label_input(toggle, label: Control, event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed:
+		label.accept_event()
+		toggle.toggle()
+	elif not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
+		label.accept_event()
+		toggle.toggle()
+
+func _set_full_screen(on: bool) -> void:
+	Game.on_full_screen = on
+	DisplayServer.window_set_mode(
+		DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED
+	)
+	Game.save_config()
+
+func _set_shake(on: bool) -> void:
+	Game.shake_screen = on
+	Game.save_config()
+
+func _set_vsync(on: bool) -> void:
+	Game.vsync_mode = on
+	DisplayServer.window_set_vsync_mode(
+		DisplayServer.VSYNC_ENABLED if on else DisplayServer.VSYNC_DISABLED
+	)
+	Game.save_config()
+
+# 物理插值开关（默认关）：写入设置并运行期应用，随后持久化。
+func _set_physics_interp(on: bool) -> void:
+	Game.physics_interp = on
+	Game.apply_physics_interp()
+	Game.save_config()
 
 func _show_mobile_notice():
 	mobile_notice.notice("option_mobile_only_notice")
@@ -71,193 +109,12 @@ func _on_resolutions_touch_block_gui_input(event: InputEvent):
 	if event is InputEventScreenTouch and event.pressed:
 		_show_mobile_notice()
 
-func mouse_on_full_screen():
-	if Game.on_full_screen == false:
-		full_screen.get_node("AnimationPlayer").play("full_on")
-	else:
-		full_screen.get_node("AnimationPlayer").play("selected_out")
-
-func mouse_out_full_screen():
-	if Game.on_full_screen == false:
-		full_screen.get_node("AnimationPlayer").play("full_out")
-	else:
-		full_screen.get_node("AnimationPlayer").play("selected")
-
-func mouse_selected_full_screen(event: InputEvent):
-
-	# 移动端由导出预设的沉浸式全屏接管，桌面端的窗口模式会关闭全屏、露出系统通知栏。
-	if OS.has_feature("mobile"):
-		if event is InputEventScreenTouch and event.pressed:
-			_show_mobile_notice()
-		return
-
-	if event as InputEventScreenTouch and event.pressed:
-		SoundManager.play_sfx("ButtonSounds")
-		if Game.on_full_screen == false:
-			Game.on_full_screen = true
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
-			full_screen.get_node("AnimationPlayer").play("selected")
-			Game.save_config()
-		else:
-			Game.on_full_screen = false
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-			full_screen.get_node("AnimationPlayer").play("full_out")
-			Game.save_config()
-
-	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
-		full_screen.accept_event()
-		SoundManager.play_sfx("ButtonSounds")
-		if Game.on_full_screen == false:
-			Game.on_full_screen = true
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
-			full_screen.get_node("AnimationPlayer").play("selected")
-			Game.save_config()
-		else:
-			Game.on_full_screen = false
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-			full_screen.get_node("AnimationPlayer").play("full_out")
-			Game.save_config()
-
-func mouse_on_shake():
-	if Game.shake_screen == false:
-		shake.get_node("AnimationPlayer").play("full_on")
-	else:
-		shake.get_node("AnimationPlayer").play("selected_out")
-
-func mouse_out_shake():
-	if Game.shake_screen == false:
-		shake.get_node("AnimationPlayer").play("full_out")
-	else:
-		shake.get_node("AnimationPlayer").play("selected")
-
-func mouse_selected_shake(event: InputEvent):
-
-	if event as InputEventScreenTouch and event.pressed:
-		SoundManager.play_sfx("ButtonSounds")
-		if Game.shake_screen == false:
-			Game.shake_screen = true
-			shake.get_node("AnimationPlayer").play("selected")
-			Game.save_config()
-		else:
-			Game.shake_screen = false
-			shake.get_node("AnimationPlayer").play("full_out")
-			Game.save_config()
-
-	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
-		shake.accept_event()
-		SoundManager.play_sfx("ButtonSounds")
-		if Game.shake_screen == false:
-			Game.shake_screen = true
-			shake.get_node("AnimationPlayer").play("selected")
-			Game.save_config()
-		else:
-			Game.shake_screen = false
-			shake.get_node("AnimationPlayer").play("full_out")
-			Game.save_config()
-
-func mouse_on_vs():
-	if Game.vsync_mode == false:
-		v_sync.get_node("AnimationPlayer").play("full_on")
-	else:
-		v_sync.get_node("AnimationPlayer").play("selected_out")
-
-func mouse_out_vs():
-	if Game.vsync_mode == false:
-		v_sync.get_node("AnimationPlayer").play("full_out")
-	else:
-		v_sync.get_node("AnimationPlayer").play("selected")
-
-func mouse_selected_vs(event: InputEvent):
-
-	# 移动端垂直同步由系统/驱动控制，避免桌面窗口设置生效。
-	if OS.has_feature("mobile"):
-		if event is InputEventScreenTouch and event.pressed:
-			_show_mobile_notice()
-		return
-
-	if event as InputEventScreenTouch and event.pressed:
-		SoundManager.play_sfx("ButtonSounds")
-		if Game.vsync_mode == false:
-			Game.vsync_mode = true
-			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
-			v_sync.get_node("AnimationPlayer").play("selected")
-			Game.save_config()
-		else:
-			Game.vsync_mode = false
-			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-			v_sync.get_node("AnimationPlayer").play("full_out")
-			Game.save_config()
-
-	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
-		v_sync.accept_event()
-		SoundManager.play_sfx("ButtonSounds")
-		if Game.vsync_mode == false:
-			Game.vsync_mode = true
-			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
-			v_sync.get_node("AnimationPlayer").play("selected")
-			Game.save_config()
-		else:
-			Game.vsync_mode = false
-			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-			v_sync.get_node("AnimationPlayer").play("full_out")
-			Game.save_config()
-
-
-func mouse_on_physics_interp():
-	if Game.physics_interp == false:
-		physics_interp.get_node("AnimationPlayer").play("full_on")
-	else:
-		physics_interp.get_node("AnimationPlayer").play("selected_out")
-
-func mouse_out_physics_interp():
-	if Game.physics_interp == false:
-		physics_interp.get_node("AnimationPlayer").play("full_out")
-	else:
-		physics_interp.get_node("AnimationPlayer").play("selected")
-
-func mouse_selected_physics_interp(event: InputEvent):
-	if event as InputEventScreenTouch and event.pressed:
-		SoundManager.play_sfx("ButtonSounds")
-		_toggle_physics_interp()
-
-	if not event.is_echo() and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
-		physics_interp.accept_event()
-		SoundManager.play_sfx("ButtonSounds")
-		_toggle_physics_interp()
-
-# 物理插值开关（默认关）：写入设置并运行期应用，随后持久化。
-func _toggle_physics_interp():
-	Game.physics_interp = not Game.physics_interp
-	Game.apply_physics_interp()
-	Game.save_config()
-	if Game.physics_interp == true:
-		physics_interp.get_node("AnimationPlayer").play("selected")
-	else:
-		physics_interp.get_node("AnimationPlayer").play("full_out")
-
 func setting_status():
-	if Game.on_full_screen == true:
-		full_screen.get_node("AnimationPlayer").play("selected")
-	else:
-		full_screen.get_node("AnimationPlayer").play("full_out")
-
+	full_screen.set_on(Game.on_full_screen, false)
 	resolutions.selected = Game.resolution
-
-	if Game.shake_screen == true:
-		shake.get_node("AnimationPlayer").play("selected")
-	else:
-		shake.get_node("AnimationPlayer").play("full_out")
-
-	if Game.vsync_mode == true:
-		v_sync.get_node("AnimationPlayer").play("selected")
-	else:
-		v_sync.get_node("AnimationPlayer").play("full_out")
-
-	if Game.physics_interp == true:
-		physics_interp.get_node("AnimationPlayer").play("selected")
-	else:
-		physics_interp.get_node("AnimationPlayer").play("full_out")
-
+	shake.set_on(Game.shake_screen, false)
+	v_sync.set_on(Game.vsync_mode, false)
+	physics_interp.set_on(Game.physics_interp, false)
 	damage_freq.set_value_no_signal(Game.damage_text_freq)
 	damage_freq_value.text = _damage_freq_text(Game.damage_text_freq)
 	effect_freq.set_value_no_signal(Game.effect_freq)

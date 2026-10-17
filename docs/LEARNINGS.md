@@ -955,6 +955,7 @@
 - Evidence / 证据: `script/mod_manager.gd`（`ORDER_PATH=user://mods/mods_order.json`；`_load_order`/`_save_order`/`get_order`/`set_order`；`_cmp_order` 先用户序、后 `(load_order,id)`；`list_mods()` 返回 `icon` 并按 `_cmp_order` 排序；`_mod_icon_path` 先 loose `rec.dir/icon.png` 再 `manifest.icon`）；`script/mod_option.gd`（`extends OptionMenu`；行 = SelectBar + `TextureRect` 图标 + Label + `ui/option_toggle.tscn`；`_input` 手写鼠标/触屏拖动 + `_target_index`/spacer 换位；`_move_selected` 上下箭头；`Image.load`→`ImageTexture`）；`script/option_toggle.gd`（`set_on(v, animate)`，`seek(current_animation_length, true)` 无动画定位）；`ui/mod_option.tscn`（`Scroll.offset_left=122` 避开页签列、`Content.size_flags_horizontal=3`）；`ui/option.tscn`（`menu_box/Mod` + 第三个 `option_button.tscn`，`button_id=option_mod`）；`scenes/main/menu_screen.gd`（删自建 MOD 按钮，`ensure_unlocked()` 移入 `_ready`）；`ETN_localization.csv`（`mod_*`）。
 - Notes / 说明: ① **页签列遮挡**：`ui/option.tscn` 内页签列 `Node2D`（含 `ColorRect` x 0..139）排在 `menu_box` **之后** → 绘制在子页内容之上；GAME 页靠 Label `horizontal_alignment=2`（右对齐）+ `offset_transform_position` 规避，**左对齐的新子页**必须把 `Scroll.offset_left` 推到页签列（≈139）之外，否则开头被裁（本次 MOD 提示首两字消失即此因）。② `user://` 下的裸 PNG **不能用 `load()`**（未 import），须 `Image.load(path)`→`ImageTexture.create_from_image()`；`res://`（pck 内）才走 `load()`。③ 用户排序只作**同级 tie-break**，依赖/冲突仍由拓扑强约束；且与启停一样**重启生效**（pck 不可卸载）。④ 小坑：`@onready var x: Button = %UpBtn` 若节点实为 `TextureButton` → 运行时 `Trying to assign value of type 'TextureButton' to a variable of type 'Button'`（断点），类型须写 `TextureButton`/`BaseButton`。⑤ 共享 `ui/option_toggle.tscn` 抽自 game_option 的开关三件套，仅 MOD 页使用（未重构 game 页）。
 - SUPERSEDED: 2026-10-18 管理页改为分栏布局（Content 左 144、左侧分组列表/右侧详情），旧 `Scroll.offset_left=122`、`SelectBar` 与行内 tooltip 描述失效；页签列遮挡仍需保持内容左边界在 139 之外。（来源：code）
+- SUPERSEDED: 2026-10-18 GAME 页改为卡片分区并复用 `ui/option_toggle.tscn`；GAME 不再靠 Label 右对齐 + `offset_transform_position` 规避页签列，内容统一从 x=150 起排；共享开关现同时服务 GAME 与 MOD，并补了 focus/`ui_accept`。（来源：code）
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-04
 
@@ -2483,6 +2484,67 @@
 - Source / 来源: code + test
 - Date / 日期: 2026-10-16
 
+### [Mod/VFX] IZZY 裁决处决 AoE 改「来源侧 Area2D + `hit_received`」，并加红色冲击波
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:456`（`_aoe_execute` 用 `$AoEHitBox` 圆形 Area2D + `get_overlapping_areas()`）、`:494`（`_spawn_shockwave` 挂 `SELayer`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.tscn`（`AoEHitBox`：`collision_layer=0`/`collision_mask=16384`/`monitorable=false`/`monitoring=false`，`CircleShape2D radius=80`）；`mods/doom_slayer_izzy/vfx/doom_shockwave.tscn`+`.gd`；`script/hit_box.gd:27`（`ENEMY_HURTBOX_LAYER=16384`）、`script/hurt_box.gd:39`（目标侧只认 `HitBox`）、`script/health_component.gd:21`（`hit_received`→`take_damage`）。
+- Notes / 说明: 原 `_aoe_execute` 是 `get_nodes_in_group("Enemy")` 手动距离扫描 + 直接 `health_component.take_damage`，伤害类型 `EXPLOSION_DAMAGE`。改为来源侧 Area2D（与近战 `_swing` 同路径）：AoE 检测敌方 `HurtBox`（层 16384）并 `hit_received.emit`，伤害因此走标准管线（护甲/加成/无敌帧）且类型改 `MELEE_DAMAGE`。要点：①AoE 的 Area2D 必须 `monitorable=false` 且层=0，否则会被敌方 HurtBox 当入射 HitBox 触发误命中；②切换 `monitoring`/`shape.disabled` 后要 `await get_tree().physics_frame`（这里等 2 帧）重叠表才刷新，`get_overlapping_areas()` 才读得到；③过滤取 `a.get_parent()`（HurtBox 的父即敌人实体）判 `EnemyPart`/`is_idle`，因为 `EnemyPart` 也有同层 HurtBox；④已处决目标同帧 HurtBox 可能仍在，用 `ent == center` 排除。冲击波用本体 `shaders/shock_wave_2.gdshader` 的 ColorRect 环：环 RGB = `ColorRect.color`，且**环仅在 `size > thickness` 时显形**（`mask` 公式所致），故 `thickness` 要设细值（0.05→0.02）而非 0.6→0，环才由小到大可见；半径按 `size(0..0.5) × 矩形边长` 计，取 160px 矩形 → 0.5 即半径 80、对齐 AoE。特效一次性，播完 `queue_free`（本体 `range_explosion` 不自动回收）。另：该 AoE **命中至少一个敌人时播一次 `HurtSounds2`**（`hit_any` 布尔，口径同 `_crucible3_tick:337-339`；只命中被处决目标时因 `ent == center` 排除而不响——处决本身已有 `execute_sounds`）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Audio] 替换 mod BGM 资源后裁决 BGM 静默不出：`load()` 返回 null 被 `_bgm_enter` 静默早退 + 未重启/重导入
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:88`（旧代码 `if intro == null: return`，在 `SoundManager.bgm_fade_out`/`play_bgm` 之前 → 本体 BGM 一秒不断）；`mods/doom_slayer_izzy/script/doom_audio.gd:22-37`（旧 `load_stream` 失败无任何告警）；修复后实测 `BGMCHECK intro_null=false intro_len=9.24 loop_null=false loop_len=59.16`、`LOOPMODE=1 loop_end=2839679`，`_bgm_enter` 后 `ENTER@3.5 playing=true db=0.0 len=9.24`→`ENTER@12 len=59.16 loop=true`。
+- Notes / 说明: 症状「进裁决 DOOM BGM 完全不响、本体 BGM 一秒不断、无淡出切换」= `_bgm_enter` 在动 BGM 前 early return，唯一路径是 `intro == null`（`bgm_intro()` 加载失败）。触发条件：**编辑器内运行 + 替换了 `res://mods/<id>/BGM/*.wav` + 未重启 Godot / 未 reimport** → 该资源的导入缓存/引用未复位，`load()` 拿不到新文件。要点：①编辑器内联调时 mod 源（`res://mods/<id>/`）优先于 `user://mods` 的 pck（`mod_manager.gd:570` `load_resource_pack(pck, replace_files=false)` → 项目文件优先），所以**换 BGM 不必重打 pck，但必须让 Godot 重新导入**（重开编辑器或 `filesystem reimport`）。②失败要**告警**，不要静默 return，否则只表现为「没声音」。③`_bgm_enter` 切 loop 曾用 `await SoundManager.bgm_player.finished`：本体任何换歌（`cut_finish`→`bgm_loop_play`；捡紫水晶 `main.gd:33`→`_on_bgm_timer_timeout`；boss）只要在 intro 期间换掉 `bgm_player.stream`，`finished` 就**永不触发**、loop 永不播 → 改用 `create_timer(intro.get_length(), true, false, true)`（`ignore_time_scale=true`，避免处决慢放拉伸计时）+ `_bgm_gen` 守卫。④`bgm_loop()` 旧版 `loop_end = data.size()/(2*ch)` 在 QOA（`compress/mode=2`）下用的是**压缩字节**，会把 59.16s 的循环截成 ~11.95s；应直接信任导入的 `edit/loop_mode=2`（本次实测 `loop_end=2839679` 即完整），仅在导入未设循环时兜底且用 `get_length()*mix_rate` 算帧数。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Camera] 处决镜头倾斜改 15°、命中震屏加强且随连击档位递增（震屏互斥，勿叠加第二个）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:44`（`EXEC_TILT := 0.261799`）、`:191`（`_cam_execute` 用 `EXEC_TILT * ±1`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:276`（`apply_execution_camera` → `emit_shake_screen(8 + tier, 55.0 + 10.0 * tier, 0.03)`）、`:274-275`；`scenes/game_camera/gamecamera.gd:71-89`（`shake_screen(length, shake_range, freq)` = length 次、每次 ±range 像素随机、freq 秒补间）、`:76`（`on_shake` 互斥）。
+- Notes / 说明: 处决**命中**震屏走既有 `apply_execution_camera`（`_execute:429` 对**普通+裁决处决都调**），故「加强」= 直接改该处参数而非再 `emit_shake_screen` 一次 —— 因 `gamecamera.gd:76` 的 `on_shake` 同一时刻只跑一个震屏，后发的会被忽略，新增会把 `apply_execution_camera` 那次吞掉。`EXEC_TILT` 由 `0.07`(≈4°) 改 `0.261799`(15°=π/12，与 `HELD_ROT` 同值)，普通/裁决共用 `_cam_execute` 故都生效。实测 `get_script_constant_map()`：`EXEC_TILT=0.261799 deg≈15.000`。`emit_shake_screen` 参数含义易误读：第 1 参是**次数**（非时长）、第 3 参是每步补间秒数。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Audio] 调整个别 SFX 音量：mod SFX 是各自 AudioStreamPlayer，只能改节点的 `volume_db`
+- Evidence / 证据: `mods/doom_slayer_izzy/script/doom_audio.gd:16-20`（`SFX_VOLUME_DB` 增益表）、`:60-80`（`register_sfx` 新建/已存在都设 `volume_db`）；`scenes/manager/SoundManager.gd:38-42`（`play_sfx(name)` 仅 `$SFX/<name>.play()`，无音量参数）。实测 `SFXVOL crucible_sword_attack db=6.0 / crucible_sword_start db=6.0 / execute_sounds db=0.0`。
+- Notes / 说明: mod 音效经 `DOOM_AUDIO.register_sfx` 注册为 `SoundManager/SFX/<name>` 的独立 `AudioStreamPlayer`（`bus="SFX"`）。`play_sfx` 没有音量参数、WAV 导入也无音量项，所以调音量 = 改该节点 `volume_db`（`SFX_VOLUME_DB` 表，未列出为 0）。注意「已存在则跳过」分支**也要同步 `volume_db`**，否则复用旧节点时改动不生效（本次已处理）。只对 mod 自带音有效；本体音（如 `Swing1`/`HurtSounds2`）不在此表内、改不到。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/SFX] 裁决处决起手补放挥砍音 `crucible_sword_attack`
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:414-415`（`_execute` 内 `if crucible_exec: SoundManager.play_sfx("crucible_sword_attack")`）；`:412`（动画 `play(anim)` 之后）、`:448`（`_kill` 命中时的 `execute_sounds` 不变）。实测 `SFX/crucible_sword_attack` 存在、`db=6.0`、可 `play()`。
+- Notes / 说明: 裁决处决此前只有命中音（`execute_sounds`），无挥舞音；补上与裁决挥舞同源的 `crucible_sword_attack`，**仅裁决处决、起手播放一次**（`crucible_exec` 分支），普通处决不补。音量沿用 `SFX_VOLUME_DB`(+6 dB)。判定标志 `crucible_exec` 在 `_execute:401` 已算好，复用之。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Glory] 「可处决」概率固定为 60%（原 25%+5%×PS等级）
+- Evidence / 证据: `mods/doom_slayer_izzy/script/glory_manager.gd:17-18`（`BASE_CHANCE := 60.0`、`CHANCE_PER_PS := 0.0`）、`:226-227`（`_chance() = BASE_CHANCE + CHANCE_PER_PS * _ps_level()`）。实测运行时 `_chance()=60.0`、`BASE_CHANCE=60.0 CHANCE_PER_PS=0.0`。
+- Notes / 说明: 由「25/30/35/40%（T0–T3）」改为**恒 60%**（把 PS 档位增量置 0，保留公式结构便于回改）。该概率仅在**致死命中**时滚动（`try_stagger:185-206`），且受 `MAX_EXEC=3`、`CD_MS=2000`、非 BOSS/EnemyPart、需有描边材质等门控；敌人不会出生即可处决（除非自带 `ds_executable` buff，走 `_process:41-47`）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/PS] IZZY 裁决三段倍率按 PS 等级查表 + T2 挥砍 hitbox×2 + T3 子弹命中回能/计量
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:62`（`COMBO_MULT := [[2,2,3],[3,3,4],[3,4,5],[4,5,6]]`）、`:252`（`_tier()=clampi(now_t,0,3)`）、`:265`（第1/2段 `dmg=base*COMBO_MULT[_tier()][idx]`）、`:309`（第3段 `base=kick*global*COMBO_MULT[_tier()][2]`，`tick=base*0.4`×4）、`:368-370`（`_apply_hitbox`：`_tier()>=2` 时 `_shapes[idx].radius/height×2`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:42`（连接 `GameEvents.player_bullet_hit_enemy`）、`:202-208`（handler）。实测：`COMBO_MULT` 正确、`hitbox@T2 r=48/h=156`（×2）、`hitbox@T1 r=24/h=78`、`hook_connected=true`、非裁决期 `now_t=3` 手动 emit 后 `meter=4.0`（=T3 上限 400×1%）。
+- Notes / 说明: 三段倍率改为按 `now_t` 查表（T3=原 4/5/6，低阶更低，属「基础调低由升级补回」的设计）；第1/2段取 `[tier][0/1]`，第3段(投掷)取 `[tier][2]`。T2 起**只放大挥砍 capsule**（第3段判定 `CRUCIBLE3_HIT_RANGE=120`、处决 AoE `80` 不变；普通近战走 `_default_shape` 不受影响）——在 `_apply_hitbox` 里改 `_shapes[idx]` 的 `radius/height`，每次挥砍按当前 tier 重算。T3 起子弹命中：**裁决期回能量、非裁决期回计量条**（各 `max_meter()*1%`，不设限）；用本体 `GameEvents.player_bullet_hit_enemy`（`GameEvents.gd:132`，由 `player_bullet.gd:87` 经 `player.gd:480-481 apply_penetrate_dealt` 触发，霰弹多弹丸=多次）。注意 `add_meter` 满会 `activate_crucible()`，故子弹命中可把计量打满自动进裁决；`add_energy`/`add_meter` 各自内部按 `crucible` 状态门控。文案（PS 卡 `t_level`）本次未做。另：**T2 起每次处决叠 2 层 combo**（T0/T1 +1）；`add_combo(units:=1)` 加层数、`add_execution_combo()` 封装 `2 if now_t>=2 else 1`，`melee.gd:449` 改调 `add_execution_combo()`。实测 `now_t` T1/T2/T3 调一次后 `combo=1/2/2`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+- SUPERSEDED: 2026-10-16 上条「T2 起放大挥砍 capsule」已改为 **T1 起**（`melee.gd:368` `_tier()>=1`）；文案与弹匣封顶见下条。
+
+### [Mod/PS] IZZY：判定扩大改到 T1；弹匣上限封顶 2（参考 tsurugi）；PS 文案注册(zh_CN+en)
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:368`（`var s := 2.0 if _tier() >= 1 else 1.0`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd`（`_ready` 内 `PlayerData.set_player.connect(_apply_ammo_cap)` + `PlayerData.max_ammo_value = 2`；`_apply_ammo_cap(): PlayerData.max_ammo_value = 2`）；`mods/doom_slayer_izzy/entry/doom_slayer_izzy_entry.gd`（`_ready` 同步调 `_register_texts()`，8 条 `ModAPI.add_translation`）；封顶机制 `script/PlayerData.gd:364`（`clamp(1, base_max_ammo + max_ammo_add*max_ammo_mult, max_ammo_value)`）、`:201`（每轮重置 9999）、`scenes/player/tsurugi/tsurugi_ps.gd:22,28`（参考实现）。
+- Notes / 说明: ①判定扩大由 T2 提到 **T1**（`_tier()>=1` 挥砍 capsule `radius/height×2`；T0 仍 1×；T2 只保留处决叠 2 层）。②弹匣**上限封顶 2**：走 `PlayerData.max_ammo_value`（拾取 `max_ammo_add` 只加在 clamp 前，被上限截住）；每轮 `reset_date()` 置 9999，靠 `set_player` 信号由角色 PS 重新封顶（与 tsurugi/Hibiki 同法），PS `_ready` 也立即设一次兜底。③PS 文案键 `doom_slayer_izzy_izzy_ps_0..3`，在 `entry` 同步注册 `zh_CN`+`en`（`add_translation` 不触发 TRANSLATION_CHANGED，须早于菜单/商店构建）；选人卡取 `_ps_0`（`ui/player_card.gd:150`）、局内 PS 卡取 `_ps_0..3`（`ability_shop_ps_card.gd:178-183`），缺键回退 en。实测：`tr(_ps_0)` 中/英文正确、`max_ammo_value=2`、`hitbox@T0 r=24`/`@T1 r=48`、`max_ammo_add=50` 后 `stats.max_ammo=2`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Egg] IZZY 彩蛋：每回合 10% 把局内 HUD 名字 IZZY → 122V
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:22-23`（`EGG_NAME := "122V"`、`EGG_CHANCE := 0.10`）、`:45`（`GameEvents.round_start.connect(_on_round_start_name)`）、`:225-234`（`_on_round_start_name` 覆写 `GameUI.player_name.text`）；名字来源 `ui/game_ui.gd:51`（`player_name.text = player.player_card.name`，仅 `_ready` 设一次）。实测：`gui/label/connected` 正常、300 次调用命中 29 次 `122V`（≈10%）。
+- Notes / 说明: 彩蛋**只覆写局内 HUD 标签**（`GameUI/PlayerName`），`GameUI` 是 `player` 根节点的兄弟（PS `player = NodePath("..")`），故 `player.get_node("GameUI").player_name` 可达；每回合重掷（命中 `122V`、否则还原 `IZZY`）。**故意不改 `player.player_card.name`**：那是共享 `PlayerCard` 资源，HUD/暂停页(`pause_screen.gd:162`)/结算页(`game_over_page.gd:157`)/选人卡(`player_card.gd:148`)/联机名都读它，改了会泄漏且需还原。触发用 `GameEvents.round_start`（每回合含第 1 回合）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Coop] IZZY 联机同步：状态/事件镜像、镜像隐藏 HUD、待处决 host 权威、LAN 处决不慢放
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd`（`get/apply_network_character_state`、`apply_network_character_event`、`_build_hud` 远端 return、`_setup_local` 本地独占、`_is_lan`、`apply_execution_camera` 慢放门、`enter_crucible` 广播 `ds_crucible_on`）；`scenes/doom_slayer_izzy_melee.gd`（`_is_lan`、`_execute:443` 慢放门、`_kill` 广播 `ds_execute`、AoE `HurtSounds2` 走 `on_hit_sfx`）；`script/glory_manager.gd:189`（`try_stagger` host 门）+`:233`（`_is_lan`）。参考：`scenes/player/hina/hina_ps.gd:31-49`（LAN 不用全局 `Engine.time_scale`）；`mods/etn_coop/net/coop_net.gd:4615/250/2124/1755`；`coop_player_proxy.gd:82`(`network_remote_player`)/`:250`/`:314-319`；`script/extension_hooks.gd:92-94,104`。单端实测：`is_lan=false`、`apply_network_character_state` 置位→镜像 `crucible=true`、remote guard 不改 `max_ammo_value`、local `_setup_local`→cap=2。
+- Notes / 说明: **A 视觉镜像**——`apply_network_character_state(state)` 解析 `combo(state&0xFF)`/`crucible(state>>8&1)`，**只写镜像 `crucible`**（借 melee `_update_held` 显示持剑），不触发玩法；镜像 `_build_hud` 直接 return（隐藏 combo/能量条，避免与本地串味）。**B 一次性事件**——`player.broadcast_character_event`→`on_character_event`→coop 转发→对端 `apply_network_character_event` 仅回放**世界表现**（`ds_crucible_on`→`crucible_sword_start`；`ds_execute`→`execute_sounds`+mirror `Kick/crucible_burst`.restart()），不含镜头/震屏/慢放。**C 待处决 host 权威**——`try_stagger` 在 `_is_lan() and not multiplayer.is_server()` 时直接 `return false`（客机不掷骰/不打标记），等 host 掷中后 coop 复制 `ds_executable` buff，客机 `_process` 见 buff 本地标记描边；host 端行为不变。**D LAN 处决不慢放**——`_execute`/`apply_execution_camera` 的 `request_slow` 在 LAN 跳过（世界与动画都正常速度，无等比慢）。**关键坑**：coop 镜像实例化整个玩家场景 → 镜像 PS `_ready` 也会跑，**必须把全局副作用（`PlayerData.max_ammo_value=2` / `set_player` 连接 / 子弹命中 hook）限制为本地**（`_setup_local` deferred + `_is_remote()` 守卫），否则客机玩别的角色会被误封顶弹匣/误充能。**待补**：完整双端联机回归（需本地两实例）尚未跑。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
 ### [UI] 通用「MOD」社团卡不可点/无悬停：整卡 ColorRect 默认 STOP 吞事件 + base 悬停为空实现
 - Evidence / 证据: `ui/mod_society_card.tscn`（旧版 `Node2D/ColorRect` 未设 `mouse_filter`，默认 `STOP`；对照本体卡 `ui/ED_card.tscn:258` 设 `mouse_filter = 2`）、`ui/mod_society_base.gd:12-17`（`mouse_select_anim`/`mouse_out_anim` 为 `pass`）、`ui/mod_society_card.gd`（现照搬 `ui/society_card.gd:68-100` 的四个交互方法，播放 `select_anim`/`out_anim`/`on_select_anim`/`out_select_anim`）。
 - Notes / 说明: 根 `PanelContainer` 的 `gui_input`/`mouse_entered` 会被覆盖其上的子 `ColorRect` 拦截（只有右侧十几像素空白可点）；任何整卡覆盖层都必须 `MOUSE_FILTER_IGNORE`。通用卡改为**照搬本体社团卡场景**（`StyleBoxEmpty` 主题、深色条、渐变、完整 `AnimationPlayer` 动画库），仅把图标 `TextureRect` 换成页码 `Label`（`MOD`/`MOD 2`）；悬停可见效果为本体卡同款底部 2px 白色下划线 + `ButtonSounds2`。`mod_society_base` 的空悬停实现仍只用于 mod 自带卡。实测：`hovered=ModSociety`、`current_animation=select_anim`、点击后 `on_select=true`/`on_select_anim`、`Node2D.position.x` 动画到 -24。
@@ -2537,5 +2599,52 @@
 ### [UI] 设置页签保留 main 原版间距/动画，清理未用轨道并移除悬停 tooltip
 - Evidence / 证据: `ui/option_button.tscn`（保留 `on_select` 三条轨道与 `selected` 的 size/position；删除未被调用的 `on_out`；`RESET` 仅留 `Node2D/ColorRect:position`/`size` 与 `.:offset_transform_position`；`selected` 删除 `ColorRect:rotation`）；`ui/option.tscn` 移除 VBox 的 `size_flags_horizontal=3` 与显式 `separation=4`，回到原版自然行高/间距；`script/option_button.gd:26-35,46-58`（删除 `_resize_highlight` 与两处 `tooltip_text`，`set_selected(false)` 回退为 `play_backwards("on_select")`）；`ui/menu_button.tscn` 的 `RESET` 三条轨道均被 `on_select` 使用，未改。
 - Notes / 说明: 用户（source）指出页签按钮重做过，实际只用 `on_select`（悬停）与 `selected`（点击后整条金色底）；`on_out`、`RESET` 及 `.:position`/`rotation` 属遗留未用部分。`offset_transform_position` 在 Godot 4.7 默认 `offset_transform_visual_only=true`，只做视觉偏移，不改按钮自身 position/size，不影响 VBox 排版。长标题不再省略且无 tooltip，超出导航区直接裁切。设置专项回归与截图见 `tests/run_ui_ux_checks.py --settings-only`。
+
+### [Mod/Melee] IZZY 近战暴击（对齐本体；此前近战完全不暴击）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:264-267`（`_roll_melee`）、`:294-296`（`_swing` 写 `base_damage`/`is_crit`）、`:347/365`（`_crucible3_tick` 每 tick roll）、`:499/502`（`_aoe_execute` 整次 roll）；`_kill` 保持 `TRUE_DAMAGE` 不变。本体参考 `scenes/player/chinatsu/chinatsu_melee.gd:69-75`、`hoshino/melee.gd:126-132`、`utaha/melee.gd:72-78`、`script/kick.gd:39-44`；`damage_data.gd:127-128`（`DamageData.make` 支持 `crit` 键）。实测：`crit_luck=100` → `_roll_melee(100)=150/crit=true`；`crit_luck=0` → `100/false`；`_swing(100,...)` 后 `hit_box.base=150 is_crit=true`。
+- Notes / 说明: 之前 IZZY 的 `_swing` 只写 `hit_box.damage_data.base_damage`、**从不 roll `critical_luck`/设 `is_crit`**，`_crucible3_tick`/`_aoe_execute` 的 `DamageData.make` 也未带 `crit` → 近战（普通/裁决连击/处决 AoE）**全部不暴击**。现对齐本体：`luck<critical_luck → base*critical_damage, is_crit=true`；**普通近战+裁决1/2段**经 `_swing` roll；**第3段每 tick 各自 roll**；**AoE 整次 roll 一次**（命中同伤害）；**处决本体 TRUE_DAMAGE 仍不暴击**（直接取 hp）。`critical_damage` 实测基础值 `1.5`；`is_crit` 驱动暴击飘字（`enemy_hurt_floating_text.gd:30`）。联机下 `base_damage` 已含暴击倍率，随伤害字典传 host（`coop_net.gd:_damage_to_dict`），权威结算一致。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-17
+
+### [Mod/Melee] 裁决剑伤害继承 50% 子弹基础伤害（B 口径：段倍率之后加固定值）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:70`（`BULLET_INHERIT := 0.5`）、`:274-280`（`_bullet_inherit()`/`_crucible_hit_base(mult)`）、`:288`（裁决 1/2 段）、`:336`（第 3 段 `tick = base*0.4 + _bullet_inherit()`，**每 tick 各自 +50% 子弹**）、`:511`（AoE `_crucible_hit_base(3.0)`）。实测（kick=20、bullet=10、global=1、crit=1.5）：`_bullet_inherit()=5`、`_crucible_hit_base(2)=45`、`_crucible_hit_base(3)=65`、`crit_luck=100` 时 `_roll_melee(45)=68/crit=true`。
+- Notes / 说明: 仅**裁决剑**（1/2/3 段 + 处决 AoE）继承；**普通近战/枪托不继承**。口径 B：继承部分 = **固定 `0.5 × stats.bullet_damage`**，**不吃 `global_damage`、不吃段倍率**；第 3 段**每个 tick 各加一次**（4 tick → 共 `2×bullet`），不是分摊。暴击作用于含继承的总伤害（`_roll_melee` ×`critical_damage`），即「暴击考虑 50% 子弹伤害」。数值样例（IZZY 基础）：第1段 T0 非暴击 45 / 暴击 68；第3段 T0 throw base=60、tick=24+5=29（4 tick 共 116）；AoE 65 / 暴击 98。联机无额外改动（`base_damage` 已含继承+暴击，随伤害字典传 host）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/PS] `_ps_0` 文案补充连击说明（处决获每层 +10% 全局伤害）
+- Evidence / 证据: `mods/doom_slayer_izzy/entry/doom_slayer_izzy_entry.gd:28,34`（`_register_texts()` 的 `doom_slayer_izzy_izzy_ps_0` zh/en）；`ui/player_card.gd:150`（选人卡取 `_ps_0`）。实测 `tr(_ps_0)` 中/英均为新文案，pck 已重打安装。
+- Notes / 说明: 句序为「弹匣上限 → 待处决概率 → 处决连击（每层 +10% 全局伤害）→ 计量满换裁决剑」；en 同步调整语序。因选人卡描述直接用 `_ps_0`，该句也会出现在选人卡上（符合既有约定）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Society] 社团卡照搬本体（BOOM 图标）+ buff 图标改 mod 自带
+- Evidence / 证据: `mods/doom_slayer_izzy/defs/societies/doom_slayer_izzy_team.tscn`（照搬 `ui/ED_card.tscn`；脚本 `res://ui/mod_society_card.gd`；`group_id="doom_slayer_izzy_team"`、`members=["doom_slayer_izzy_izzy"]`；图标 `res://mods/doom_slayer_izzy/sprites/BOOM_icon.png`）；`mods/doom_slayer_izzy/resources/buff/executable.tres`（图标 → `res://mods/doom_slayer_izzy/sprites/dead_buff.png`，uid `uid://bk6jwuhcqcm4v`）。实测：root/script/gid/members 正确、icon 路径正确、动画列表 `[RESET,on_select_anim,out_anim,out_select_anim,select_anim]`、`buff.icon` 指向 mod 自带、`ModManager.get_mod_societies()=1` 且 gid 正确。
+- Notes / 说明: ①复制 `ui/ED_card.tscn` 时**必须去掉 `[gd_scene]` 里重复的 uid**（否则与本体 ED_card 的 uid 冲突），本次已移除；②社团卡用 `mod_society_card.gd`（继承 `mod_society_base.gd`，带本体悬停/选中动画）；③`BOOM_icon.png` 与 `ED_icon.png` 同为 **223×50**，`TextureRect` 的 offsets/scale 无需改；④buff 图标改为 mod 自带后，**mod 不再依赖未跟踪的本体 `sprites/buff_icon/dead_buff.png`**（该文件在 0.5.1.3 不存在、也不在 git 中），提升了 0.5.1.3 兼容性与干净 checkout 可用性。mod 社团 `group_id` 由 `ModManager._scan_societies` 自动加入 `PlayerData.group`（`mod_manager.gd:1195-1197`），`menu_screen._setup_societies` 据此显示。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/PS] 计量/能量跨回合继承 50%（回合结束减半；裁决态保留）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:46`（`GameEvents.round_upgrade.connect(_on_round_upgrade_carry)`）、`:80`（`_on_round_upgrade_carry`：裁决期 `energy*=0.5`、否则 `meter*=0.5`）、`_reset_soft`（不再清 `meter/energy/crucible/BGM`，只重置 combo/`crucible_index`）、`_on_change_scene`（换关全清）。实测：非裁决 `meter 120 → round_upgrade → 60` 且 `_reset_soft` 保留 60；裁决 `energy 200 → 100`、`crucible=true` 保持；`_on_change_scene` 后 `meter/energy/crucible = 0/0/false`。
+- Notes / 说明: 目的=缓解「每回合重新处决攒能量、前期攒够时回合快结束」的节奏问题。触发点 `GameEvents.round_upgrade`（回合结束、升级界面前，`round_manager.gd:143`，每回合一次）。裁决态**跨回合保留**（不退出、DOOM BGM 继续），只把剩余 `energy` 减半；非裁决则 `meter` 减半带着走。换关/新局/`reset_done` 仍全清。**已知未处理**：关卡 BGM 轮替（`main.gd:33` 捡紫水晶 + 240s `BGM_timer` → `_on_bgm_timer_timeout` → `bgm_slow_fade_out`）仍会把裁决 BGM 顶掉；纯 mod 挡需依赖本体私有方法名/节点（脆弱 hack），本次按用户意见不做。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Fix] 导出游戏里角色立绘/头像缺失：`sprite_path` 不能用 mod 本地 UID，必须写路径
+- Evidence / 证据: `mods/doom_slayer_izzy/defs/characters/doom_slayer_izzy_izzy.tres:10` 原 `sprite_path = "uid://cpi3qx3s5vgqn"`，改为 `sprite_path = "res://mods/doom_slayer_izzy/sprites/izzy_picture.png"`；读取处 `ui/player_card.gd`（`_apply_sprite(card.sprite_path)`）、`ui/game_ui.gd:50`、`ui/pause_screen.gd:160`、`ui/game_over_page.gd:155`、`ui/menu_box_button.gd:49`、`ui/score_card.gd:164`、`ui/test_character_card.gd:42` 均为 `LazyTexture.load_uncached(path)` → `ResourceLoader.load(path, "", CACHE_MODE_IGNORE)`。实测：`sprite_path` 为路径后 `LazyTexture.load_uncached()` 返回非空、`resource_path` 正确；mod 内已无 `= "uid://"` 字符串。
+- Notes / 说明: 导出游戏的基础 `uid_cache.bin` **不含 mod 的 UID**（导出 `exclude_filter` 排掉 `mods/*`，uid_cache 按导出资源重建），因此 `load("uid://...")` 返回 null → 立绘、局内 HUD 头像、暂停/结算/分数卡头像、测试房头像全缺；脚本/文本/场景路径都正常，所以只表现为「图没了」。`PlayerCard.sprite_path` 这类**普通字符串属性**无法像 `ext_resource` 那样按 `path=` 回退，**必须写 `res://` 路径**。`ext_resource` 同时带 `uid`+`path` 的可回退，无需改。此问题与版本无关（0.5.1.3/0.5.1.4 导出都会中招）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Packaging] mod 元数据改名 + 换 mod 图标；zip 暂存别放构建副本内
+- Evidence / 证据: `mods/doom_slayer_izzy/mod.json`（`name=DOOM SLAYER IZZY`、`author=SH`、`description=神秘穿越而来的BOOM…→https://space.bilibili.com/21140459←`、`game_version=v0.5.1.4`、`version` 保持 `0.1.0`）；`mods/doom_slayer_izzy/icon.png` 为 `izzy_mod_icon.png`（256×256）的副本。实测安装目录 `icon.png=256x256`、`mod.json` 解析正确、pck 内含新 `name/author/game_version`、zip 含 `pck/icon.png/mod.json`。
+- Notes / 说明: ①MOD 管理面板**优先用安装目录的 `icon.png`**（README §2），所以换图标必须把新图复制成 **mod 根目录 `icon.png`** 并在安装时覆盖旧图；只放在 `sprites/` 或只写 `mod.json.icon` 字段不够（旧 `icon.png` 优先）。②打包脚本末尾不自建 zip 时，手动 `Compress-Archive` 的**暂存目录不要放在构建副本内**（如 `<copy>/build/<id>/`）——ModPack 预设的 `exclude_filter` 未排除 `build/`，下次导出会把 `res://build/...` 一起打进 pck（本次已改用 `%TEMP%` 暂存并清掉旧 stage）。③`mod.json` 用 UTF-8 保存，`description` 可含全角标点与 URL（JSON 字符串内无需转义）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [UI] GAME 设置页用 MOD 同款卡片分区；ScrollContainer 子项最小宽度超出会反向撑宽并两侧回弹
+- Evidence / 证据: `ui/game_option.tscn`（`Scroll` offset_left=134（右侧无额外偏移），`Content` → `DisplayCard`/`FeedbackCard`/`AudioCard`，卡片 `StyleBoxFlat_card` 与 `Theme_row`/`Theme_section`；四个 `option_toggle.tscn` 实例 `track_color=Color(0.164706,...)`）；`script/game_option.gd`（`_bind_toggle`/`_bind_toggle_label`/`_set_full_screen` 等，`setting_status()` 用 `set_on(v,false)`）；`script/option_toggle.gd`（`focus_entered/focus_exited`、`ui_accept`、`track_color`）；`ETN_localization.csv`（`option_group_display/feedback/audio`）。
+- Notes / 说明: ① GAME 页原 `Graphics`/`Sounds` 长列表改为三张深色卡片；DISPLAY 两行标签左对齐并包 126×22 固定 wrapper，滑条行固定「标签 126 + 滑条扩展 + 数值 64」，右控件槽 128；FEEDBACK/AUDIO 仍为右对齐标签。内容最小宽度 446，须落在 ScrollContainer 可视宽 446（454 - 8 滚动条）内；超出时 `grow_horizontal=BOTH` 会把 `Scroll` 撑出页面边界。② 关闭态开关在页面暗底上几乎不可见；共享 `option_toggle` 新增导出 `track_color`，GAME 实例设为 0.164706，MOD 保持默认 0.0784314。③ 共享开关新增焦点高亮与 `ui_accept`（Enter/Space/手柄 A），处理输入后 `accept_event()`；GAME 行标签点击转发到 `toggle()`，移动端全屏/垂直同步仍由 `_on_toggle_changed` 回滚并提示。④ 三组标题使用新增本地化键，CSV 仍在末尾追加（UTF-8 BOM + CRLF）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+- Follow-up / 后续（2026-10-18，来源：user + test）：DISPLAY 两行原本 `CellA`/`CellB` 都设 `size_flags_horizontal=3`，RowDisplay 的右列（下拉框）更宽时 HBox 会给两行 `CellA` 分配不同宽度，导致左列开关与右列控件错位。现固定 `CellA=152`、`CellB=262`，仅 `CellB` 扩展；标签改为 126×22 固定 wrapper + 左对齐 + `clip_text`，两行右控件槽统一 128。4 语言下 `FullScreen`/`VSync`/`MaxFps` 的 x 一致、`Resolutions`/`PhysicsInterp` 的 x 一致，`Content` 最小宽 446（Scroll 宽 454，x=134）。

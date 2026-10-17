@@ -173,3 +173,6 @@ mod_kind_clothes,服装,Outfits,Trajes,Trang phục
 mod_kind_shop_characters,商店角色,Shop Characters,Personagens da Loja,Nhân vật cửa hàng
 mod_kind_game_modes,游戏模式,Game Modes,Modos de Jogo,Chế độ chơi
 mod_kind_levels,关卡,Levels,Níveis,Màn chơi
+option_group_display,显示,Display,Exibição,Hiển thị
+option_group_feedback,反馈,Feedback,Feedback,Phản hồi
+option_group_audio,音频,Audio,Áudio,Âm thanh
