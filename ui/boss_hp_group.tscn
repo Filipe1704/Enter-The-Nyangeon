@@ -1,0 +1,41 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/boss_hp_group.gd" id="1_group"]
+
+[node name="BossHPGroup" type="CanvasLayer"]
+script = ExtResource("1_group")
+
+[node name="SingleRoot" type="Control" parent="."]
+visible = false
+offset_left = 0.0
+offset_top = 309.0
+offset_right = 640.0
+offset_bottom = 353.0
+mouse_filter = 2
+
+[node name="Bars" type="HBoxContainer" parent="SingleRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 6
+
+[node name="MultiRoot" type="Control" parent="."]
+offset_left = 0.0
+offset_top = 309.0
+offset_right = 640.0
+offset_bottom = 353.0
+mouse_filter = 2
+
+[node name="Bars" type="HBoxContainer" parent="MultiRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 6

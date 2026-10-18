@@ -54,18 +54,35 @@ func get_level():
 	# 联机人数缩放：mod 经 ExtensionHooks 注入附加数量乘数（未注入时保持 1.0，单机零回归）。
 	if ExtensionHooks.enemy_spawn_count_scale.is_valid():
 		round_mult *= maxf(0.0, float(ExtensionHooks.enemy_spawn_count_scale.call(PlayerData.now_round, max_round)))
-	var hp_round_x: float = 0.0 if max_round <= 1.0 else clamp((PlayerData.now_round - 1.0) / (max_round - 1.0), 0.0, 1.0)
-	var hp_curve: Curve = round_boss_hp_curve if boss_round else round_hp_curve
-	var hp_base: float = hp_curve.sample(hp_round_x) if hp_curve != null else hp_mult
-	var hp_growth: float = hp_growth_curve.sample(PlayerData.now_round / max_round) if hp_growth_curve != null else PlayerData.now_round / (max_round * 0.5)
-	var hp_lv: float = min(PlayerData.level_hp, 3.0) if (PlayerData.game_mode.has("hujiu") and boss_round) else PlayerData.level_hp
-	hp_mult = hp_base * pow(hp_lv, hp_growth) if !PlayerData.on_endless else hp_base * pow(max(1, hp_lv), hp_growth)
-	var damage_round_x: float = 0.0 if max_round <= 1.0 else clamp((PlayerData.now_round - 1.0) / (max_round - 1.0), 0.0, 1.0)
-	var round_damage_mult: float = round_damage_curve.sample(damage_round_x) if round_damage_curve != null else 1.0
-	damage_mult = PlayerData.level_damage * round_damage_mult
+	var multipliers := EnemyScaling.hp_damage_multipliers(
+		PlayerData.now_round,
+		max_round,
+		boss_round,
+		PlayerData.on_endless,
+		PlayerData.level_hp,
+		PlayerData.level_damage,
+		endless_hp,
+		endless_boss_hp,
+		endless_damage,
+		round_hp_curve,
+		round_boss_hp_curve,
+		round_damage_curve,
+		hp_growth_curve,
+		PlayerData.game_mode.has("hujiu")
+	)
+	hp_mult = float(multipliers.get("hp", 1.0))
+	damage_mult = float(multipliers.get("damage", 1.0))
 
 func round_count(x: float, y:float):
 	return pow(x, y)
+
+func _resolve_boss_position() -> Vector2:
+	if boss_position != Vector2.ZERO:
+		return boss_position
+	var center := get_tree().get_first_node_in_group("CenterPosition")
+	if center is Node2D:
+		return (center as Node2D).global_position
+	return Vector2.ZERO
 
 func _physics_process(_delta):
 	time_mult = 1 - (round_timer.round_timer.time_left / round_timer.round_timer.wait_time)
@@ -95,9 +112,9 @@ func boss_spawn():
 			spawn_anim = enemy_spawn_anim.instantiate()
 			get_tree().get_first_node_in_group("EnemiesRoot").add_child(spawn_anim)
 		
-		spawn_anim.position = boss_position
-		spawn_anim.hp_mult = hp_mult * endless_boss_hp
-		spawn_anim.damage_mult = damage_mult * endless_damage
+		spawn_anim.position = _resolve_boss_position()
+		spawn_anim.hp_mult = hp_mult
+		spawn_anim.damage_mult = damage_mult
 		spawn_anim.is_boss = true
 		spawn_anim.active_state()
 		spawn_anim.enemy_spawn_anim(enemy_temp)
@@ -135,8 +152,8 @@ func enemy_spawn():
 					get_tree().get_first_node_in_group("EnemiesRoot").add_child(spawn_anim)
 				
 				spawn_anim.position = rand_position
-				spawn_anim.hp_mult = hp_mult * endless_hp
-				spawn_anim.damage_mult = damage_mult * endless_damage
+				spawn_anim.hp_mult = hp_mult
+				spawn_anim.damage_mult = damage_mult
 				spawn_anim.active_state()
 				spawn_anim.enemy_spawn_anim(enemy_temp)
 				GameEvents.emit_enemy_spawn()

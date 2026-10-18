@@ -47,6 +47,21 @@ var summoned_damage_interceptor: Callable = Callable()
 # （参数 [summoned, amount, source_id, damage_add_override]；返回 true = mod 已接管）
 var summoned_upgrade_interceptor: Callable = Callable()
 
+# ---------------- Boss 回合 ----------------
+# 查询：返回本回合的 Boss plan（Dictionary）；空 = 由本体 BossSchedule 决定。
+# 参数 [now_round: int, group: String, is_endless: bool, endless_round: int]
+var boss_plan_override: Callable = Callable()
+# 接管：Boss 回合结算；返回 true = mod 已处理（联机 host 权威/客机跳过）。
+# 参数 [entry, result: Dictionary]
+var boss_encounter_settle_gate: Callable = Callable()
+# 接管：Boss 超时行为；返回 true = mod 已处理。
+# 参数 [boss, profile]
+var boss_timeout_gate: Callable = Callable()
+# 接管：Boss 进场/死亡演出外壳（镜头/暂停）；返回 true = mod 已接管。
+# 参数 [boss, kind: StringName]
+var boss_enter_cinematic_gate: Callable = Callable()
+var boss_death_cinematic_gate: Callable = Callable()
+
 # ---------------- 查询类 ----------------
 # 敌人附加数值乘数：返回 {hp: float, damage: float}；未注入/空字典 = 1.0。
 # 由 spawn_anim.spawn_enemy_body() 在写入 max_hp_mult / damage_mult 前调用。
@@ -71,6 +86,14 @@ var on_player_downed: Callable = Callable()
 var on_player_revived: Callable = Callable()
 var on_player_melee: Callable = Callable()
 var on_player_reload: Callable = Callable()
+# Boss 生命周期通知（参数 [boss] / [boss, entry] / [entry, result]）
+var on_boss_spawned: Callable = Callable()
+var on_boss_joined: Callable = Callable()
+var on_boss_defeated: Callable = Callable()
+var on_boss_phase_changed: Callable = Callable()
+var on_boss_encounter_started: Callable = Callable()
+var on_boss_encounter_ended: Callable = Callable()
+var on_boss_round_settled: Callable = Callable()
 var on_pyroxenes_gain: Callable = Callable()
 # 敌人 buff 移除（通知，参数 [body, buff_id]）
 var on_enemy_buff_removed: Callable = Callable()

@@ -17,6 +17,8 @@ var refresh_cost_add_num:float = 0
 
 var is_game_over: bool = false
 
+var boss_controller: BossRoundController
+
 var max_round: int = 20
 var is_game_mode_2: bool = false
 
@@ -25,6 +27,9 @@ var on_round_end: bool = false
 var selected_mult: float = 6
 
 func _ready():
+	boss_controller = BossRoundController.new()
+	boss_controller.name = "BossRoundController"
+	add_child(boss_controller)
 	GameEvents.round_upgrade_end.connect(_on_round_start)
 	GameEvents.round_end.connect(_on_round_end)
 	GameEvents.on_refresh.connect(refresh_cost_count)
@@ -114,6 +119,8 @@ func _on_round_end():
 		return
 	
 	on_round_end = true
+	if boss_controller != null:
+		boss_controller.cancel_for_round_end()
 	# 回合收尾全程锁用户暂停（含 1s 等待 + 转场 + 升级页），避免转场前弹暂停菜单并在升级页丢失鼠标
 	GameEvents.emit_pause_lock(true)
 	

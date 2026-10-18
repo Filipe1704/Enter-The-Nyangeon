@@ -27,6 +27,15 @@ signal round_end
 signal round_num_changed(now_round_num: int)
 signal boss_round_start
 signal boss_round_end
+# Boss 遭遇/Boss 回合新事件（稳定载荷；旧 boss_round_start/end 继续保留给已有 mod）
+signal boss_spawned(boss, card)
+signal boss_joined(boss, entry)
+signal boss_defeated(boss)
+signal boss_phase_changed(boss, phase)
+signal boss_encounter_started(entry, plan)
+signal boss_encounter_ended(entry, result)
+signal boss_round_settled(result)
+signal boss_trigger_fired(entry, trigger_name)
 # 非用户暂停锁：演出/升级期间锁住用户暂停菜单（true=锁），避免外部 get_tree().paused 写入与暂停界面可见性失配
 signal pause_lock(locked: bool)
 signal fever_time_start
@@ -271,6 +280,30 @@ func emit_boss_round_start():
 
 func emit_boss_round_end():
 	boss_round_end.emit()
+
+func emit_boss_spawned(boss, card):
+	boss_spawned.emit(boss, card)
+
+func emit_boss_joined(boss, entry):
+	boss_joined.emit(boss, entry)
+
+func emit_boss_defeated(boss):
+	boss_defeated.emit(boss)
+
+func emit_boss_phase_changed(boss, phase: int):
+	boss_phase_changed.emit(boss, phase)
+
+func emit_boss_encounter_started(entry, plan: Dictionary):
+	boss_encounter_started.emit(entry, plan)
+
+func emit_boss_encounter_ended(entry, result: Dictionary):
+	boss_encounter_ended.emit(entry, result)
+
+func emit_boss_round_settled(result: Dictionary):
+	boss_round_settled.emit(result)
+
+func emit_boss_trigger_fired(entry, trigger_name: StringName):
+	boss_trigger_fired.emit(entry, trigger_name)
 
 func emit_pause_lock(locked: bool):
 	pause_lock.emit(locked)

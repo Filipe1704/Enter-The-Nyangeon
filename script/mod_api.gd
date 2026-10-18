@@ -3,7 +3,7 @@ class_name ModAPI
 # Mod 稳定接口：mod 的 entry 脚本（`mod.json.entry`）可调用，避免直接依赖 ModManager 内部结构。
 # 版本随破坏性变更递增；mod 在 manifest 声明 `api_version`，超版本会被 ModManager 跳过 entry。
 
-const VERSION := 2
+const VERSION := 3
 
 
 # ---------------- UI ----------------
@@ -34,6 +34,27 @@ static func get_scene(kind: String, id: String) -> String:
 
 static func get_characters() -> Array:
 	return ModManager.get_characters()
+
+
+# Boss 内容与编排表（BossCard / BossSchedule）。
+static func get_bosses() -> Array:
+	return ModManager.get_content("bosses")
+
+
+static func get_boss(id: String) -> Resource:
+	return ModManager.get_resource("bosses", id)
+
+
+static func get_boss_schedules() -> Array:
+	return ModManager.get_mod_boss_schedules()
+
+
+static func register_boss(id: String, card: BossCard, mod_id: String) -> bool:
+	return ModManager.register_content("bosses", id, card, mod_id)
+
+
+static func register_boss_schedule(id: String, schedule: BossSchedule, mod_id: String) -> bool:
+	return ModManager.register_content("boss_schedules", id, schedule, mod_id)
 
 
 static func has_upgrade(id: String) -> bool:

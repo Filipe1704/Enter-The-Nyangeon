@@ -49,6 +49,8 @@ res://mods/example/defs/characters/example_hero.tscn
 | `defs/characters/` | `PlayerCard` | `id` |
 | `defs/upgrades/` | `AbilityUpgrade` | `id` |
 | `defs/enemies/` | `EnemyCard` | `id` |
+| `defs/bosses/` | `BossCard`（继承 `EnemyCard`） | `id` |
+| `defs/boss_schedules/` | `BossSchedule` | `id` |
 | `defs/supports/` | `SupportCard` | `support_id` |
 | `defs/clothes/` | `ClothesCard` | `id` |
 | `defs/shop_characters/` | `CharacterCard` | `id`（须与同名 `PlayerCard.id` 一致） |
@@ -155,6 +157,43 @@ manifest 还可声明加载顺序与依赖：
   "enemy_waves": [ { "scene": "res://mods/<id>/waves/my_wave.tscn", "group": "lv_endless" } ]
   ```
   `group` 省略则用 `enemy_group`。
+
+## 11.1 Boss 回合（Phase 2）
+
+- `defs/bosses/<id>.tres` 放 `BossCard`（继承 `EnemyCard`）。`body` 场景根节点必须继承 `BossEnemy`，且 `BossCard.id == body.pool_id`；否则注册/生成会告警或跳过。
+- Boss **不走** `enemy_group` 自动波次；必须提供 `defs/boss_schedules/<id>.tres`（`BossSchedule`）。`ROUND_START` 条目按回合开始出 Boss；中途条目由 `Trigger` 命中后加入：
+  ```text
+  BossSchedule
+    entries[0]
+      encounter: BossRoundEntry
+        bosses: [BossCard]
+        spawn_mode: SINGLE
+        end_condition: ALL_DEFEATED
+      trigger: ROUND_START
+      round_min: 10
+      round_max: 10
+      role: PRIMARY
+      timer_mode: REPLACE_NORMAL
+  ```
+- `BossCard` 可配置：
+  - `round_profile`：`time_limit`、`timeout_mode`（RAGE/END/FAIL/CUSTOM）、`end_on_death`、`end_on_pickup`、`final_boss`、`victory_mode`（`upgrade`/`victory`/`game_over`/`continue`）。
+  - `enter_anim_player_path` + `enter_anim_name`、`death_anim_player_path` + `death_anim_name`、`camera_marker_path`、`escape_anim_name`；动画仍在 Boss 自带场景的 `AnimationPlayer` 上播放。
+  - `bgm_intro/bgm_loop`、`reward_scene`、`phases`（阶段动画/无敌/buff/BGM）；多 Boss 血条由本体 `BossHPGroup` HBox 统一管理，不再由 `BossCard` 指定血条场景。
+- 架构：`BossRoundController` 选择 schedule → `BossSpawner` 生成 → `BossEnemy` 播自己的动画 → `BossCinematic` 统一镜头/UI/暂停 → 死亡后发 `boss_round_settled` → `round_manager` 或 `game_over`。
+- 多 Boss：`BossRoundEntry.spawn_mode` 支持 `SINGLE/SEQUENCE/SIMULTANEOUS/SCHEDULED`，`end_condition` 支持 `ALL_DEFEATED/ANY_DEFEATED/SEQUENCE_COMPLETE`。`positions` 可显式给每个 Boss 落点；未配置时按中心自动左右错开。血条 HBox 最多同时显示 `max_visible_hp_bars`（默认 4）条，超出等待，槽位释放后按生成顺序补位；视觉复刻原 `boss_hp.tscn`（黑底/灰边/白拖尾+红渐变/像素字体），单 Boss 撑满全宽并复刻原布局，名字显示为 `-名字-`（如 `-GOLIATH-`）；多 Boss 名字上排且只显示名字本身；名字优先缩字号（15→9），仍放不下最多两行，最后省略号，完整名字在 tooltip；死亡演出结束后才移除槽位。
+- 多阶段：`BossCard.phases` 中 `hp_ratio` 触发阶段；阶段动画走完整暂停演出，`invulnerable_duration`、`buff_layer/buff_value/buff_duration`、`bgm` 生效；多个阈值同时跨过按顺序排队。
+- 无尽：`BossSchedule.endless_mode` 默认 `ROTATION`（按 `endless_entries` 顺序循环），可设 `WEIGHTED`；`round_min/round_max` 对无尽条目按 `endless_round` 匹配，建议 `group="lv_endless_boss"`。
+- 中途加入 Boss（Phase 2.5）：`enable_mid_round_encounters` 默认 `true`；`Trigger` 支持 `TIME/KILLS/SPAWN_COUNT/ENEMY_COUNT/WAVE_CLEAR/BOSS_PHASE/CUSTOM`（CUSTOM 用控制器 `fire_trigger(name)`）。`intruder_end_mode`：`ROUND_TIMER`（普通计时 + `extra_time`，到点未杀 missed）、`BOSS_FEVER`（Boss 计时 + `fever_duration`，结束未杀 missed）、`MANDATORY_KILL`（必须击杀）。`normal_spawn_mode`：`CONTINUE` / `STOP_WHILE_BOSS_ALIVE`（死亡后恢复）/ `STOP_FOR_ROUND`（本回合不再恢复）。missed 倒放 `enter_anim`（禁用 method track），不聚焦镜头/不暂停。
+- 多 Boss 分时入场：`BossRoundEntry.spawn_mode=SCHEDULED` + `spawn_conditions`（与 `bosses` 下标对齐）。内置 `BossSpawnDelayCondition`（从遭遇触发读秒）、`BossSpawnAfterDefeatedCondition`、`BossSpawnAfterPhaseCondition`、`BossSpawnWaveClearCondition`；自定义条件继承 `BossSpawnCondition` 并实现 `is_met(ctx)`。`BossEncounterEntry.boss_timer_start` 默认 `FIRST_BOSS_READY`（首个 Boss 入场演出结束后才启动 Boss 计时）；`max_first_spawn_wait` 默认 30s，超时取消未入场 Boss 并按 missed 处理，设为 0 关闭。
+  ```text
+  BossRoundEntry
+    spawn_mode: SCHEDULED
+    spawn_conditions:
+      [0] BossSpawnDelayCondition(seconds=0)
+      [1] BossSpawnAfterDefeatedCondition(boss_index=0)
+      [2] BossSpawnAfterPhaseCondition(boss_index=1, phase=2)
+  ```
+- 调试：`ModAPI.get_bosses()` / `get_boss_schedules()`；控制器在组 `"BossRoundController"`。
 
 ## 12. entry 脚本与 ModAPI
 

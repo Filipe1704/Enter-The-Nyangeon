@@ -22,10 +22,10 @@
 | Dir | Purpose / 职责 |
 |---|---|
 | `scenes/` | 场景 + **与场景同目录同名的脚本**（feature subfolders）。含 `player/`, `enemies/`, `bullet/`, `update_item/`, `manager/`, `main/`, `weapon/`, `summoned/`, `item/`, `debuff/`, `shop/`, `props/`, `player_support/`, `game_camera/`, `crosshair/`, `shadow/`。 |
-| `script/` | 跨场景/全局系统脚本：autoload 脚本（`Game.gd`, `GameEvents.gd`, `PlayerData.gd`, `locale_font.gd`, `extension_hooks.gd`…）、基类与路由器（`entity_ENEMY.gd`, `Stats.gd`, `damage_router.gd`, `buff_router.gd`, `projectile_spawner.gd`…）、`props/` 道具脚本。 |
-| `resources/` | 数据资源：每类一个 `class_name` 脚本 + 大量 `<snake_case>.tres`。子类：`buff/`(+`components/`,`player_buff/`,`enemy_buff/`,`summoned_buff/`)、`upgrades/`、`player/`(+`PS/`)、`enemy/`、`shop/character/`、`clothes/`、`equip/`、`game_mode/`、`level/`、`raid_formwork/`、`support/`、`talk/`。 |
+| `script/` | 跨场景/全局系统脚本：autoload 脚本（`Game.gd`, `GameEvents.gd`, `PlayerData.gd`, `locale_font.gd`, `extension_hooks.gd`…）、基类与路由器（`entity_ENEMY.gd`, `Stats.gd`, `damage_router.gd`, `buff_router.gd`, `projectile_spawner.gd`, `boss_enemy.gd`/`boss_round_controller.gd`…）、`props/` 道具脚本。 |
+| `resources/` | 数据资源：每类一个 `class_name` 脚本 + 大量 `<snake_case>.tres`。子类：`buff/`(+`components/`,`player_buff/`,`enemy_buff/`,`summoned_buff/`)、`upgrades/`、`player/`(+`PS/`)、`enemy/`、`boss/`（`BossCard`/`BossSchedule`/`BossRoundProfile`/`BossSpawnCondition` 等）、`shop/character/`、`clothes/`、`equip/`、`game_mode/`、`level/`、`raid_formwork/`、`support/`、`talk/`。 |
 | `sprites/` | 全部源贴图（`.png` + `.import`），按主题分子目录。 |
-| `ui/` | 菜单/HUD/卡片：`ui/*.tscn` + 同名 `.gd` + 图标；含 `ark_of_Shittim/`, `support_ui/`, `health/`, `weapon/`, `res/`, `school/`, `card icon/`。另含主菜单弹窗 `option.tscn`（设置，通用容器；子页 `game_option.tscn`（设置：DISPLAY/FEEDBACK/AUDIO 卡片）/`controls_option.tscn`/`mod_option.tscn`（设置 / 按键说明 / MOD 管理：分组列表 + 常驻详情），基类 `script/option_menu.gd`、页签 `option_button.tscn`、共享开关 `option_toggle.tscn`）、`scoreboard.tscn`（记分板）、`credits.tscn`（鸣谢，可滚动翻译者名单，复用 `shaders/motion_screen.gdshader` 做背景模糊）。 |
+| `ui/` | 菜单/HUD/卡片：`ui/*.tscn` + 同名 `.gd` + 图标；含 `ark_of_Shittim/`, `support_ui/`, `health/`, `weapon/`, `res/`, `school/`, `card icon/`；多 Boss HUD 为 `boss_hp_group.gd`/`boss_hp_slot.gd`。另含主菜单弹窗 `option.tscn`（设置，通用容器；子页 `game_option.tscn`（设置：DISPLAY/FEEDBACK/AUDIO 卡片）/`controls_option.tscn`/`mod_option.tscn`（设置 / 按键说明 / MOD 管理：分组列表 + 常驻详情），基类 `script/option_menu.gd`、页签 `option_button.tscn`、共享开关 `option_toggle.tscn`）、`scoreboard.tscn`（记分板）、`credits.tscn`（鸣谢，可滚动翻译者名单，复用 `shaders/motion_screen.gdshader` 做背景模糊）。 |
 | `shaders/` | `shader_type canvas_item;` 着色器 + `funcs.gdshaderinc` + `erotion_shader.tres`。 |
 | `sounds/` | `BGM/` 与 `voice/`；根目录为 SFX。 |
 | `fonts/` | 位图字体 + `theme.tres`（全局 UI 主题）。 |

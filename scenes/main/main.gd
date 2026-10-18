@@ -11,6 +11,11 @@ const FLOATING_TEXT: PackedScene = preload("res://ui/floating_text.tscn")
 @onready var BGM_timer: Timer = $BGMTimer
 
 var bgm_num: int = 0
+var _boss_bgm_loop: AudioStream = null
+var _boss_bgm_card: BossCard = null
+var _mid_boss_bgm_active: bool = false
+var _saved_mid_bgm_num: int = 0
+var _boss_bgm_generation: int = 0
 
 var floor_group: Array
 
@@ -30,18 +35,27 @@ func _ready() -> void:
 	GameEvents.round_upgrade_end.connect(enemy_clear_unit)
 	GameEvents.boss_round_start.connect(boss_bgm)
 	GameEvents.boss_round_end.connect(boss_bgm_stop)
+	GameEvents.boss_encounter_started.connect(_on_boss_encounter_started)
+	GameEvents.boss_encounter_ended.connect(_on_boss_encounter_ended)
+	GameEvents.boss_joined.connect(_on_boss_joined)
+	GameEvents.boss_phase_changed.connect(_on_boss_phase_changed)
 	GameEvents.pyroxenes_pick_up.connect(_on_bgm_timer_timeout)
 	GameEvents.game_over.connect(game_over_true)
 
 func game_over_true(_player_dead: bool):
 	game_over = true
+	_mid_boss_bgm_active = false
 
 func bgm_loop_play():
 	if game_over == false:
-		SoundManager.play_bgm(bgm_loop[bgm_num], 0.0)
+		if _boss_bgm_loop != null:
+			SoundManager.play_bgm(_boss_bgm_loop, 0.0)
+		else:
+			SoundManager.play_bgm(bgm_loop[bgm_num], 0.0)
 
 func first_round():
 	SoundManager.game_end = false
+	_mid_boss_bgm_active = false
 	PoolManager.clear_pool()
 	PlayerData.reset_date()
 	
@@ -139,14 +153,84 @@ func player_portal_unit():
 	player.position = battle_room.position
 
 func boss_bgm():
+	boss_bgm_for_card(_active_boss_card())
+
+func boss_bgm_for_card(card: BossCard) -> void:
+	_boss_bgm_generation += 1
+	var generation := _boss_bgm_generation
 	SoundManager.bgm_fade_out()
 	BGM_timer.stop()
+	_boss_bgm_card = card
 	await get_tree().create_timer(1).timeout
+	if generation != _boss_bgm_generation:
+		return
 	bgm_num = 0
+	_boss_bgm_loop = null
+	if card != null:
+		_boss_bgm_loop = card.bgm_loop
+		if card.bgm_intro != null:
+			SoundManager.play_bgm_cut(card.bgm_intro, 1.0)
+			return
 	SoundManager.play_bgm_cut(bgm_first_cut[bgm_num], 1.0)
 
 func boss_bgm_stop():
+	_boss_bgm_generation += 1
+	_boss_bgm_loop = null
+	_boss_bgm_card = null
 	SoundManager.bgm_fade_out()
+
+func _active_boss_card() -> BossCard:
+	var controller := get_tree().get_first_node_in_group("BossRoundController")
+	if controller == null or not controller.has_method("get_current_plan"):
+		return null
+	var plan: Dictionary = controller.get_current_plan()
+	var bosses: Array = plan.get("bosses", [])
+	if bosses.is_empty():
+		return null
+	return bosses[0] as BossCard
+
+# 中途加入的 Boss（非 ROUND_START）也切 Boss BGM；ROUND_START 仍由旧信号驱动，避免重复。
+func _on_boss_encounter_started(entry: BossEncounterEntry, _plan: Dictionary) -> void:
+	if entry == null or entry.trigger == BossEncounterEntry.Trigger.ROUND_START:
+		return
+	if not _mid_boss_bgm_active:
+		_saved_mid_bgm_num = bgm_num
+		_mid_boss_bgm_active = true
+	var card: BossCard = null
+	if entry.encounter != null and not entry.encounter.bosses.is_empty():
+		card = entry.encounter.bosses[0]
+	boss_bgm_for_card(card)
+
+func _on_boss_encounter_ended(entry: BossEncounterEntry, _result: Dictionary) -> void:
+	if entry == null or entry.trigger == BossEncounterEntry.Trigger.ROUND_START:
+		return
+	boss_bgm_stop()
+	if _mid_boss_bgm_active:
+		_mid_boss_bgm_active = false
+		if not game_over:
+			bgm_num = clampi(_saved_mid_bgm_num, 0, maxi(0, bgm_loop.size() - 1))
+			if bgm_loop.size() > 0:
+				SoundManager.play_bgm(bgm_loop[bgm_num], 0.0)
+				BGM_timer.start()
+
+func _on_boss_joined(boss: BossEnemy, entry: BossEncounterEntry) -> void:
+	if boss == null or entry == null or entry.encounter == null:
+		return
+	if entry.encounter.spawn_mode == BossRoundEntry.SpawnMode.SIMULTANEOUS:
+		return
+	if boss.boss_card != null and boss.boss_card != _boss_bgm_card:
+		boss_bgm_for_card(boss.boss_card)
+
+func _on_boss_phase_changed(boss: BossEnemy, phase: int) -> void:
+	if boss == null or phase <= 0:
+		return
+	var phase_data := boss.get_phase_data(phase - 1)
+	if phase_data == null or phase_data.bgm == null:
+		return
+	_boss_bgm_loop = null
+	SoundManager.bgm_fade_out()
+	await get_tree().create_timer(0.3).timeout
+	SoundManager.play_bgm(phase_data.bgm, 0.0)
 
 func _on_bgm_timer_timeout() -> void:
 	var first_bgm = bgm_num

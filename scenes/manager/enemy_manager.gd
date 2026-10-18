@@ -71,6 +71,7 @@ var endless_boss_hp: float = 1
 var endless_damage: float = 1
 
 func _ready():
+	add_to_group("EnemyManager")
 	GameEvents.round_num_changed.connect(round_num_changed)
 	GameEvents.round_start.connect(round_enemy_spawn_start)
 	GameEvents.round_end.connect(round_enemy_spawn_end)
@@ -93,6 +94,35 @@ func _group_index(group: String) -> int:
 		if n >= 1 and n <= 20:
 			return n - 1
 	return -1
+
+func _group_name(index: int) -> String:
+	if index == 21:
+		return "lv_endless_boss"
+	if index == 20:
+		return "lv_endless"
+	if index >= 0 and index < 20:
+		return "lv%d" % (index + 1)
+	return ""
+
+# BossSpawner 与普通波次共用的最终血量/伤害倍率（已包含无尽倍率）。
+func get_spawn_multipliers(is_boss: bool) -> Dictionary:
+	var max_round_value: float = float(round_manager.max_round) if round_manager != null else 20.0
+	return EnemyScaling.hp_damage_multipliers(
+		float(PlayerData.now_round),
+		max_round_value,
+		is_boss,
+		PlayerData.on_endless,
+		PlayerData.level_hp,
+		PlayerData.level_damage,
+		endless_hp,
+		endless_boss_hp,
+		endless_damage,
+		round_hp_curve,
+		round_boss_hp_curve,
+		round_damage_curve,
+		hp_growth_curve,
+		PlayerData.game_mode.has("hujiu")
+	)
 
 func round_num_changed(now_round_num: int):
 	if now_round_num <= round_manager.max_round:
@@ -123,6 +153,17 @@ func round_enemy_spawn_start():
 	# 联机：客机不本地刷怪（敌人由 host 权威 + 镜像）
 	if ExtensionHooks.intercept_named("round_enemy_spawn_gate", []):
 		return
+	var boss_controller := get_tree().get_first_node_in_group("BossRoundController")
+	if boss_controller != null and boss_controller.has_method("plan_for_round"):
+		var plan: Dictionary = boss_controller.plan_for_round(
+			int(round_manager.now_round_num),
+			_group_name(group_num),
+			PlayerData.on_endless,
+			endless_round
+		)
+		if not plan.is_empty():
+			boss_controller.begin_round(plan)
+			return
 	var num = enemies_spawn_group[group_num].size() - 1
 	spawn_num = randi_range(0, num)
 	if PlayerData.game_mode.has("hujiu") and group_num == 14:

@@ -13,7 +13,7 @@ const STATE_PATH := "user://mods/mods_state.json"
 const ORDER_PATH := "user://mods/mods_order.json"
 # 卸载时因 pck 被占用/目录只读而未能删除的 mod id，下次启动挂载前再删。
 const PENDING_UNINSTALL_PATH := "user://mods/.pending_uninstall.json"
-const API_VERSION := 2
+const API_VERSION := 3
 # zip 导入上限（防恶意/误打包的超大包）
 const IMPORT_MAX_FILES := 2000
 const IMPORT_MAX_MB := 256
@@ -33,6 +33,8 @@ const KIND_CLASS := {
 	"societies": "PlayerGroup",
 	"upgrades": "AbilityUpgrade",
 	"enemies": "EnemyCard",
+	"bosses": "BossCard",
+	"boss_schedules": "BossSchedule",
 	"supports": "SupportCard",
 	"clothes": "ClothesCard",
 	"shop_characters": "CharacterCard",
@@ -515,6 +517,16 @@ func get_mod_waves() -> Array:
 	return out
 
 
+# BossSchedule 注册表：由 BossRoundController 读取并按 priority 选择。
+func get_mod_boss_schedules() -> Array:
+	var out: Array = []
+	for id in _order.get("boss_schedules", []):
+		var rec = _registry["boss_schedules"].get(id, null)
+		if rec != null and rec.res != null:
+			out.append(rec.res)
+	return out
+
+
 func _build_wave_scene(cards: Array) -> PackedScene:
 	var wave := Node2D.new()
 	wave.name = "ModWave"
@@ -784,7 +796,9 @@ func _register_res(mod_id: String, overrides: Array, kind: String, id: String, r
 	if err != "":
 		push_warning("[ModManager] %s 注册被拒：(%s) %s" % [kind, id, err])
 		return false
-	if kind == "enemies" and not _validate_enemy(res, id):
+	if (kind == "enemies" or kind == "bosses") and not _validate_enemy(res, id):
+		return false
+	if kind == "bosses" and not _validate_boss(res, id):
 		return false
 	if kind == "characters" and not _validate_character(res):
 		return false
@@ -970,6 +984,20 @@ func _validate_enemy(res, id: String) -> bool:
 	if res.get("icon") == null:
 		push_warning("[ModManager] 敌人缺 icon（测试房卡片将空白）：%s" % id)
 	return true
+
+
+# Boss 场景根必须继承 BossEnemy，否则 BossRoundController 无法接管生命周期。
+func _validate_boss(res, id: String) -> bool:
+	var body = res.get("body")
+	if body == null:
+		return false
+	var inst = body.instantiate()
+	var ok: bool = inst is BossEnemy
+	if not ok:
+		push_warning("[ModManager] Boss body 根节点未继承 BossEnemy：%s" % id)
+	if inst != null:
+		inst.free()
+	return ok
 
 
 # 角色一致性校验：战斗场景根 player_card/ps_card 应指向注册的同一份资源。

@@ -67,6 +67,16 @@
 - [ ] **支援**：`defs/supports/` 的支援出现在支援商店/选择界面；EX/被动可运行。
 - [ ] **道具**：`defs/upgrades/` + 同目录 `<id>.tscn` 的道具进入三选一池；拾取后效果生效；记分板装备列表能显示（`score_card`）。
 - [ ] **敌人**：`defs/enemies/`（`id == body.pool_id`）在指定 `enemy_group` 出现；生成上限正常。
+- [ ] **Boss**：`defs/bosses/`（`BossCard`，`body` 根继承 `BossEnemy`，`id == body.pool_id`）+ `defs/boss_schedules/`（`BossSchedule`，`trigger=ROUND_START`，`round_min/round_max` 指定回合）能在目标回合进入 Boss 回合；入场/死亡动画、镜头/暂停复位、奖励、`boss_round_settled` 与升级/胜负流程正常；无青辉石也能结算（`end_on_death=true`）。
+  - [ ] 多 Boss：`SINGLE/SEQUENCE/SIMULTANEOUS`、`ALL/ANY/SEQUENCE_COMPLETE`；HBox 血条最多 4 槽，超出等待，死亡演出结束后移除并补位；单 Boss 全宽并复刻原 `boss_hp.tscn` 布局；多 Boss 黑底/灰边/白拖尾+红渐变/像素字体一致；长名字缩字号/两行/省略号。
+  - [ ] 多阶段：阶段动画走完整暂停，无敌/buff/BGM 生效，不误结束回合。
+  - [ ] 无尽：`ROTATION` 按顺序循环，`WEIGHTED` 权重随机；`endless_round` 与 `group=lv_endless_boss` 匹配正确。
+  - [ ] 中途乱入：`trigger=TIME/KILLS/SPAWN_COUNT/ENEMY_COUNT/WAVE_CLEAR/BOSS_PHASE/CUSTOM` 命中一次后只出一次；`CUSTOM` 经 `fire_trigger(name)`。
+  - [ ] 中途结算：`ROUND_TIMER` 普通计时 + `extra_time` 到点 missed；`BOSS_FEVER` 独立计时→`fever_duration`→未杀 missed；`MANDATORY_KILL` 计时到点不死、必须击杀；missed 倒放入场动画、无镜头/暂停、Boss 无敌。
+  - [ ] 刷怪策略：`STOP_WHILE_BOSS_ALIVE` 在 Boss 死亡后恢复；`STOP_FOR_ROUND` 本回合不恢复；中途 Boss BGM 结束后恢复原 BGM。
+  - [ ] 多 Boss 分时：`spawn_mode=SCHEDULED`、`spawn_conditions` 数量与 `bosses` 对齐；读秒/死亡/阶段/波次清空分别触发；自定义 `BossSpawnCondition` 子类可注册并运行；血条按入场顺序从单槽切多槽。
+  - [ ] 首 Boss 计时：`boss_timer_start=FIRST_BOSS_READY` 时，入场演出结束前 Boss 计时未启动，结束后启动；`ENCOUNTER_START` 仍为触发即计时。
+  - [ ] 首 Boss 兜底：`max_first_spawn_wait` 超时会取消未入场 Boss、按 missed 结算，之后不再生成；设为 0 时关闭。
 - [ ] **游戏模式**：`defs/game_modes/` 出现在模式选择；选中后 `PlayerData.game_mode` 含该 id；entry 脚本应用行为。
 - [ ] **记分板筛选（mod）**：角色筛选含本体（含 `ako`/`chinatsu`/`aris_armed`）+ mod 角色；模式筛选含本体 + mod 模式；按 id 过滤正确。
 - [ ] **记分板记录（mod）**：用 mod 角色/道具/模式/关卡打完一局 → 记分板记录立绘/名称/装备/模式图标正常显示。

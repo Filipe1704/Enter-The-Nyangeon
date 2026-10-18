@@ -1,0 +1,337 @@
+[gd_scene format=3 uid="uid://bybjeo75e0kop"]
+
+[ext_resource type="Script" uid="uid://ielj4coghjdp" path="res://ui/boss_hp_slot.gd" id="1_slot"]
+[ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="2_font"]
+[ext_resource type="Gradient" path="res://ui/boss_hp_gradient_white.tres" id="3_white"]
+[ext_resource type="Gradient" path="res://ui/boss_hp_gradient_red.tres" id="4_red"]
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_white"]
+gradient = ExtResource("3_white")
+width = 630
+height = 15
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_red"]
+gradient = ExtResource("4_red")
+width = 630
+height = 15
+fill_to = Vector2(0, 1)
+
+[node name="BossHPSlot" type="Control" unique_id=439963229]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 640.0
+offset_bottom = 44.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+script = ExtResource("1_slot")
+hp_gradient_white = ExtResource("3_white")
+hp_gradient_red = ExtResource("4_red")
+
+[node name="SingleLayout" type="Control" parent="." unique_id=457994403]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Background" type="ColorRect" parent="SingleLayout" unique_id=1499966153]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -17.0
+offset_right = -5.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.843137)
+
+[node name="BorderTop" type="ColorRect" parent="SingleLayout" unique_id=1523785967]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -18.0
+offset_right = -5.0
+offset_bottom = -16.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BorderBottom" type="ColorRect" parent="SingleLayout" unique_id=789325298]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -2.0
+offset_right = -5.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BorderLeft" type="ColorRect" parent="SingleLayout" unique_id=1241534574]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = -18.0
+offset_right = 5.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BorderRight" type="ColorRect" parent="SingleLayout" unique_id=2027644998]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -5.0
+offset_top = -18.0
+offset_right = -2.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BossName" type="Label" parent="SingleLayout" unique_id=345085602]
+z_index = 1
+layout_mode = 0
+offset_left = 13.0
+offset_top = 17.0
+offset_right = 233.0
+offset_bottom = 35.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0.14902, 0.14902, 0.14902, 1)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = -1
+theme_override_constants/shadow_outline_size = 7
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 15
+text = "-BOSS-"
+vertical_alignment = 1
+clip_text = true
+text_overrun_behavior = 3
+max_lines_visible = 1
+
+[node name="BarArea" type="Control" parent="SingleLayout" unique_id=1795717369]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -16.0
+offset_right = -5.0
+offset_bottom = -1.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="HP2" type="TextureProgressBar" parent="SingleLayout/BarArea" unique_id=1056855636]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+max_value = 1.0
+step = 0.0
+value = 1.0
+fill_mode = 6
+texture_progress = SubResource("GradientTexture2D_white")
+
+[node name="HP" type="TextureProgressBar" parent="SingleLayout/BarArea" unique_id=1604778172]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+max_value = 1.0
+step = 0.0
+value = 1.0
+fill_mode = 6
+texture_progress = SubResource("GradientTexture2D_red")
+
+[node name="HPValue" type="Label" parent="SingleLayout/BarArea" unique_id=1455604605]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.14902, 0.14902, 0.14902, 1)
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 16
+text = "1000/1000"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MultiLayout" type="Control" parent="." unique_id=598716246]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Background" type="ColorRect" parent="MultiLayout" unique_id=838323756]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 26.0
+offset_right = -4.0
+offset_bottom = -1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.843137)
+
+[node name="BorderTop" type="ColorRect" parent="MultiLayout" unique_id=210337150]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 3.0
+offset_top = 25.0
+offset_right = -3.0
+offset_bottom = 27.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BorderBottom" type="ColorRect" parent="MultiLayout" unique_id=2095962459]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 3.0
+offset_top = -2.0
+offset_right = -3.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BorderLeft" type="ColorRect" parent="MultiLayout" unique_id=1658206817]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = 25.0
+offset_right = 5.0
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BorderRight" type="ColorRect" parent="MultiLayout" unique_id=662058965]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -5.0
+offset_top = 25.0
+offset_right = -2.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.14902, 0.14902, 0.14902, 1)
+
+[node name="BossName" type="Label" parent="MultiLayout" unique_id=1279908348]
+z_index = 1
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 6.0
+offset_top = 18.0
+offset_right = -6.0
+offset_bottom = 42.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0.14902, 0.14902, 0.14902, 1)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = -1
+theme_override_constants/shadow_outline_size = 7
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 15
+text = "BOSS"
+autowrap_mode = 3
+clip_text = true
+text_overrun_behavior = 3
+max_lines_visible = 2
+
+[node name="BarArea" type="Control" parent="MultiLayout" unique_id=984991259]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 5.0
+offset_top = 27.0
+offset_right = -5.0
+offset_bottom = 42.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="HP2" type="TextureProgressBar" parent="MultiLayout/BarArea" unique_id=2120765091]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+max_value = 1.0
+step = 0.0
+value = 1.0
+fill_mode = 6
+texture_progress = SubResource("GradientTexture2D_white")
+
+[node name="HP" type="TextureProgressBar" parent="MultiLayout/BarArea" unique_id=803725651]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+max_value = 1.0
+step = 0.0
+value = 1.0
+fill_mode = 6
+texture_progress = SubResource("GradientTexture2D_red")
+
+[node name="HPValue" type="Label" parent="MultiLayout/BarArea" unique_id=406288636]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.14902, 0.14902, 0.14902, 1)
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 10
+text = "1000/1000"
+horizontal_alignment = 1
+vertical_alignment = 1

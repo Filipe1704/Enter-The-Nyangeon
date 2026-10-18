@@ -2738,6 +2738,79 @@
 
 - Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `CODEBASE_AUDIT.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。
 
+### [Boss] 新 Boss 必须走 BossSchedule；`enemy_group` 不会自动生成 BossCard
+- Evidence / 证据: `script/boss_round_controller.gd:35-56`（`plan_for_round` 只读 `BossSchedule.entries/endless_entries`）、`scenes/manager/enemy_manager.gd:159-177`（有 plan 才走控制器）、`script/mod_manager.gd:545-552`（`get_mod_boss_schedules`）；`get_mod_boss_waves` 已移除，避免半支持的旧式波次路径。
+- Notes / 说明: 只注册 `defs/bosses/*.tres` 不会自动刷 Boss；必须提供 `defs/boss_schedules/*.tres`，首版用 `BossEncounterEntry.trigger = ROUND_START` + `round_min/round_max` 指定回合。`BossCard.body` 根节点必须继承 `BossEnemy`，否则 `spawn_anim` 只告警、不会注册到控制器。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss] 无动画时 enter/death 信号必须延迟一帧发
+- Evidence / 证据: `script/boss_enemy.gd:_play_anim_and_emit`（`anim_name == ""` 时 `call_deferred("_emit_boss_signal", sig)`）、`script/boss_cinematic.gd:_wait_signal`（先 connect 再等待）。
+- Notes / 说明: `BossCinematic.play_enter/play_death` 是先调用 `boss.play_*_anim()` 再 `connect` 等待信号；若无 AnimationPlayer 时同步 `emit`，信号会在 connect 前丢失，控制器卡在 8 秒超时/暂停树。实测无动画 Boss 死亡后 `paused=true`、`boss_round_active=true` 持续到超时；改为 deferred emit 后立即恢复并结算。
+- Source / 来源: test
+- Date / 日期: 2026-10-18
+
+### [Boss] `round_timer` 旧信号与新 profile 的分工
+- Evidence / 证据: `ui/round_timer.gd:102-119`（`boss_round()` 从 `BossRoundController.get_profile()` 取时间）、`:248-264`（超时模式 RAGE/END/FAIL/CUSTOM）、`:312-328`（`end_boss_round` 只在 `end_on_pickup` 时消费）、`script/boss_round_controller.gd:59-93`（控制器发旧 `boss_round_start` 兼容 BGM/计时）。
+- Notes / 说明: 新 Boss 回合仍发旧 `boss_round_start`/`boss_round_end`，`main.gd` 的 BGM 与 `round_timer` 不需重写；`BossRoundProfile` 只覆盖时间/超时/结算策略。旧 `goliath`/`erosion_tower_group` 无 controller profile，继续走 90 秒/rage/青辉石原路径。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss] 多 Boss 血条：HBox 最多 4 槽，死亡演出后移除并补位
+- Evidence / 证据: `ui/boss_hp_group.tscn`/`ui/boss_hp_group.gd`（`max_visible=4`、`_active/_pending`、FIFO 补位、`_set_mode` 切换 `SingleRoot`/`MultiRoot` 并 reparent）、`ui/boss_hp_slot.tscn`/`ui/boss_hp_slot.gd`（`SingleLayout`/`MultiLayout` 可编辑子树，复刻 `boss_hp.tscn` 黑底/灰边/`TextureProgressBar` 白拖尾+红渐变/像素字体；单 Boss 原布局、名字 15→9 缩字号、多 Boss 最多两行/省略号/tooltip）、`script/boss_round_controller.gd:_ensure_hp_group/_remove_boss_bar/_dispose_hp_group`。
+- Notes / 说明: `SingleRoot` / `MultiRoot` 统一 `(0,309)`、`640×44`；单 Boss 内容贴底部复刻原 `boss_hp.tscn`（名字 `-名字-` 覆盖血条左侧、HP16、血条 15px），多 Boss 名字上排只显示名字、HP10、血条仍 15px。超过 `max_visible_hp_bars` 的 Boss 只存在于等待队列，不显示血条/名字。Boss 死亡演出结束后才 `remove_boss`，剩余槽位按生成顺序回填。实测 5 个同时生成：4 槽 + 1 pending，首个死亡后自动补成 4 槽；单槽宽度 640、4 槽约 155；长名字降到 9px、两行；单/多 Boss 截图确认黑底/灰边/红色渐变/像素字体与旧 `boss_hp.tscn` 一致。视觉节点全部在 `boss_hp_slot.tscn`，脚本不再写位置；`auto_fit_name=false` 可保留手动字体。之前错位根因：单 Boss 父高 21、多 Boss 40，而场景按 40 调整并使用 `offset_bottom=-21`，运行到 21 高时布局被压成 0；统一 44 后修复。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss/UI] HUD 视觉必须放 `.tscn`，脚本只绑数据；否则手动调整会被运行期覆盖
+- Evidence / 证据: `ui/boss_hp_slot.tscn`（`SingleLayout`/`MultiLayout` 两套可编辑子树、`Background`/`Border*`/`BossName`/`BarArea`/`HP2`/`HP`/`HPValue`）、`ui/boss_hp_group.tscn`（`SingleRoot`/`MultiRoot` + HBox）、`ui/boss_hp_slot.gd`（只绑定/切换显隐/生成渐变纹理）、`ui/boss_hp_group.gd`（只切 Root、`reparent` 槽位）。
+- Notes / 说明: 原 `BossHPSlot` 在代码里 new 控件并由 `_apply_layout()` 写位置/尺寸，用户在编辑器里改的任何布局都会被运行期覆盖。改为场景后，单/多布局、边框、字体、渐变、位置都在 `boss_hp_slot.tscn` 编辑；`BossHPGroup` 只切换 `SingleRoot`/`MultiRoot` 并 reparent 槽位。`auto_fit_name=false` 可关闭自动缩字号，保留手动字体。渐变抽到 `ui/boss_hp_gradient_white.tres` / `boss_hp_gradient_red.tres`，脚本按 BarArea 宽度生成 `GradientTexture2D`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [Boss] 多阶段必须由控制器串行播完整暂停演出
+- Evidence / 证据: `script/boss_enemy.gd:_on_boss_hp_changed/_apply_phase_effects`（只切阶段/加 buff/无敌，不直接播动画）、`script/boss_cinematic.gd:play_phase`（完整 pause 外壳）、`script/boss_round_controller.gd:_on_boss_phase_changed/_run_phase_queue`（按 Boss 排队）。
+- Notes / 说明: 阶段动画由控制器调用 `BossCinematic.play_phase()`，不能由 `BossEnemy` 自己 `play_phase_anim()` 后直接发信号，否则多个阈值同时跨过会并发 `paused=true`。无阶段动画时 `BossEnemy` 延迟一帧发 `boss_phase_anim_finished`，让 `BossCinematic` 先 connect。实测 40% HP 触发 phase_index=1、无敌 0.8s 后恢复。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss] 无尽轮换使用 `endless_round`，不是全局 now_round
+- Evidence / 证据: `resources/boss/boss_schedule.gd:endless_mode`、`script/boss_round_controller.gd:plan_for_round(..., endless_round)`、`_pick_entry` 的 `_rotation`、`scenes/manager/enemy_manager.gd` 传入 `endless_round`。
+- Notes / 说明: 固定条目用全局回合号；`endless_entries` 用无尽回合号匹配 `round_min/round_max`，并按 `group` 过滤（建议 `lv_endless_boss`）。`ROTATION` 默认按条目顺序循环，`WEIGHTED` 保留权重随机；`first_round_add` 重置 rotation。不要让无尽表在普通无尽回合也命中，否则每回合都会出 Boss。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss] 回合中途加入只预留接口，默认 ADD（已被 Phase 2.5 取代）
+- Evidence / 证据: `resources/boss/boss_encounter_entry.gd`（`Trigger`/`Role`/`TimerMode`/`OnNormalTimeout` 字段）、`script/boss_round_controller.gd:95-114`（`arm_mid_round_encounters`/`fire_trigger` 当前只告警/缓存）、`:12`（`enable_mid_round_encounters=false`）。
+- Notes / 说明: 首版只评估 `ROUND_START`；中途加入默认 `NORMAL_CONTINUES` + `Role.ADD` + `OnNormalTimeout.END_WITH_BOSS`，即普通计时/刷怪继续，Boss 死亡不结束回合。启用前不要依赖 `begin_encounter` 自动触发；需先实现触发器评估与普通回合超时策略。
+- SUPERSEDED: 2026-10-18 Phase 2.5 已启用；`enable_mid_round_encounters=true`，触发器、三种 `IntruderEndMode`、`NormalSpawnMode`、missed 倒放离场均已实现并通过运行时探针。
+- Source / 来源: code
+- Date / 日期: 2026-10-18
+
+### [Boss] BossHPGroup 必须实例化场景，不能 `.new()`
+- Evidence / 证据: `ui/boss_hp_group.gd:13-16` 依赖场景子节点 `SingleRoot/MultiRoot`；`script/boss_round_controller.gd:_ensure_hp_group()` 改用 `load("res://ui/boss_hp_group.tscn").instantiate()`。
+- Notes / 说明: `BossHPGroup.new()` 只有脚本、没有 `SingleRoot`/`MultiRoot`/`Bars`，`@onready` 为 null，运行时报 `Node not found: "SingleRoot"` 并中断 Boss 生成。血条预览/运行时都必须从 `.tscn` 实例化。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss] 分时入场读秒不能只依赖 global_time_count
+- Evidence / 证据: `script/boss_round_controller.gd:_process()` 用 0.1s 累加器推进 `encounter.spawn_elapsed_seconds`；`_on_global_time_count()` 只负责回合中途触发器。
+- Notes / 说明: `GameEvents.global_time_count` 来自 `RoundTimer`，在某些场景（未正式开回合、暂停/测试）可能不推进；分时入场若只挂它，延迟 Boss 会永远 pending。改用控制器 `_process` 后读秒仍随 `paused` 停止，测试与正常回合一致。`FIRST_BOSS_READY` 的 `max_first_spawn_wait` 也走同一计时。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Boss] `spawn_conditions` 与 `bosses` 下标必须对齐
+- Evidence / 证据: `resources/boss/boss_round_entry.gd:spawn_conditions`、`script/boss_round_controller.gd:_init_scheduled_spawns()`。
+- Notes / 说明: 条件数组按 `bosses` 下标对应；数量不足时缺失项按“立即入场”处理并告警，多余条件被忽略。`SCHEDULED` 模式应同时清空/设置 `spawn_mode`，否则容易误走旧 `SINGLE/SEQUENCE/SIMULTANEOUS` 路径。
+- Source / 来源: code
+- Date / 日期: 2026-10-18
+
+### [Boss] `STOP_FOR_ROUND` 不能提前清 `spawn_stopped`
+- Evidence / 证据: `script/boss_round_controller.gd:_resume_spawns_if_needed()`。
+- Notes / 说明: 只有 `STOP_WHILE_BOSS_ALIVE` 可以在 Boss 死后恢复刷怪；旧逻辑先清 `spawn_stopped` 再判断模式，导致 `STOP_FOR_ROUND` 状态显示为已恢复（虽然全局 spawner 仍停着）。应先判断模式，再清标志。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
 ### [UI] `branch_anim` 按「展开态」起步；分支切换不能被焦点转移重播 `select_card`
 - Evidence / 证据: `ui/player_card.gd:108-145,194-246`（`_preview_open` 幂等守卫、`_switching` 先于 `grab_focus`、播放前 seek `select_card` 末帧、结束按焦点/触屏状态复位）、`ui/player_card_anim.tres:438-521`（`branch_anim` 只改立绘 x/alpha，首帧与 `select_card` 末帧一致）、`Button.focus_mode` 默认 `All`（鼠标按下会抢焦点）、`tests/test_ui_ux_regressions.gd:1033-1052`。
 - Notes / 说明: 先播 `RESET` 会把整张卡瞬时打回收起布局，且 `branch_anim` 不改卡宽/面板位置，于是全程停在收起态；只删 `RESET` 还不够：鼠标按下分支按钮会抢焦点（`focus_mode=All`），`focus_entered → select_player_card()` 与松开时的 `grab_focus()` 都会把 `select_card` 从 t=0 重播（t=0 正是收起姿态），`branch_anim` 随即冻结在半展开态。修法是：`select_player_card()` 用 `_preview_open` 防重播；`switch_branch()` 先置 `_switching` 再交还焦点，并在分支动画前瞬间 seek `select_card` 末帧；结束再按 `_input_open` + 焦点（触屏用 `_touch_mode and on_touch`）套 `select_card`/`select_out` 末帧。`touch_out_player_card()` 与 `mouse_open()` 的 `select_out` 都要带 `_switching` 守卫，否则触屏摸别的卡、或难度页关闭会打断分支动画并永久卡住 `_switching`。另注意 `select_out` 的 `.:size` 末帧会先于 `.:custom_minimum_size` 应用，被旧的 165 夹住，seek 后要按 `Vector2(custom_minimum_size.x, size.y)` 补一次宽。官方测试用 `pressed.emit()` 绕过鼠标抢焦点，所以没暴露这条路径。

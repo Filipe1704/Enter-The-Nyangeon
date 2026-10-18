@@ -14,6 +14,8 @@ var hp_mult = 1
 var damage_mult = 1
 
 var is_boss: bool = false
+# true = 由 BossRoundController/BossSpawner 编排（入场/死亡演出由控制器负责）
+var controller_managed: bool = false
 
 var is_idle: int = 1
 
@@ -46,6 +48,7 @@ func idle_state():
 	coin_mult = 1
 	has_path = false
 	is_boss = false
+	controller_managed = false
 	# 作弊菜单暂停生成时会把本节点置 ALWAYS；归还空闲复位为默认，避免池化后在暂停菜单中仍处理
 	process_mode = PROCESS_MODE_INHERIT
 	self.visible = false
@@ -81,6 +84,13 @@ func spawn_enemy_body(enemy: EnemyCard):
 		enemy_body = enemy.body.instantiate()
 		get_tree().get_first_node_in_group("EnemiesRoot").add_child(enemy_body)
 	
+	if enemy is BossCard:
+		if enemy_body is BossEnemy:
+			enemy_body.boss_card = enemy
+			enemy_body.set_meta("boss_managed", controller_managed)
+		else:
+			push_warning("[spawn_anim] BossCard %s 的 body 根节点未继承 BossEnemy" % enemy.id)
+
 	# 路线来源：优先关卡显式传入（path_spawn），否则用 EnemyCard.route（数据驱动，所有生成器通用）。
 	var route_scene: PackedScene = null
 	if has_path == true:
@@ -115,6 +125,9 @@ func spawn_enemy_body(enemy: EnemyCard):
 			enemy_body.body_part[i].stats.update_body_ability()
 			enemy_body.body_part[i].active_state()
 	ExtensionHooks.notify_named("on_enemy_spawned", [enemy_body, str(enemy.body.resource_path)])
+	if enemy is BossCard and enemy_body is BossEnemy:
+		GameEvents.emit_boss_spawned(enemy_body, enemy)
+		ExtensionHooks.notify_named("on_boss_spawned", [enemy_body, enemy])
 
 func on_round_end():
 	can_spawn = false
