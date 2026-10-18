@@ -246,7 +246,7 @@ PoolManager.detach(node)
 - **窗口尺寸**：`Game._physics_process` 已不再轮询（注释掉）；实时路径为 `get_window_size()`（`Game.gd:111`）。
 - **相机震动单写者（2026-10-03）**：游戏相机 `scenes/game_camera/gamecamera.tscn`（玩家子节点）由 `_process` 每帧写 `position`（瞄准前导）；屏幕震动必须只写独立 `shake_offset`，在 `_process` 里合成 `position = base + shake_offset`，**禁止** tween `position`（会与 `_process` 互覆盖 → 整屏随机抖动/回弹，疑似"网络丢包"体感）。见 `LEARNINGS.md` [Camera]。
 - **移动端渲染设置（2026-10-03）**：`project.godot` 开 `shader_compiler/shader_cache/enabled`、Android 导出开 `shader_baker/enabled`，减少战斗中新特效首现时的运行期 shader 编译顿挫；帧率上限由 `Game.apply_max_fps` 全平台配置、默认 60（见 §1.5；2026-10-14 核对）。
-- **统一悬浮提示宿主不是 autoload（2026-10-18）**：`ui/hover_tooltip.gd` 按最近的 `CanvasLayer` 复用宿主（meta `_hover_tooltip_host` 存弱引用），跨层唯一性靠 `static var _viewports`（视口 id → 模式/指针/宿主）与宿主弱引用协调，最后 `_display` 的宿主清掉其它层；因此不新增单例，也不受切场景影响。`_ready` 预建 16 个 Label，显示与换内容都不增删节点，避免唤醒 `change_scene` 的 `tree_changed` 等待。绑定侧 `HoverTooltipBinding` 是 `RefCounted`，随目标 `tree_exiting` 自动解绑，卡片释放后不会留下悬空目标。
+- **统一悬浮提示宿主不是 autoload（2026-10-18）**：`ui/hover_tooltip.gd` 按最近的 `CanvasLayer` 复用宿主（meta `_hover_tooltip_host` 存弱引用），跨层唯一性靠 `static var _viewports`（视口 id → 模式/指针/宿主）与宿主弱引用协调，最后 `_display` 的宿主清掉其它层；因此不新增单例，也不受切场景影响。`_ready` 预建 16 个 Label，显示与换内容都不增删节点，避免唤醒 `change_scene` 的 `tree_changed` 等待。绑定侧 `HoverTooltipBinding` 是 `RefCounted`，随目标 `tree_exiting` 自动解绑，卡片释放后不会留下悬空目标。宿主的延迟 `mount()` 遇到失效或待删除父节点时使用 `queue_free()`；本机 Godot 4.7 Windows Release 模板无法解析该处 `free()` / `self.free()`，会使整个提示脚本加载失败（验证见 `LEARNINGS.md` 的 Release 条目）。
 - **SoundManager 异步**：`play_bgm_cut` 需 stream 结束并 emit `cut_finish`；`main.gd:53-55` 依赖此启动循环 BGM；`bgm_slow_fade_out` 在 `game_end` 时中止。
 
 ## 7. Official Coop Extensions / 官方联机通用拓展接口

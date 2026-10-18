@@ -2695,3 +2695,12 @@
 - Source / 来源: code | test
 - Date / 日期: 2026-10-18
 
+
+### [UI/Export] Tooltip 的 free() 在本机 Windows Release 模板中导致整脚本解析失败
+- Evidence / 证据: `ui/hover_tooltip.gd:39-43`（`mount()` 的失效父节点分支）；用户导出的 `E:/Enter The Nyangeon v0.5.1.4-test.exe` 及其启动日志报 `Parse Error: Function "free()" not found in base self.`（`:41`）。本地复现入口 `.godot/tooltip_export_debug/release_loop.py`，最小对照入口 `minimal_release.py`，完整游戏验证日志 `game-regression-runtime.log`。
+- Notes / 说明: 用户反馈 Windows EXE 内 Tooltip 完全不显示。实际 Release 启动在加载宿主脚本时即解析失败，尚未执行到该释放分支也会使所有绑定失效。独立最小工程排除了游戏资源与 Mod：`free()` 和 `self.free()` 均复现，改为 Node 的 `queue_free()` 后通过，失效父节点的未挂载宿主在帧末释放。源码运行及用编辑器引擎 `--main-pack` 挂载同一 EXE 都可通过，不能替代真正 Release 可执行文件的运行验证。本条结论限于本机 Godot 4.7 stable 官方模板的实测，未据此推断其它版本/平台。
+- Validation / 验证: 原始 EXE 复现 `script_loaded=false`；最小 `free()` / `self.free()` 对照均 `valid=false`，`queue_free()` 为 `valid=true`。修复后的完整游戏 Release 专项 `checks=6 failures=0`，覆盖宿主加载、16 个 Label 初始化、真实道具卡键盘与鼠标显示、实际本地化正负效果、失效父节点释放。最终交付包恢复原主菜单并移除临时验证入口。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-18
+
+- Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `CODEBASE_AUDIT.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。

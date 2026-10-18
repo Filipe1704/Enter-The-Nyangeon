@@ -38,7 +38,7 @@ var truncated := false
 
 func mount(parent: Node) -> void:
 	if not is_instance_valid(parent) or parent.is_queued_for_deletion():
-		free()
+		queue_free()
 		return
 	parent.add_child(self)
 
