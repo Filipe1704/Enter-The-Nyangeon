@@ -136,7 +136,7 @@ func update_exp():
 			exp_value.text = "-/-"
 			create_tween().tween_property(exp_bar, "value", 1, 0.05 )
 		lv_value.text = "LV " + str(SupportData.now_lv)
-		pa_value.text = "+" + str(round(SupportData.now_count_ability * 10000) * 0.01) + "%"
+		pa_value.text = "+" + SupportData.percent_text(SupportData.now_count_ability) + "%"
 	else:
 		lv_value.text = "LV -"
 		exp_value.text = "-/-"
@@ -153,7 +153,7 @@ func update_card():
 	ps.text = now_support_card.support_id + "_ps"
 	ex_skill.text = now_support_card.support_id + "_ex"
 	pa_id.text = now_support_card.pa_ability
-	pa_value.text = "+" + str(round(SupportData.now_count_ability * 100)) + "%"
+	pa_value.text = "+" + SupportData.percent_text(SupportData.now_count_ability) + "%"
 	
 	unlock_cost.text = str(now_support_card.unlock_cost)
 	

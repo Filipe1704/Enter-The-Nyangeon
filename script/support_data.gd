@@ -73,6 +73,10 @@ func _ready() -> void:
 	exp_changed.connect(count_exp)
 	count_max_exp()
 
+## 被动加成百分比文本：难度页支援详情与支援商店共用，避免两处小数位不一致。
+func percent_text(value: float) -> String:
+	return str(roundi(value * 100.0))
+
 func reset_game_support():
 	if game_support == null or !support_data.has(game_support.support_id):
 		var remembered := selected_support_id
