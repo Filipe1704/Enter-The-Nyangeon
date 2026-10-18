@@ -2666,3 +2666,35 @@
 - Source / 来源: code | test
 - Date / 日期: 2026-10-18
 - SUPERSEDED: 2026-10-18 已修复：Mod 行设为 `MOUSE_FILTER_PASS`，触屏按下/拖动交给父级滚动，轻点选中，触屏排序使用上下移按钮；鼠标仍可整行拖动排序。Mod 页创建的行与 Toggle 显式启用焦点，方向键选择、Tab 切换与刷新后的焦点恢复均经真实输入验证。共享 Toggle 场景仍不默认启用焦点，其他使用方须按需设置。复现脚本已转为断言回归，修复后日志 `.godot/mod_ui_fix_20261018/audit.log`：触屏滑动 `scroll=59`、顺序不变，无待重启改动。Android 实机仍待验证。来源：code | test。
+
+### [Coop/UI] 联机覆盖层卡片化：LAN 左右分栏常驻房间列表；PageScroll 与动态房间按钮必须进白名单
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/ui/coop_menu.tscn`（Panel `(146,32) 489×320`；Header → `PageScroll/PageContent` → StatusBox；LAN `LanSplit` 左 272 / 右 190；RoomList/RoomStatus/RoomCount）；`ui/coop_menu.gd`（`_build_room_list`/`_refresh_room_list`/`_clear_room_list`/`_refresh_room_status`/`_set_selected_mode`/`_build_interactive_controls`）；`ui/coop_option.gd` + `ui/coop_option.tscn` + `ui/coop_theme.tres`；`i18n/coop_i18n.gd`（`coop_section_*`）。实测 4 语言：Panel 489、PageScroll 478、PageContent 470、Left 272 / Right 190、RoomList 178，右边缘 635 不越界；扩展契约 `checks=17 failures=0`。
+- Notes / 说明: ① `_set_buttons_enabled()` 会把 `_panel` 全部后代设 `IGNORE`，`PageScroll` 本身、竖向滚动条和动态房间按钮都必须加入 `_build_interactive_controls()`，否则触摸拖动/房间点击失效。② 房间列表改为 `%RoomList` 常驻右列，`_clear_room_list()` 同时从白名单移除旧按钮；`_refresh_room_status()` 区分扫描中/无房间/有房间数量。③ 房间行点击沿用 `_on_room_pressed`：回填 IP/端口并直接加入，不再走二级菜单。④ 紧凑字号（分区 12 / 行 13 / LAN 分栏行 12 / 按钮与输入 11 / 说明 IP 9）避免 272/190 两列撑宽；按钮 `clip_text + text_overrun_behavior=3`。⑤ 编辑器里 coop 翻译未注册时 Label 以原始 key 计算最小宽度，Panel 可能显示 500 宽；运行期注册 `coop_i18n` 后为 489，不要按编辑器宽度改布局。⑥ `SakiServerRow` 移入 Relay 卡片后改名查找易失效，已加 `unique_name_in_owner` 并用 `%SakiServerRow`。⑦ `coop_option.tscn` 自带 `coop_theme.tres`，所以本体 option 的 COOP 页也获得同一卡片/像素按钮样式。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+- Follow-up / 后续（2026-10-18，来源：user + test）：仅把 PageScroll 放进白名单仍不够——vbar 可能在构建白名单之后才创建。 `_set_buttons_enabled(true)` 现显式设 PageScroll/vbar STOP，并给白名单控件 `mouse_force_pass_scroll_events=true`；`_input` 增加页面矩形内滚轮兜底（服务器子菜单打开时跳过）。运行期探针：wheel=48 / drag=80 / vbar=57，Filters scroll=0 vbar=0。
+
+### [Mod/UI] 第三方 mod 的 pck 夹带 `mods/etn_coop` 旧编译脚本会遮蔽联机 UI（新场景 + 旧脚本）
+- Evidence / 证据: `user://mods/doom_slayer_izzy/doom_slayer_izzy.pck` 内含 `mods/etn_coop/ui/coop_menu.gdc`、`coop_menu.gd.remap` 与旧 `coop_menu.tscn`；`ModManager` 只扫描 `user://mods`，etn_coop 的镜像 `res://mods/etn_coop` 仅提供项目资源，doom pck 的 `.gd.remap` 让新场景加载旧编译脚本。实测新 etn_coop pck + 镜像后：`coop_menu.gd` 仍 `has_method("_resolve_page_scroll")==false`、`PageScroll.mouse_filter==2`、点击命中 `CoopMenu`；禁用 doom pck 后：`has_resolve=true`、`filter=0`、滚轮 `48`、vbar 拖动 `57`。另：镜像的 `net/coop_net.gd` 仍是旧版，导致 `coop.extensions` 访问报错；对镜像做完整 SDK 同步后消失。
+- Notes / 说明: ① 排查时不要只看 `option.tscn`/新卡片是否出现——**场景可以来自镜像，脚本却来自第三方 pck 的 `.gdc`**；用 `has_method` 或新加的方法确认运行脚本版本。② 第三方 mod 打包时若工程里包含 `res://mods/etn_coop/`（例如复制了联机镜像），会把 `mods/etn_coop/**` 一并打进自己的 pck；它的 `.gdc`/`.remap` 会遮蔽同名 `.gd`，且其 load_order 更高时更明显。修复=重打该 mod 时排除 `mods/etn_coop/**`，或临时把该 pck 移出 `user://mods`。③ 只同步 UI 文件不够；编辑器镜像若长期未全量同步，会出现 `coop_net.gd` 等旧依赖报错，需用 SDK 源整体覆盖镜像。④ `PageScroll` 的 vbar 可能晚于白名单创建，启用时必须动态 `get_v_scroll_bar()` 补 `STOP`；页面矩形内保留 `_input` 滚轮兜底。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [Coop/UI] 手动给页签加 `option_button_box` 后，脚本必须兼容新旧 VBox 路径
+- Evidence / 证据: 镜像 `ui/coop_menu.tscn` 的页签移到 `Node2D/option_button_box/VBoxContainer`（用户手动加 `Title` + ScrollContainer），SDK 源仍是 `Node2D/VBoxContainer`；`script/coop_menu.gd` 新增 `_tabs_vbox()`（新路径优先、旧路径回退），`_setup_tab_input()` 设 `focus_mode=ALL`。运行期验证：`_tabs_vbox()` 返回 VBox、LAN/RELAY/OPTION `focus_mode=2`、`PageScroll.mouse_filter=0`，红字 `Node not found` 消失。
+- Notes / 说明: ① 用户手动调整镜像后不要直接整体同步 SDK→镜像，否则会覆盖 `Title`/`option_button_box`；先保留镜像，等用户确认后再把场景搬回 `mod_sdk/`。② `_build_extension_pages()` 找不到页签容器时 `push_warning` 并返回，避免无条件 `get_node()` 抛红字。③ 内置页签设置 `focus_mode=ALL` 可消除 `option_button.gd:54 grab_focus()` 警告。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [Coop/UI] 语义色 + 粗体层级 + LAN 扫描省略号动画
+- Evidence / 证据: `ui/coop_menu.tscn`（`Theme_section` 浅绿 `0.549/0.941/0.721` + Bold，分隔线低透明绿；`RoomCount`/`RelayRoomCodeLabel` 浅绿 Bold；`LocalIpLabel` 青；说明冷灰；`Title` 浅绿 Bold）；`ui/coop_theme.tres`（按钮 hover/focus 文字浅绿、占位符冷灰）；`ui/coop_option.gd`（卡片标题/数值 Bold + 浅绿）；`ui/coop_menu.gd`（`_scanning_text`/`_tick_scan_dots`，`SCAN_DOT_INTERVAL=0.38`，`coop_lan_scanning_base`；`_set_status` 同时给状态点与文字上色）。运行期实测：状态文本 `正在扫描局域网..` → `...`，`_scan_phase=2→3`，`RoomStatus` 颜色 `(1,0.78,0.12)`，`RoomCount` 颜色 `(0.549,0.941,0.721)` 且字体为 `BoutiqueBitmap9x9_Bold_1.9.ttf`。
+- Notes / 说明: ① 配色走语义而非每卡主题：浅绿=标题/数值，青=地址，琥珀=扫描/等待，红=错误，冷灰=说明；主文本保持白色。② 只有分区标题和数值用 Bold，行标签保持 regular，避免字号/字重一起变重。③ 扫描动画只在 `_browsing && 无房间` 时运行，有房间隐藏、无房间显示静态“未发现房间”；同色点循环不改布局。④ 用户手动加的 `Title`/`option_button_box` 场景已搬回 `mod_sdk`，镜像与源码同步；安装版 pck 已重打。⑤ `doom_slayer_izzy.pck` 仍禁用（旧 `mods/etn_coop` 会遮蔽新 UI）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+- SUPERSEDED: 2026-10-18 用户反馈绿色标题/Bold 过土；分区标题与 COOP 题头恢复灰/白 regular，数值恢复白 regular；仅保留状态色、IP 青和扫描动画。（来源：user）
+
+### [Coop/UI] ESC 关闭联机覆盖层要走 `_input`，且不能先做手柄判断
+- Evidence / 证据: `ui/coop_menu.gd` 新增 `_handle_cancel_input()`，在 `_input()` 顶部优先处理；`_unhandled_input()` 只保留手柄方向/确认。运行期实测：首次 ESC `on_coop=false`；重开后打开服务器子菜单，ESC 只关子菜单（`submenu.visible=false`、`on_coop=true`）；再按 ESC `on_coop=false`。旧实现把 `if not _is_gamepad_event(event): return` 放在 `_is_ui_cancel()` 之前，键盘 ESC 被提前丢弃。
+- Notes / 说明: ① 取消键统一在 `_input()` 消费，早于 GUI/`_unhandled_input`，避免主菜单/暂停页同时响应 ESC。② 顺序：已打开的删除确认框先让弹窗处理；服务器子菜单先只关子菜单；否则 `out_coop_selected()`。③ `ui_cancel`/`pause` 都走 `_is_ui_cancel`，键盘 ESC 与手柄 B 一致；`set_input_as_handled()` 防止重复关闭。④ 旧 `_file_dialog` 守卫是误加（本场景没有该变量），已移除；确认框是 `_saved_confirm`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18

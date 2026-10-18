@@ -7,6 +7,13 @@ extends VBoxContainer
 const CoopNetScript := preload("res://mods/etn_coop/net/coop_net.gd")
 const FreqSliderScene := preload("res://ui/damage_freq_slider.tscn")
 const ToggleScene := preload("res://ui/option_toggle.tscn")
+const ROW_FONT := preload("res://fonts/BoutiqueBitmap9x9_1.9.ttf")
+
+const CARD_BG := Color(0.101961, 0.101961, 0.101961, 1)
+const CARD_BORDER := Color(0.223529, 0.223529, 0.223529, 1)
+const LABEL_COLOR := Color(1, 1, 1, 1)
+const DIM_COLOR := Color(0.74902, 0.780392, 0.764706, 1)
+const TRACK_COLOR := Color(0.164706, 0.164706, 0.164706, 1)
 
 var _remote_effect_slider: HSlider
 var _remote_flash_slider: HSlider
@@ -22,7 +29,7 @@ var _net_check_result: Label
 
 func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_theme_constant_override("separation", 6)
+	add_theme_constant_override("separation", 8)
 	_build()
 	_refresh()
 	var coop = CoopNetScript.instance
@@ -47,33 +54,45 @@ func get_interactive_controls() -> Array:
 
 
 func _build() -> void:
-	_remote_effect_slider = _add_freq_row("coop_option_remote_effect", 0)
-	_remote_flash_slider = _add_freq_row("coop_option_remote_flash", 1)
-	_remote_text_slider = _add_freq_row("coop_option_remote_text", 2)
-	_debug_hud_toggle = _add_toggle_row("coop_option_debug_hud")
-	_upnp_toggle = _add_toggle_row("coop_option_upnp")
+	var remote := _add_card("coop_section_remote")
+	_remote_effect_slider = _add_freq_row(remote, "coop_option_remote_effect", 0)
+	_remote_flash_slider = _add_freq_row(remote, "coop_option_remote_flash", 1)
+	_remote_text_slider = _add_freq_row(remote, "coop_option_remote_text", 2)
 
+	var display := _add_card("coop_section_display")
+	_debug_hud_toggle = _add_toggle_row(display, "coop_option_debug_hud")
+	_upnp_toggle = _add_toggle_row(display, "coop_option_upnp")
+
+	var net := _add_card("coop_net_check")
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	add_child(row)
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	net.add_child(row)
 	_net_check_button = Button.new()
-	_net_check_button.custom_minimum_size = Vector2(120, 30)
-	_net_check_button.text = tr("coop_net_check")
+	_net_check_button.custom_minimum_size = Vector2(112, 26)
+	_net_check_button.text = "coop_net_check"
 	_net_check_button.pressed.connect(_on_net_check_pressed)
 	_net_check_button.gui_input.connect(_on_net_check_gui_input)
 	row.add_child(_net_check_button)
 	_net_check_result = Label.new()
 	_net_check_result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_net_check_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_net_check_result.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_net_check_result.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_net_check_result.add_theme_font_override("font", ROW_FONT)
 	_net_check_result.add_theme_font_size_override("font_size", 9)
-	_net_check_result.text = tr("coop_net_check_hint")
+	_net_check_result.add_theme_color_override("font_color", DIM_COLOR)
+	_net_check_result.text = "coop_net_check_hint"
 	row.add_child(_net_check_result)
 
 	var note := Label.new()
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	note.add_theme_font_override("font", ROW_FONT)
 	note.add_theme_font_size_override("font_size", 9)
-	note.text = tr("coop_option_note")
-	add_child(note)
+	note.add_theme_color_override("font_color", DIM_COLOR)
+	note.text = "coop_option_note"
+	net.add_child(note)
 
 	_remote_effect_slider.value_changed.connect(_on_remote_effect_value_changed)
 	_remote_flash_slider.value_changed.connect(_on_remote_flash_value_changed)
@@ -82,30 +101,98 @@ func _build() -> void:
 	_upnp_toggle.toggled.connect(_on_upnp_toggled)
 
 
-# idx: 0=特效 1=闪白 2=飘字
-func _add_freq_row(label_key: String, idx: int) -> HSlider:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	add_child(row)
+func _add_card(title_key: String) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = CARD_BG
+	style.border_color = CARD_BORDER
+	style.set_border_width_all(1)
+	style.content_margin_left = 6.0
+	style.content_margin_top = 6.0
+	style.content_margin_right = 6.0
+	style.content_margin_bottom = 6.0
+	style.anti_aliasing = false
+	panel.add_theme_stylebox_override("panel", style)
+	add_child(panel)
 
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(box)
+
+	var header := Label.new()
+	header.text = title_key
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_theme_font_override("font", ROW_FONT)
+	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_color_override("font_color", Color(0.819608, 0.819608, 0.819608, 1))
+	box.add_child(header)
+
+	var divider := ColorRect.new()
+	divider.custom_minimum_size = Vector2(0, 1)
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	divider.color = CARD_BORDER
+	box.add_child(divider)
+
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 4)
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(content)
+	return content
+
+
+func _make_row_label(key: String) -> Label:
 	var label := Label.new()
-	label.custom_minimum_size = Vector2(190, 22)
-	label.add_theme_font_size_override("font_size", 12)
-	label.text = tr(label_key)
+	label.custom_minimum_size = Vector2(150, 22)
+	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(label)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.text = key
+	label.add_theme_font_override("font", ROW_FONT)
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", LABEL_COLOR)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	label.add_theme_constant_override("shadow_offset_x", 0)
+	label.add_theme_constant_override("shadow_offset_y", 3)
+	label.add_theme_constant_override("outline_size", 4)
+	label.add_theme_constant_override("shadow_outline_size", 2)
+	return label
+
+
+# idx: 0=特效 1=闪白 2=飘字
+func _add_freq_row(parent: VBoxContainer, label_key: String, idx: int) -> HSlider:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
+
+	row.add_child(_make_row_label(label_key))
 
 	var slider: HSlider = FreqSliderScene.instantiate()
-	slider.custom_minimum_size = Vector2(150, 16)
+	slider.custom_minimum_size = Vector2(132, 16)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(slider)
 
 	var value := Label.new()
-	value.custom_minimum_size = Vector2(84, 20)
-	value.add_theme_font_size_override("font_size", 12)
+	value.custom_minimum_size = Vector2(64, 20)
+	value.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	value.add_theme_font_override("font", ROW_FONT)
+	value.add_theme_font_size_override("font_size", 11)
+	value.add_theme_color_override("font_color", LABEL_COLOR)
+	value.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+	value.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	value.add_theme_constant_override("shadow_offset_x", 0)
+	value.add_theme_constant_override("shadow_offset_y", 2)
+	value.add_theme_constant_override("outline_size", 4)
+	value.add_theme_constant_override("shadow_outline_size", 2)
 	row.add_child(value)
 
 	if idx == 0:
@@ -117,19 +204,16 @@ func _add_freq_row(label_key: String, idx: int) -> HSlider:
 	return slider
 
 
-func _add_toggle_row(label_key: String):
+func _add_toggle_row(parent: VBoxContainer, label_key: String):
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	add_child(row)
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
 
-	var label := Label.new()
-	label.custom_minimum_size = Vector2(190, 22)
-	label.add_theme_font_size_override("font_size", 12)
-	label.text = tr(label_key)
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(label)
+	row.add_child(_make_row_label(label_key))
 
 	var toggle = ToggleScene.instantiate()
+	toggle.set("track_color", TRACK_COLOR)
 	toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(toggle)
 	return toggle

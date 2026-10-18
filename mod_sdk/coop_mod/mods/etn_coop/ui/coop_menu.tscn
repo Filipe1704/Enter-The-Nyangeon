@@ -1,12 +1,17 @@
-[gd_scene load_steps=20 format=3 uid="uid://bcoopmenuscene2"]
+[gd_scene format=3 uid="uid://bv54mlp6lokwd"]
 
-[ext_resource type="Script" path="res://mods/etn_coop/ui/coop_menu.gd" id="1_script"]
-[ext_resource type="Shader" path="res://shaders/scrolling_bkgd.gdshader" id="2_shader"]
-[ext_resource type="FontFile" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="4_font"]
-[ext_resource type="PackedScene" path="res://ui/return.tscn" id="5_return"]
-[ext_resource type="PackedScene" path="res://ui/option_button.tscn" id="6_button"]
+[ext_resource type="Script" uid="uid://ba7ne14dm7tdw" path="res://mods/etn_coop/ui/coop_menu.gd" id="1_script"]
+[ext_resource type="Shader" uid="uid://d3frxix26ovel" path="res://shaders/scrolling_bkgd.gdshader" id="2_shader"]
+[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="4_font"]
+[ext_resource type="PackedScene" uid="uid://16ybq5tjkt1a" path="res://ui/return.tscn" id="5_return"]
+[ext_resource type="PackedScene" uid="uid://sosltotyod01" path="res://ui/option_button.tscn" id="6_button"]
 [ext_resource type="PackedScene" path="res://mods/etn_coop/ui/coop_option.tscn" id="7_coopopt"]
 [ext_resource type="PackedScene" path="res://ui/option_toggle.tscn" id="8_toggle"]
+[ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="9_kkiw5"]
+[ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="9_scroll"]
+[ext_resource type="Theme" uid="uid://hn8wfogubms0" path="res://ui/pixel_scrollbar_theme.tres" id="10_scrolltheme"]
+[ext_resource type="Theme" uid="uid://0ivk887ius3a" path="res://mods/etn_coop/ui/coop_theme.tres" id="11_cooptheme"]
+[ext_resource type="Texture2D" uid="uid://4d4ff0hkjxle" path="res://ui/close_pixel.svg" id="12_tgpav"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_banner"]
 shader = ExtResource("2_shader")
@@ -17,13 +22,6 @@ shader_parameter/repeat_y = 1.0
 shader_parameter/tint = Color(0, 0.837, 0.295, 1)
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
-
-[sub_resource type="Gradient" id="Gradient_sep"]
-colors = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 0)
-
-[sub_resource type="GradientTexture2D" id="GradientTexture_sep"]
-gradient = SubResource("Gradient_sep")
-width = 16
 
 [sub_resource type="Animation" id="Anim_panel_reset"]
 length = 0.001
@@ -90,7 +88,7 @@ tracks/0/keys = {
 "times": PackedFloat32Array(0.1),
 "transitions": PackedFloat32Array(1),
 "update": 0,
-"values": [Vector2(146, 48)]
+"values": [Vector2(146, 32)]
 }
 tracks/1/type = "value"
 tracks/1/imported = false
@@ -164,6 +162,24 @@ _data = {
 &"panel_option_in": SubResource("Anim_panel_in"),
 &"panel_option_out": SubResource("Anim_panel_out")
 }
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.101961, 0.101961, 0.101961, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.223529, 0.223529, 0.223529, 1)
+anti_aliasing = false
+
+[sub_resource type="Theme" id="Theme_section"]
+Label/colors/font_color = Color(0.819608, 0.819608, 0.819608, 1)
+Label/font_sizes/font_size = 12
+Label/fonts/font = ExtResource("4_font")
 
 [sub_resource type="Animation" id="Anim_root_reset"]
 length = 0.001
@@ -255,15 +271,23 @@ _data = {
 &"coop_out": SubResource("Anim_root_out")
 }
 
-[node name="CoopMenu" type="Control"]
+[sub_resource type="Gradient" id="Gradient_sep"]
+colors = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture_sep"]
+gradient = SubResource("Gradient_sep")
+width = 16
+
+[node name="CoopMenu" type="Control" unique_id=1067491471]
 layout_mode = 3
 anchor_left = -1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("11_cooptheme")
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=2021966573]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -273,7 +297,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.141176, 0.141176, 0.141176, 1)
 
-[node name="TopBarBack" type="ColorRect" parent="."]
+[node name="TopBarBack" type="ColorRect" parent="." unique_id=1771429841]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 1
 anchors_preset = 10
@@ -281,7 +305,7 @@ anchor_right = 1.0
 grow_horizontal = 2
 mouse_filter = 2
 
-[node name="Banner" type="TextureRect" parent="."]
+[node name="Banner" type="TextureRect" parent="." unique_id=834419365]
 unique_name_in_owner = true
 material = SubResource("ShaderMaterial_banner")
 layout_mode = 1
@@ -293,46 +317,95 @@ scale = Vector2(0.25, 0.25)
 mouse_filter = 2
 stretch_mode = 1
 
-[node name="Panel" type="PanelContainer" parent="."]
+[node name="Panel" type="PanelContainer" parent="." unique_id=1695586280]
 modulate = Color(1, 1, 1, 0)
 layout_mode = 0
-offset_right = 489.0
-offset_bottom = 322.0
+offset_right = 500.0
+offset_bottom = 320.0
 scale = Vector2(1e-05, 1)
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxEmpty_panel")
 
-[node name="PanelAnimator" type="AnimationPlayer" parent="Panel"]
+[node name="PanelAnimator" type="AnimationPlayer" parent="Panel" unique_id=2112350353]
 unique_name_in_owner = true
 libraries/ = SubResource("AnimationLibrary_panel")
 
-[node name="RootHBox" type="HBoxContainer" parent="Panel"]
+[node name="RootHBox" type="HBoxContainer" parent="Panel" unique_id=1126041156]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Separator" type="ColorRect" parent="Panel/RootHBox"]
+[node name="Separator" type="ColorRect" parent="Panel/RootHBox" unique_id=741138591]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.22, 0.22, 0.22, 1)
 
-[node name="ContentRoot" type="VBoxContainer" parent="Panel/RootHBox"]
+[node name="ContentRoot" type="VBoxContainer" parent="Panel/RootHBox" unique_id=619841813]
 layout_mode = 2
 size_flags_horizontal = 3
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="RowPlayerId" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot"]
+[node name="Header" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot" unique_id=1631911209]
 layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="TitleLabel" type="Label" parent="Panel/RootHBox/ContentRoot/Header" unique_id=1364755291]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "coop_title"
+
+[node name="ModeSubtitleLabel" type="Label" parent="Panel/RootHBox/ContentRoot/Header" unique_id=1723950296]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "coop_mode_subtitle_lan"
+
+[node name="PageScroll" type="ScrollContainer" parent="Panel/RootHBox/ContentRoot" unique_id=1132391474]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 0
+theme = ExtResource("10_scrolltheme")
+follow_focus = true
+horizontal_scroll_mode = 0
+script = ExtResource("9_scroll")
+
+[node name="PageContent" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll" unique_id=1061914142]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Panel/RootHBox/ContentRoot/RowPlayerId"]
-custom_minimum_size = Vector2(190, 22)
+[node name="PlayerCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent" unique_id=282197893]
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/PlayerCard" unique_id=1906126455]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/PlayerCard/VBox" unique_id=1104528914]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme = SubResource("Theme_section")
 text = "coop_option_player_id"
-vertical_alignment = 1
 
-[node name="PlayerIdInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/RowPlayerId"]
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/PlayerCard/VBox" unique_id=995312960]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="Row" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/PlayerCard/VBox" unique_id=550003065]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="PlayerIdInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/PlayerCard/VBox/Row" unique_id=1170333249]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 26)
 layout_mode = 2
@@ -340,91 +413,187 @@ size_flags_horizontal = 3
 mouse_filter = 2
 placeholder_text = "coop_option_player_id_placeholder"
 
-[node name="PlayerIdConfirm" type="Button" parent="Panel/RootHBox/ContentRoot/RowPlayerId"]
+[node name="PlayerIdConfirm" type="Button" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/PlayerCard/VBox/Row" unique_id=1201832536]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(70, 26)
 layout_mode = 2
 mouse_filter = 2
 text = "button_confirm"
 
-[node name="Header" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot"]
-layout_mode = 2
-theme_override_constants/separation = 0
-
-[node name="TitleLabel" type="Label" parent="Panel/RootHBox/ContentRoot/Header"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "coop_title"
-
-[node name="ModeSubtitleLabel" type="Label" parent="Panel/RootHBox/ContentRoot/Header"]
+[node name="LanPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent" unique_id=1429449996]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
-text = "coop_mode_subtitle_lan"
-
-[node name="LanPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="LanHeader" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 13
-text = "coop_mode_lan_label"
-
-[node name="HostRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/LanPanel"]
-layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="HostButton" type="Button" parent="Panel/RootHBox/ContentRoot/LanPanel/HostRow"]
+[node name="LanSplit" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel" unique_id=2039526506]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="LeftColumn" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit" unique_id=1304718010]
+custom_minimum_size = Vector2(272, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.43
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="ConnectionCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn" unique_id=2143651672]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard" unique_id=978411254]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox" unique_id=913194724]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme = SubResource("Theme_section")
+text = "coop_section_connection"
+
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox" unique_id=1376230224]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="HostRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox" unique_id=368798539]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="HostButton" type="Button" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox/HostRow" unique_id=106289557]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(98, 30)
+custom_minimum_size = Vector2(98, 26)
 layout_mode = 2
 mouse_filter = 2
 text = "coop_host"
 
-[node name="LocalIpLabel" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel/HostRow"]
+[node name="LocalIpLabel" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox/HostRow" unique_id=205089161]
+theme_override_colors/font_color = Color(0.498039, 0.847059, 1, 1)
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 10
+theme_override_font_sizes/font_size = 9
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="AddrModeRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/LanPanel"]
+[node name="JoinRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox" unique_id=525536873]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="AddrLabel" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel/AddrModeRow"]
+[node name="IpInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox/JoinRow" unique_id=2074295631]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 26)
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
-text = "coop_share_address"
+size_flags_horizontal = 3
+mouse_filter = 2
+placeholder_text = "coop_host_lan_ip_placeholder"
+
+[node name="JoinButton" type="Button" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox/JoinRow" unique_id=245797204]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+mouse_filter = 2
+text = "coop_join"
+
+[node name="PortRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox" unique_id=1682589616]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="PortLabel" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox/PortRow" unique_id=619824334]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "coop_lan_port"
 vertical_alignment = 1
 
-[node name="LanAddrLabel" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel/AddrModeRow"]
+[node name="PortInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/ConnectionCard/VBox/PortRow" unique_id=1299746799]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 26)
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
+mouse_filter = 2
+text = "24591"
+
+[node name="AddressCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn" unique_id=779680816]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard" unique_id=1691218366]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox" unique_id=1222296876]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme = SubResource("Theme_section")
+text = "coop_share_address"
+
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox" unique_id=1682939967]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="AddrModeRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox" unique_id=1914875593]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="LanAddrLabel" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox/AddrModeRow" unique_id=1357888257]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
 text = "coop_addr_lan"
 vertical_alignment = 1
 
-[node name="LanAddrToggle" parent="Panel/RootHBox/ContentRoot/LanPanel/AddrModeRow" instance=ExtResource("8_toggle")]
+[node name="LanAddrToggle" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox/AddrModeRow" unique_id=1298788776 instance=ExtResource("8_toggle")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
+track_color = Color(0.164706, 0.164706, 0.164706, 1)
 
-[node name="PublicAddrLabel" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel/AddrModeRow"]
+[node name="PublicAddrLabel" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox/AddrModeRow" unique_id=1309884592]
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
+theme_override_font_sizes/font_size = 11
 text = "coop_addr_public"
 vertical_alignment = 1
 
-[node name="PublicAddrToggle" parent="Panel/RootHBox/ContentRoot/LanPanel/AddrModeRow" instance=ExtResource("8_toggle")]
+[node name="PublicAddrToggle" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox/AddrModeRow" unique_id=360489412 instance=ExtResource("8_toggle")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
+track_color = Color(0.164706, 0.164706, 0.164706, 1)
 
-[node name="ManualIpHint" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel"]
+[node name="ManualIpRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox" unique_id=1056192213]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="PublicIpInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox/ManualIpRow" unique_id=525689694]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+placeholder_text = "coop_manual_ip_placeholder"
+
+[node name="PublicIpClear" type="Button" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox/ManualIpRow" unique_id=1363314508]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+mouse_filter = 2
+text = "coop_manual_ip_clear"
+
+[node name="ManualIpHint" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox" unique_id=814480196]
+theme_override_colors/font_color = Color(0.74902, 0.780392, 0.764706, 1)
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -432,149 +601,210 @@ theme_override_font_sizes/font_size = 9
 text = "coop_upnp_failed_hint"
 autowrap_mode = 3
 
-[node name="ManualIpRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/LanPanel"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="PublicIpInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/LanPanel/ManualIpRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(210, 30)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-placeholder_text = "coop_manual_ip_placeholder"
-
-[node name="PublicIpClear" type="Button" parent="Panel/RootHBox/ContentRoot/LanPanel/ManualIpRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 30)
-layout_mode = 2
-mouse_filter = 2
-text = "coop_manual_ip_clear"
-
-[node name="JoinRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/LanPanel"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="IpInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/LanPanel/JoinRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(210, 30)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-placeholder_text = "coop_host_lan_ip_placeholder"
-
-[node name="JoinButton" type="Button" parent="Panel/RootHBox/ContentRoot/LanPanel/JoinRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 30)
-layout_mode = 2
-mouse_filter = 2
-text = "coop_join"
-
-[node name="PortRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/LanPanel"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="PortLabel" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel/PortRow"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 10
-text = "coop_lan_port"
-vertical_alignment = 1
-
-[node name="PortInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/LanPanel/PortRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 26)
-layout_mode = 2
-mouse_filter = 2
-text = "24591"
-
-[node name="LanNote" type="Label" parent="Panel/RootHBox/ContentRoot/LanPanel"]
+[node name="LanNote" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/LeftColumn/AddressCard/VBox" unique_id=2121296777]
+theme_override_colors/font_color = Color(0.74902, 0.780392, 0.764706, 1)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "coop_lan_note"
 autowrap_mode = 3
 
-[node name="RelayPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot"]
+[node name="RightColumn" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit" unique_id=406129806]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="RoomsCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn" unique_id=2050120046]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard" unique_id=64953578]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="HeaderRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard/VBox" unique_id=167730358]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard/VBox/HeaderRow" unique_id=1091549189]
+layout_mode = 2
+size_flags_horizontal = 3
+theme = SubResource("Theme_section")
+text = "coop_lan_rooms"
+
+[node name="RoomCount" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard/VBox/HeaderRow" unique_id=314305508]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard/VBox" unique_id=181441331]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="RoomStatus" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard/VBox" unique_id=304202821]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "coop_lan_scanning"
+autowrap_mode = 3
+
+[node name="RoomList" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/LanPanel/LanSplit/RightColumn/RoomsCard/VBox" unique_id=1383203270]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="RelayPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent" unique_id=431222357]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="SakiServerRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/RelayPanel"]
-layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="RelayHeader" type="Label" parent="Panel/RootHBox/ContentRoot/RelayPanel/SakiServerRow"]
+[node name="RelayServerCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel" unique_id=723530108]
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard" unique_id=695969816]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox" unique_id=905400027]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme = SubResource("Theme_section")
 text = "coop_mode_relay"
 
-[node name="SakiSpacer" type="Control" parent="Panel/RootHBox/ContentRoot/RelayPanel/SakiServerRow"]
-custom_minimum_size = Vector2(220, 0)
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox" unique_id=1927756861]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
-size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
 
-[node name="RelayServerRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/RelayPanel"]
+[node name="RelayServerRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox" unique_id=681750493]
 layout_mode = 2
-theme_override_constants/separation = 8
+mouse_filter = 2
+theme_override_constants/separation = 6
 
-[node name="RelayServerInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/RelayPanel/RelayServerRow"]
+[node name="RelayServerInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox/RelayServerRow" unique_id=260327249]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(220, 30)
+custom_minimum_size = Vector2(220, 26)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 placeholder_text = "coop_relay_server_placeholder"
 
-[node name="RelayCreateButton" type="Button" parent="Panel/RootHBox/ContentRoot/RelayPanel/RelayServerRow"]
+[node name="RelayCreateButton" type="Button" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox/RelayServerRow" unique_id=677694296]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(112, 30)
+custom_minimum_size = Vector2(112, 26)
 layout_mode = 2
 mouse_filter = 2
 text = "coop_create_room"
 
-[node name="RelayRoomCodeLabel" type="Label" parent="Panel/RootHBox/ContentRoot/RelayPanel"]
+[node name="RelayRoomCodeLabel" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox" unique_id=1007253739]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "coop_room_code_empty"
 
-[node name="RelayJoinRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/RelayPanel"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="RelayRoomInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/RelayPanel/RelayJoinRow"]
+[node name="SakiServerRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox" unique_id=1608184061]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(220, 30)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-placeholder_text = "coop_room_code_placeholder"
-
-[node name="RelayJoinButton" type="Button" parent="Panel/RootHBox/ContentRoot/RelayPanel/RelayJoinRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(112, 30)
 layout_mode = 2
 mouse_filter = 2
-text = "coop_join_room"
+theme_override_constants/separation = 6
 
-[node name="RelayNote" type="Label" parent="Panel/RootHBox/ContentRoot/RelayPanel"]
+[node name="RelayNote" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayServerCard/VBox" unique_id=531988825]
+theme_override_colors/font_color = Color(0.74902, 0.780392, 0.764706, 1)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "coop_relay_note"
 autowrap_mode = 3
 
-[node name="DedicatedPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot"]
+[node name="RelayRoomCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel" unique_id=53564622]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayRoomCard" unique_id=514608052]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayRoomCard/VBox" unique_id=948131162]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme = SubResource("Theme_section")
+text = "coop_room_number"
+
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayRoomCard/VBox" unique_id=1225661036]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="RelayJoinRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayRoomCard/VBox" unique_id=389560742]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="RelayRoomInput" type="LineEdit" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayRoomCard/VBox/RelayJoinRow" unique_id=1720215904]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 26)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+placeholder_text = "coop_room_code_placeholder"
+
+[node name="RelayJoinButton" type="Button" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/RelayPanel/RelayRoomCard/VBox/RelayJoinRow" unique_id=783876347]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(112, 26)
+layout_mode = 2
+mouse_filter = 2
+text = "coop_join_room"
+
+[node name="DedicatedPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent" unique_id=44913386]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 5
+mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="DedicatedHeader" type="Label" parent="Panel/RootHBox/ContentRoot/DedicatedPanel"]
+[node name="DedicatedCard" type="PanelContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/DedicatedPanel" unique_id=632756888]
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/DedicatedPanel/DedicatedCard" unique_id=1288781265]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/DedicatedPanel/DedicatedCard/VBox" unique_id=1023225188]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme = SubResource("Theme_section")
 text = "coop_mode_dedicated"
 
-[node name="DedicatedNote" type="Label" parent="Panel/RootHBox/ContentRoot/DedicatedPanel"]
+[node name="Divider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/DedicatedPanel/DedicatedCard/VBox" unique_id=860827087]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="DedicatedNote" type="Label" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/DedicatedPanel/DedicatedCard/VBox" unique_id=739431362]
+theme_override_colors/font_color = Color(0.74902, 0.780392, 0.764706, 1)
 custom_minimum_size = Vector2(0, 86)
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
@@ -582,35 +812,41 @@ text = "coop_dedicated_note"
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="OptionPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot"]
+[node name="OptionPanel" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent" unique_id=1257878916]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 6
+mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="OptionHeader" type="Label" parent="Panel/RootHBox/ContentRoot/OptionPanel"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 13
-text = "coop_mode_option"
-
-[node name="CoopOption" parent="Panel/RootHBox/ContentRoot/OptionPanel" instance=ExtResource("7_coopopt")]
+[node name="CoopOption" parent="Panel/RootHBox/ContentRoot/PageScroll/PageContent/OptionPanel" unique_id=919396507 instance=ExtResource("7_coopopt")]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ContentSpacer" type="Control" parent="Panel/RootHBox/ContentRoot"]
+[node name="StatusBox" type="VBoxContainer" parent="Panel/RootHBox/ContentRoot" unique_id=2065761064]
 layout_mode = 2
-[node name="StatusBox" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot"]
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="StatusDivider" type="ColorRect" parent="Panel/RootHBox/ContentRoot/StatusBox" unique_id=1275114136]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="StatusRow" type="HBoxContainer" parent="Panel/RootHBox/ContentRoot/StatusBox" unique_id=1158186905]
+layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="StatusDot" type="ColorRect" parent="Panel/RootHBox/ContentRoot/StatusBox"]
+[node name="StatusDot" type="ColorRect" parent="Panel/RootHBox/ContentRoot/StatusBox/StatusRow" unique_id=417755528]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(8, 8)
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.45, 0.45, 0.45, 1)
 
-[node name="StatusLabel" type="Label" parent="Panel/RootHBox/ContentRoot/StatusBox"]
+[node name="StatusLabel" type="Label" parent="Panel/RootHBox/ContentRoot/StatusBox/StatusRow" unique_id=154784926]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 34)
 layout_mode = 2
@@ -619,19 +855,10 @@ theme_override_font_sizes/font_size = 10
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="Hint" type="Label" parent="."]
-layout_mode = 0
-offset_left = 59.0
-offset_top = 323.0
-offset_right = 209.0
-offset_bottom = 345.0
-theme_override_font_sizes/font_size = 11
-text = "coop_return_hint"
-
-[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=210026287]
 libraries/ = SubResource("AnimationLibrary_root")
 
-[node name="Node2D" type="Control" parent="."]
+[node name="Node2D" type="Control" parent="." unique_id=351320759]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -640,7 +867,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="TextureRect" type="TextureRect" parent="Node2D"]
+[node name="TextureRect" type="TextureRect" parent="Node2D" unique_id=1578503216]
 layout_mode = 0
 offset_left = 135.0
 offset_top = 20.0
@@ -649,7 +876,7 @@ offset_bottom = 360.0
 mouse_filter = 2
 texture = SubResource("GradientTexture_sep")
 
-[node name="ColorRect" type="ColorRect" parent="Node2D"]
+[node name="ColorRect" type="ColorRect" parent="Node2D" unique_id=1703096324]
 layout_mode = 0
 offset_top = 20.0
 offset_right = 139.0
@@ -657,79 +884,75 @@ offset_bottom = 360.0
 mouse_filter = 2
 color = Color(0.0768358, 0.0768358, 0.0768358, 1)
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Node2D"]
+[node name="Title" type="Label" parent="Node2D" unique_id=219710569]
 layout_mode = 0
-offset_left = 24.0
-offset_top = 39.0
-offset_right = 121.0
-offset_bottom = 87.0
+offset_left = 20.0
+offset_top = 28.0
+offset_right = 98.0
+offset_bottom = 54.0
+theme_override_fonts/font = ExtResource("4_font")
+text = "COOP"
+vertical_alignment = 1
+script = ExtResource("9_kkiw5")
+base_font_size = 16
+base_size_y = 26.0
+base_size_x = 78.0
+min_font_size = 9
 
-[node name="LAN" parent="Node2D/VBoxContainer" instance=ExtResource("6_button")]
+[node name="option_button_box" type="ScrollContainer" parent="Node2D" unique_id=1038951682]
+layout_mode = 0
+offset_left = 9.0
+offset_top = 68.0
+offset_right = 139.0
+offset_bottom = 334.0
+theme = ExtResource("10_scrolltheme")
+follow_focus = true
+horizontal_scroll_mode = 3
+vertical_scroll_mode = 3
+script = ExtResource("9_scroll")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Node2D/option_button_box" unique_id=60060751]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="LAN" parent="Node2D/option_button_box/VBoxContainer" unique_id=1033468618 instance=ExtResource("6_button")]
 unique_name_in_owner = true
 layout_mode = 2
 button_id = "coop_lan"
+text = "coop_mode_lan"
 
-[node name="lan_label" type="Label" parent="Node2D/VBoxContainer/LAN"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("4_font")
-theme_override_font_sizes/font_size = 14
-text = "coop_mode_lan_label"
-
-[node name="Relay" parent="Node2D/VBoxContainer" instance=ExtResource("6_button")]
+[node name="Relay" parent="Node2D/option_button_box/VBoxContainer" unique_id=1835961 instance=ExtResource("6_button")]
 unique_name_in_owner = true
 layout_mode = 2
 button_id = "coop_relay"
-
-[node name="relay_label" type="Label" parent="Node2D/VBoxContainer/Relay"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("4_font")
-theme_override_font_sizes/font_size = 19
 text = "coop_mode_relay"
 
-[node name="Option" parent="Node2D/VBoxContainer" instance=ExtResource("6_button")]
+[node name="Option" parent="Node2D/option_button_box/VBoxContainer" unique_id=1910805555 instance=ExtResource("6_button")]
 unique_name_in_owner = true
 layout_mode = 2
 button_id = "coop_option"
-
-[node name="option_label" type="Label" parent="Node2D/VBoxContainer/Option"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_shadow_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("4_font")
-theme_override_font_sizes/font_size = 19
 text = "coop_mode_option"
 
-[node name="Label" type="Label" parent="Node2D"]
+[node name="Label" type="Label" parent="Node2D" unique_id=872417525]
+theme_override_colors/font_color = Color(0.74902, 0.780392, 0.764706, 1)
 layout_mode = 0
 offset_left = 4.0
 offset_top = 344.0
 offset_right = 81.0
 offset_bottom = 357.0
 theme_override_font_sizes/font_size = 11
-text = "coop_return_hint"
+text = "ESC: RETURN"
 
-[node name="return" parent="Node2D" instance=ExtResource("5_return")]
+[node name="return" parent="Node2D" unique_id=1586323975 instance=ExtResource("5_return")]
+auto_translate_mode = 2
+texture_filter = 1
 layout_mode = 0
-offset_left = 108.0
-offset_top = 329.0
-offset_right = 134.0
-offset_bottom = 355.0
+offset_left = 104.0
+offset_top = 28.0
+offset_right = 130.0
+offset_bottom = 54.0
+offset_transform_enabled = true
+offset_transform_scale = Vector2(0.8, 0.8)
+text = ""
+icon = ExtResource("12_tgpav")
+icon_alignment = 1

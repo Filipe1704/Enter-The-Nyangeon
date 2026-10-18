@@ -38,6 +38,7 @@
 ## Menu Pages / 通用页面与状态栏
 
 - 官方通过 `ModAPI.create_option_tab()` 创建页签并放在 OPTION 前，与内置页面互斥；页面自身由官方菜单持有。
+- 2026-10-18 起页面插入 `Panel/RootHBox/ContentRoot/PageScroll/PageContent`，高度由内容决定并随外层滚动；不要再假设固定 322px 面板高度。
 - 交互名单包含按钮、输入框、滚动容器及滚动条。关闭菜单撤销鼠标及键盘焦点，重开恢复原始 mouse_filter / focus_mode；导航只纳入可见且未禁用的控件。
 - 切页或释放菜单不结束提供者会话。菜单缓存每个提供者的准备、失败及游戏连接状态，切页或切换语言后恢复显示；迟到的 offline 通知不覆盖准备或失败结果。
 
