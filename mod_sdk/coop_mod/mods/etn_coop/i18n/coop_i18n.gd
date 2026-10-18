@@ -6,6 +6,9 @@ extends RefCounted
 const LOCALES: Array[String] = ["zh_CN", "en", "pt", "vi_VN"]
 
 const MESSAGES: Dictionary = {
+	"coop_status_extension_preparing": {"zh_CN": "正在准备组网…", "en": "Preparing network…", "pt": "Preparando a rede…", "vi_VN": "Đang chuẩn bị mạng…"},
+	"coop_status_extension_ready": {"zh_CN": "组网已就绪，正在建立游戏连接", "en": "Network ready; establishing game connection", "pt": "Rede pronta; conectando ao jogo", "vi_VN": "Mạng sẵn sàng; đang kết nối trò chơi"},
+	"coop_status_extension_failed": {"zh_CN": "组网失败，请检查连接设置", "en": "Network setup failed; check connection settings", "pt": "Falha na rede; verifique as configurações", "vi_VN": "Thiết lập mạng thất bại; kiểm tra cài đặt"},
 	"coop_title": {"zh_CN": "联机", "en": "CO-OP", "pt": "CO-OP", "vi_VN": "CO-OP"},
 	"coop_mode_lan": {"zh_CN": "局域网", "en": "LAN", "pt": "LAN", "vi_VN": "LAN"},
 	"coop_mode_lan_label": {"zh_CN": "公网/局域网", "en": "Internet/LAN", "pt": "Internet/LAN", "vi_VN": "Internet/LAN"},
@@ -16,14 +19,14 @@ const MESSAGES: Dictionary = {
 	"coop_mode_subtitle_dedicated": {"zh_CN": "专用服务器（暂不可用）", "en": "Dedicated server (unavailable)", "pt": "Servidor dedicado (indisponível)", "vi_VN": "Máy chủ riêng (không khả dụng)"},
 	"coop_host": {"zh_CN": "开服", "en": "HOST", "pt": "HOSPEDAR", "vi_VN": "TẠO PHÒNG"},
 	"coop_join": {"zh_CN": "加入", "en": "JOIN", "pt": "ENTRAR", "vi_VN": "THAM GIA"},
-	"coop_host_lan_ip_placeholder": {"zh_CN": "主机地址（IP / 域名）", "en": "Host address (IP / domain)", "pt": "Endereço do host (IP / domínio)", "vi_VN": "Địa chỉ chủ phòng (IP / tên miền)"},
+	"coop_host_lan_ip_placeholder": {"zh_CN": "IP / 域名", "en": "IP / domain", "pt": "IP / domínio", "vi_VN": "IP / tên miền"},
 	"coop_lan_port": {"zh_CN": "端口", "en": "Port", "pt": "Porta", "vi_VN": "Cổng"},
 	"coop_share_address": {"zh_CN": "分享地址", "en": "Share address", "pt": "Compartilhar endereço", "vi_VN": "Chia sẻ địa chỉ"},
 	"coop_addr_lan": {"zh_CN": "局域网", "en": "LAN", "pt": "LAN", "vi_VN": "LAN"},
 	"coop_addr_public": {"zh_CN": "公网", "en": "Internet", "pt": "Internet", "vi_VN": "Internet"},
 	"coop_addr_public_unavailable": {"zh_CN": "公网地址暂不可用，请手动填入公网 IP 或改用中继", "en": "Public address unavailable; enter your public IP manually or use relay", "pt": "Endereço público indisponível; informe o IP público ou use relay", "vi_VN": "Địa chỉ công khai không khả dụng; nhập IP công khai hoặc dùng relay"},
 	"coop_copied": {"zh_CN": "地址已复制", "en": "Address copied", "pt": "Endereço copiado", "vi_VN": "Đã sao chép địa chỉ"},
-	"coop_manual_ip_placeholder": {"zh_CN": "公网地址（IP / 域名[:端口]）", "en": "Public address (IP / domain[:port])", "pt": "Endereço público (IP / domínio[:porta])", "vi_VN": "Địa chỉ công khai (IP / tên miền[:cổng])"},
+	"coop_manual_ip_placeholder": {"zh_CN": "公网 IP / 域名", "en": "Public IP / domain", "pt": "IP público / domínio", "vi_VN": "IP / tên miền công khai"},
 	"coop_manual_ip_clear": {"zh_CN": "清除", "en": "Clear", "pt": "Limpar", "vi_VN": "Xóa"},
 	"coop_manual_ip_invalid": {"zh_CN": "公网 IP 无效", "en": "Invalid public IP", "pt": "IP público inválido", "vi_VN": "IP công khai không hợp lệ"},
 	"coop_upnp_failed_hint": {"zh_CN": "UPnP 自动映射失败，请手动填入公网 IP（或在路由器转发端口 / 改用中继）", "en": "UPnP mapping failed; enter your public IP manually (or forward the port / use relay)", "pt": "Falha no UPnP; informe o IP público manualmente (ou encaminhe a porta / use relay)", "vi_VN": "Ánh xạ UPnP thất bại; hãy nhập IP công khai thủ công (hoặc chuyển tiếp cổng / dùng relay)"},
@@ -42,10 +45,12 @@ const MESSAGES: Dictionary = {
 	"coop_lan_note": {"zh_CN": "同一局域网内可直接连接；房主在「选项」开启 UPnP 后，客机填公网 IP:端口即可跨网直连。", "en": "Connect directly within the same LAN; if the host enables UPnP in OPTION, clients can connect over the internet with the public IP:port.", "pt": "Conecte-se na mesma LAN; se o host ativar UPnP em OPÇÕES, clientes podem conectar pela internet com IP:porta público.", "vi_VN": "Kết nối trực tiếp trong cùng LAN; nếu chủ phòng bật UPnP trong TÙY CHỌN, người khác có thể kết nối qua internet bằng IP:cổng công khai."},
 	# LAN 房间发现
 	"coop_lan_scanning": {"zh_CN": "正在扫描局域网…", "en": "Scanning LAN...", "pt": "Procurando na LAN...", "vi_VN": "Đang quét LAN..."},
+	"coop_lan_scanning_base": {"zh_CN": "正在扫描局域网", "en": "Scanning LAN", "pt": "Procurando na LAN", "vi_VN": "Đang quét LAN"},
 	"coop_lan_rooms": {"zh_CN": "局域网房间", "en": "LAN rooms", "pt": "Salas LAN", "vi_VN": "Phòng LAN"},
 	"coop_lan_no_rooms": {"zh_CN": "未发现房间", "en": "No rooms found", "pt": "Nenhuma sala encontrada", "vi_VN": "Không tìm thấy phòng"},
 	# 版本/协议握手
 	"coop_version_mismatch": {"zh_CN": "版本不一致，无法联机", "en": "Version mismatch, cannot join", "pt": "Versão incompatível", "vi_VN": "Phiên bản không khớp"},
+	"coop_session_started": {"zh_CN": "本局已开始选人，请等待下一局后加入", "en": "Selection has started. Please join the next game.", "pt": "A seleção começou. Entre na próxima partida.", "vi_VN": "Đã bắt đầu chọn nhân vật. Hãy tham gia ván tiếp theo."},
 	"coop_status_host_version_old": {"zh_CN": "房主版本过旧，请让对方更新联机 mod", "en": "Host version is outdated; ask them to update the coop mod", "pt": "Versão do host desatualizada; peça para atualizar", "vi_VN": "Chủ phòng cũ; hãy nhờ họ cập nhật mod"},
 	"coop_status_handshake_timeout": {"zh_CN": "联机握手超时，可能版本不匹配", "en": "Handshake timed out (possible version mismatch)", "pt": "Tempo de handshake esgotado (versão incompatível?)", "vi_VN": "Quá hạn bắt tay (có thể lệch phiên bản)"},
 	# 实时战绩面板
@@ -134,6 +139,9 @@ const MESSAGES: Dictionary = {
 	# 选项页：其它联机玩家攻击反馈频率
 	"coop_mode_option": {"zh_CN": "选项", "en": "OPTION", "pt": "OPÇÕES", "vi_VN": "TÙY CHỌN"},
 	"coop_mode_subtitle_option": {"zh_CN": "其它联机玩家攻击反馈频率", "en": "Other players' attack feedback frequency", "pt": "Frequência de feedback dos outros jogadores", "vi_VN": "Tần suất phản hồi đòn của người khác"},
+	"coop_section_connection": {"zh_CN": "连接", "en": "Connection", "pt": "Conexão", "vi_VN": "Kết nối"},
+	"coop_section_remote": {"zh_CN": "其他玩家", "en": "Other players", "pt": "Outros jogadores", "vi_VN": "Người chơi khác"},
+	"coop_section_display": {"zh_CN": "显示与网络", "en": "Display & Network", "pt": "Exibição e rede", "vi_VN": "Hiển thị và mạng"},
 	"coop_option_remote_effect": {"zh_CN": "其它玩家特效", "en": "Others' effects", "pt": "Efeitos dos outros", "vi_VN": "Hiệu ứng người khác"},
 	"coop_option_remote_flash": {"zh_CN": "其它玩家闪白", "en": "Others' hit flash", "pt": "Flash dos outros", "vi_VN": "Chớp trắng người khác"},
 	"coop_option_remote_text": {"zh_CN": "其它玩家飘字", "en": "Others' damage text", "pt": "Texto de dano dos outros", "vi_VN": "Số sát thương người khác"},
@@ -168,7 +176,13 @@ const MESSAGES: Dictionary = {
 }
 
 
+static var _installed: bool = false
+
+
 static func install() -> void:
+	if _installed:
+		return
+	_installed = true
 	for loc in LOCALES:
 		var t := Translation.new()
 		t.locale = loc
@@ -176,4 +190,6 @@ static func install() -> void:
 			var entry: Dictionary = MESSAGES[key]
 			var text: String = str(entry.get(loc, entry.get("en", "")))
 			t.add_message(StringName(key), StringName(text))
-		TranslationServer.add_translation(t)
+		# 经 ModAPI 注册（ModManager 记账，便于统一管理与后续回收）；异常情况下退回直接注册
+		if not ModAPI.register_translation(t):
+			TranslationServer.add_translation(t)

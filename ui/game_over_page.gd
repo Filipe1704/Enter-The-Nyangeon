@@ -121,9 +121,9 @@ func time_count_stop(player_dead: bool):
 	Engine.time_scale = 1
 	get_tree().paused = true
 	if player_dead == true:
-		SoundManager.play_bgm(bgm_loop)
+		SoundManager.play_bgm(bgm_loop, 1.0)
 	else:
-		SoundManager.play_bgm_cut(bgm_cut_win)
+		SoundManager.play_bgm_cut(bgm_cut_win, 1.0)
 	animation_player.play("game_over_in")
 	time_num.text = str(hour) + ":" + str(minute) + ":" + str(second)
 	score_num.text = str(score)
@@ -147,7 +147,7 @@ func play_voice(name_local: String):
 		SoundManager.play_voice(player.player_card.voice_name, name_local + str(n + 1))
 
 func play_win_loop():
-	SoundManager.play_bgm(bgm_loop_win)
+	SoundManager.play_bgm(bgm_loop_win, 0.0)
 
 func get_player():
 	player = get_tree().get_first_node_in_group("Player")

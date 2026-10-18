@@ -1,46 +1,77 @@
 extends OptionMenu
 
-# MOD 管理页：列出已安装 mod（名字 + 可选 icon + 启用开关），支持拖动 / 上下箭头调整顺序、
-# 导入 zip、卸载（删除运行目录 + 清理状态；pck 挂载后运行期不可卸载 → 本会话仍生效，重启完全移除）。
-# 悬停 / 点按行显示描述 tooltip。顺序与启停一样下次重启生效。
-
 const TOGGLE := preload("res://ui/option_toggle.tscn")
 const ROW_FONT := preload("res://fonts/BoutiqueBitmap9x9_1.9.ttf")
 
 const DRAG_THRESHOLD := 6.0
 const ACCENT := Color(0.815686, 0.701961, 0.0235294, 1)
+const DANGER := Color(1.0, 0.352941, 0.352941, 1)
+const OK_COLOR := Color(0.509804, 0.807843, 0.313726, 1)
+const DIM := Color(0.74902, 0.74902, 0.74902, 1)
 
 @onready var list_box: VBoxContainer = %List
-@onready var list_scroll: ScrollContainer = %ScrollContainer
+@onready var summary_label: Label = %Summary
 @onready var status_label: Label = %Status
 @onready var import_btn: Button = %ImportBtn
+@onready var restart_bar: PanelContainer = %RestartBar
+@onready var restart_label: Label = %RestartLabel
+@onready var undo_btn: Button = %UndoBtn
+@onready var restart_btn: Button = %RestartBtn
 @onready var uninstall_btn: Button = %UninstallBtn
-@onready var up_btn: TextureButton = %UpBtn
-@onready var down_btn: TextureButton = %DownBtn
+@onready var up_btn: Button = %UpBtn
+@onready var down_btn: Button = %DownBtn
 @onready var drag_layer: Control = %DragLayer
-@onready var tooltip: PanelContainer = %Tooltip
-@onready var tip_name: Label = %TipName
-@onready var tip_meta: Label = %TipMeta
-@onready var tip_desc: Label = %TipDesc
+@onready var detail_head: HBoxContainer = %DetailHead
+@onready var detail_buttons: HBoxContainer = %DetailButtons
+@onready var empty_label: Label = %EmptyLabel
+@onready var detail_scroll: ScrollContainer = %DetailScroll
+@onready var detail_icon: TextureRect = %Icon
+@onready var detail_initial: Label = %Initial
+@onready var detail_name: Label = %DetailName
+@onready var detail_meta: Label = %DetailMeta
+@onready var detail_error: Label = %DetailError
+@onready var detail_desc: Label = %DetailDesc
+@onready var detail_deps: Label = %DetailDeps
+@onready var detail_adds: Label = %DetailAdds
+@onready var detail_override_scripts: Label = %DetailOverrideScripts
+@onready var detail_overrides: Label = %DetailOverrides
+@onready var detail_min_version: Label = %DetailMinVersion
+@onready var detail_min_state: Label = %DetailMinState
+@onready var detail_dir: Label = %DetailDir
 
 var _file_dialog: FileDialog
 var _confirm: ConfirmationDialog
-var _pending_restart: bool = false
+var _restart_confirm: ConfirmationDialog
 var _selected_id: String = ""
 var _icon_cache: Dictionary = {}
-var _touch_mode: bool = false
-var _touch_tooltip_id: String = ""
-var _tooltip_id: String = ""
+var _last_mods: Array = []
+var _pending_ids: Dictionary = {}
+var _pending_irreversible: Dictionary = {}
+var _baseline_valid: bool = false
+var _baseline_enabled: Dictionary = {}
+var _baseline_order: Array = []
+var _baseline_ids: Array = []
+var _restoring: bool = false
+var _row_hover_id: String = ""
+
+var _row_style_normal: StyleBoxFlat
+var _row_style_hover: StyleBoxFlat
+var _row_style_selected: StyleBoxFlat
+var _row_icon_style: StyleBoxFlat
 
 var _press_row: Control = null
+var _press_touch_index: int = -1
 var _press_viewport: Vector2 = Vector2.ZERO
 var _drag_grab_offset: Vector2 = Vector2.ZERO
 var _drag_active: bool = false
 var _drag_row: Control = null
+var _drag_origin_index: int = 0
+var _drag_origin_row_index: int = 0
 var _spacer: Control = null
 
 
 func _ready() -> void:
+	_build_row_styles()
 	_file_dialog = FileDialog.new()
 	_file_dialog.use_native_dialog = true
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -51,113 +82,304 @@ func _ready() -> void:
 	import_btn.pressed.connect(_on_import_pressed)
 	uninstall_btn.pressed.connect(_on_uninstall_pressed)
 	_confirm = ConfirmationDialog.new()
+	_confirm.title = tr("mod_uninstall")
 	_confirm.ok_button_text = tr("mod_uninstall")
 	_confirm.cancel_button_text = tr("mod_cancel")
 	add_child(_confirm)
 	_confirm.confirmed.connect(_on_uninstall_confirmed)
+	_restart_confirm = ConfirmationDialog.new()
+	_restart_confirm.title = tr("mod_restart_now")
+	_restart_confirm.ok_button_text = tr("mod_restart_now")
+	_restart_confirm.cancel_button_text = tr("mod_cancel")
+	_restart_confirm.dialog_text = tr("mod_restart_confirm")
+	add_child(_restart_confirm)
+	_restart_confirm.confirmed.connect(_on_restart_confirmed)
 	up_btn.pressed.connect(func(): _move_selected(-1))
 	down_btn.pressed.connect(func(): _move_selected(1))
-	list_scroll.gui_input.connect(_on_list_scroll_gui_input)
+	undo_btn.pressed.connect(_on_undo)
+	restart_btn.pressed.connect(_on_restart_pressed)
 	ModManager.mods_changed.connect(_refresh)
 	_refresh()
 
 
 func menu_show() -> void:
 	super()
+	_set_status("")
 	_refresh()
 
 
 func menu_hide() -> void:
 	_cancel_drag()
-	_clear_tooltip()
 	super()
 
 
-func _process(_delta: float) -> void:
-	if not shown:
-		return
-	if _drag_active:
-		_hide_tooltip()
-		return
-	if _touch_mode or _touch_tooltip_id != "":
-		return
-	var m := get_global_mouse_position()
-	var row := _row_at(m)
-	if row == null:
-		_hide_tooltip()
-		return
-	var id := str(row.get_meta("mod_id", ""))
-	if tooltip.visible and _tooltip_id == id:
-		_place_tooltip(m)
-	else:
-		_show_tooltip(row, m)
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_cancel_drag()
+
+
+func _build_row_styles() -> void:
+	_row_style_normal = StyleBoxFlat.new()
+	_row_style_normal.bg_color = Color(0.164706, 0.164706, 0.164706, 1)
+	_row_style_normal.content_margin_left = 3.0
+	_row_style_normal.content_margin_right = 3.0
+	_row_style_normal.content_margin_top = 1.0
+	_row_style_normal.content_margin_bottom = 1.0
+	_row_style_hover = StyleBoxFlat.new()
+	_row_style_hover.bg_color = Color(0.196078, 0.196078, 0.196078, 1)
+	_row_style_hover.content_margin_left = 3.0
+	_row_style_hover.content_margin_right = 3.0
+	_row_style_hover.content_margin_top = 1.0
+	_row_style_hover.content_margin_bottom = 1.0
+	_row_style_hover.border_width_left = 1
+	_row_style_hover.border_width_top = 1
+	_row_style_hover.border_width_right = 1
+	_row_style_hover.border_width_bottom = 1
+	_row_style_hover.border_color = Color(0.372549, 0.372549, 0.372549, 1)
+	_row_style_selected = StyleBoxFlat.new()
+	_row_style_selected.bg_color = Color(0.211765, 0.211765, 0.211765, 1)
+	_row_style_selected.content_margin_left = 3.0
+	_row_style_selected.content_margin_right = 3.0
+	_row_style_selected.content_margin_top = 1.0
+	_row_style_selected.content_margin_bottom = 1.0
+	_row_style_selected.border_width_left = 1
+	_row_style_selected.border_width_top = 1
+	_row_style_selected.border_width_right = 1
+	_row_style_selected.border_width_bottom = 1
+	_row_style_selected.border_color = ACCENT
+	_row_icon_style = StyleBoxFlat.new()
+	_row_icon_style.bg_color = Color(0.121569, 0.121569, 0.121569, 1)
+	_row_icon_style.border_width_left = 1
+	_row_icon_style.border_width_top = 1
+	_row_icon_style.border_width_right = 1
+	_row_icon_style.border_width_bottom = 1
+	_row_icon_style.border_color = Color(0.294118, 0.294118, 0.294118, 1)
 
 
 func _refresh() -> void:
-	if list_box == null:
+	if list_box == null or _restoring:
 		return
-	_clear_tooltip()
+	var focused := get_viewport().gui_get_focus_owner()
+	var focus_id := ""
+	var focus_toggle := false
+	for row in _row_children():
+		if focused != null and (row == focused or row.is_ancestor_of(focused)):
+			focus_id = str(row.get_meta("mod_id"))
+			focus_toggle = row != focused
+			break
+	_cancel_drag()
+	_row_hover_id = ""
 	for c in list_box.get_children():
 		list_box.remove_child(c)
 		c.queue_free()
-	for m in ModManager.list_mods():
-		list_box.add_child(_make_row(m))
-	if _pending_restart:
-		status_label.text = tr("mod_restart_notice")
+	_last_mods = ModManager.list_mods()
+	_sync_pending()
+	var groups := {
+		"attention": [],
+		"enabled": [],
+		"disabled": [],
+	}
+	var known: Dictionary = {}
+	for m in _last_mods:
+		var id := str(m.id)
+		known[id] = true
+		groups[_group_key(m)].append(m)
+	if not known.has(_selected_id):
+		_selected_id = str(_last_mods[0].id) if not _last_mods.is_empty() else ""
+	for key in ["attention", "enabled", "disabled"]:
+		var items: Array = groups[key]
+		if items.is_empty():
+			continue
+		list_box.add_child(_make_group_header(key, items.size()))
+		for m in items:
+			list_box.add_child(_make_row(m))
+	_update_summary()
+	_update_restart_bar()
 	_update_arrows()
+	_update_detail()
+	_bind_row_navigation()
+	if focus_id != "":
+		_restore_row_focus.call_deferred(focus_id, focus_toggle)
 
 
-func _make_row(m: Dictionary) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.add_theme_constant_override("separation", 8)
-	row.set_meta("mod_id", str(m.id))
+func _group_key(m: Dictionary) -> String:
+	if str(m.get("error", "")) != "":
+		return "attention"
+	var required := str(m.get("game_version", ""))
+	if required != "" and not bool(m.get("game_version_ok", true)):
+		return "attention"
+	return "enabled" if bool(m.get("enabled", false)) else "disabled"
+
+
+func _make_group_header(key: String, count: int) -> Label:
+	var label := Label.new()
+	label.set_meta("group_header", true)
+	label.custom_minimum_size = Vector2(0, 12)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_override("font", ROW_FONT)
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", DANGER if key == "attention" else DIM)
+	var text_key := "mod_group_attention"
+	if key == "enabled":
+		text_key = "mod_group_enabled"
+	elif key == "disabled":
+		text_key = "mod_group_disabled"
+	label.text = tr(text_key) % count
+	return label
+
+
+func _make_row(m: Dictionary) -> PanelContainer:
+	var id := str(m.id)
+	var row := PanelContainer.new()
+	row.custom_minimum_size = Vector2(0, 22)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.focus_mode = Control.FOCUS_ALL
+	row.set_meta("mod_id", id)
 	row.set_meta("mod_data", m)
+	row.set_meta("is_row", true)
+	row.add_theme_stylebox_override("panel", _row_style_for(id))
 
-	var bar := ColorRect.new()
-	bar.name = "SelectBar"
-	bar.color = ACCENT
-	bar.custom_minimum_size = Vector2(3, 24)
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.visible = (str(m.id) == _selected_id)
-	row.add_child(bar)
+	var box := HBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 6)
+	row.add_child(box)
+
+	var icon_slot := PanelContainer.new()
+	icon_slot.custom_minimum_size = Vector2(20, 20)
+	icon_slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_slot.add_theme_stylebox_override("panel", _row_icon_style)
+	box.add_child(icon_slot)
 
 	var icon := TextureRect.new()
-	icon.name = "Icon"
-	icon.custom_minimum_size = Vector2(24, 24)
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.texture = _load_icon(str(m.icon))
-	row.add_child(icon)
+	var tex := _load_icon(str(m.get("icon", "")))
+	icon.texture = tex
+	icon.visible = tex != null
+	icon_slot.add_child(icon)
 
+	var initial := Label.new()
+	initial.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	initial.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	initial.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	initial.add_theme_font_override("font", ROW_FONT)
+	initial.add_theme_font_size_override("font_size", 10)
+	initial.add_theme_color_override("font_color", ACCENT)
+	initial.text = _name_initial(str(m.get("name", id)), id)
+	initial.visible = tex == null
+	icon_slot.add_child(initial)
+
+	var text_box := VBoxContainer.new()
+	text_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_box.add_theme_constant_override("separation", 0)
+	box.add_child(text_box)
 	var label := Label.new()
 	label.name = "Name"
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.clip_text = false
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var suffix := ""
-	if str(m.error) != "":
-		suffix = "  " + (tr("mod_tag_error") % str(m.error))
-	elif not m.mounted and m.enabled:
-		suffix = "  " + tr("mod_tag_unmounted")
-	label.text = "%s  v%s%s" % [str(m.name), str(m.version), suffix]
+	label.text = str(m.get("name", id))
 	_apply_row_font(label)
-	row.add_child(label)
+	text_box.add_child(label)
+
+	var pending := Label.new()
+	pending.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pending.add_theme_font_override("font", ROW_FONT)
+	pending.add_theme_font_size_override("font_size", 8)
+	pending.add_theme_color_override("font_color", ACCENT)
+	pending.text = tr("mod_detail_pending")
+	pending.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	pending.visible = _is_pending(id)
+	text_box.add_child(pending)
 
 	var toggle = TOGGLE.instantiate()
 	toggle.name = "Toggle"
-	toggle.set("on", bool(m.enabled))
-	toggle.connect("toggled", func(on: bool): _on_toggle(str(m.id), on))
-	row.add_child(toggle)
+	toggle.focus_mode = Control.FOCUS_ALL
+	toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	toggle.set("on", bool(m.get("enabled", false)))
+	toggle.connect("toggled", func(on: bool): _on_toggle(id, on))
+	box.add_child(toggle)
+	row.focus_entered.connect(func(): _focus_row(row))
+	toggle.focus_entered.connect(func(): _focus_row(row))
+	toggle.gui_input.connect(func(event: InputEvent): _on_row_key_input(row, event, true))
 
+	row.mouse_entered.connect(func(): _on_row_hover(row, true))
+	row.mouse_exited.connect(func(): _on_row_hover(row, false))
 	row.gui_input.connect(func(event: InputEvent): _on_row_gui_input(row, event))
 	return row
 
 
+func _focus_row(row: Control) -> void:
+	_select(row)
+	(list_box.get_parent() as ScrollContainer).ensure_control_visible(row)
+
+
+func _restore_row_focus(id: String, to_toggle: bool) -> void:
+	if not shown:
+		return
+	for row in _row_children():
+		if str(row.get_meta("mod_id")) == id:
+			var target: Control = row.find_child("Toggle", true, false) if to_toggle else row
+			target.grab_focus()
+			return
+
+
+func _bind_row_navigation() -> void:
+	var rows := _row_children()
+	import_btn.focus_next = NodePath("")
+	import_btn.focus_neighbor_bottom = NodePath("")
+	if rows.is_empty():
+		return
+	import_btn.focus_neighbor_bottom = import_btn.get_path_to(rows[0])
+	for i in rows.size():
+		var row: Control = rows[i]
+		var toggle: Control = row.find_child("Toggle", true, false)
+		var previous: Control = import_btn if i == 0 else rows[i - 1].find_child("Toggle", true, false)
+		var next: Control = rows[i + 1] if i + 1 < rows.size() else uninstall_btn
+		row.focus_previous = row.get_path_to(previous)
+		row.focus_next = row.get_path_to(toggle)
+		toggle.focus_previous = toggle.get_path_to(row)
+		toggle.focus_next = toggle.get_path_to(next)
+	import_btn.focus_next = import_btn.get_path_to(rows[0])
+
+
+func _on_row_key_input(row: Control, event: InputEvent, from_toggle: bool = false) -> void:
+	var direction := 0
+	if event.is_action_pressed("ui_up"):
+		direction = -1
+	elif event.is_action_pressed("ui_down"):
+		direction = 1
+	if direction != 0:
+		var rows := _row_children()
+		var index := rows.find(row) + direction
+		if index >= 0 and index < rows.size():
+			var target: Control = rows[index].find_child("Toggle", true, false) if from_toggle else rows[index]
+			target.grab_focus()
+		elif index < 0:
+			import_btn.grab_focus()
+		else:
+			uninstall_btn.grab_focus()
+		row.accept_event()
+	elif event.is_action_pressed("ui_right") and not from_toggle:
+		(row.find_child("Toggle", true, false) as Control).grab_focus()
+		row.accept_event()
+	elif event.is_action_pressed("ui_left") and from_toggle:
+		row.grab_focus()
+		row.accept_event()
+	elif event.is_action_pressed("ui_accept") and not from_toggle:
+		row.accept_event()
+		_on_toggle(str(row.get_meta("mod_id")), not bool(row.get_meta("mod_data").get("enabled", false)))
+
+
 func _apply_row_font(label: Label) -> void:
 	label.add_theme_font_override("font", ROW_FONT)
-	label.add_theme_font_size_override("font_size", 15)
+	label.add_theme_font_size_override("font_size", 12)
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	label.add_theme_constant_override("shadow_offset_x", 0)
@@ -182,157 +404,138 @@ func _load_icon(path: String) -> Texture2D:
 	return tex
 
 
-# ---------------- 描述 tooltip ----------------
+func _row_style_for(id: String) -> StyleBoxFlat:
+	if id == _selected_id:
+		return _row_style_selected
+	if id == _row_hover_id:
+		return _row_style_hover
+	return _row_style_normal
 
-# 命中整行矩形（含开关），悬停/触摸用同一判定。
-func _row_at(pos: Vector2) -> Control:
+
+func _apply_row_style(row: Control) -> void:
+	row.add_theme_stylebox_override("panel", _row_style_for(str(row.get_meta("mod_id", ""))))
+
+
+func _on_row_hover(row: Control, entered: bool) -> void:
+	if _drag_active:
+		return
+	_row_hover_id = str(row.get_meta("mod_id", "")) if entered else ""
+	for c in _row_children():
+		_apply_row_style(c)
+
+
+func _row_children() -> Array:
+	var out: Array = []
 	for c in list_box.get_children():
-		if c == _spacer or not (c is Control):
-			continue
-		if (c as Control).get_global_rect().has_point(pos):
-			return c
-	return null
-
-
-func _show_tooltip(row: Control, pos: Vector2) -> void:
-	var m: Dictionary = row.get_meta("mod_data", {})
-	_tooltip_id = str(m.get("id", row.get_meta("mod_id", "")))
-	tip_name.text = str(m.get("name", _tooltip_id))
-	var ver := str(m.get("version", ""))
-	var author := str(m.get("author", ""))
-	var meta := ""
-	if ver != "":
-		meta = "v" + ver
-	if author != "":
-		meta = author if meta == "" else meta + "  " + author
-	tip_meta.text = meta
-	tip_meta.visible = meta != ""
-	var desc := str(m.get("description", ""))
-	tip_desc.text = desc
-	tip_desc.visible = desc != ""
-	tooltip.visible = true
-	_place_tooltip(pos)
-
-
-func _hide_tooltip() -> void:
-	tooltip.visible = false
-	_tooltip_id = ""
-
-
-func _clear_tooltip() -> void:
-	_touch_tooltip_id = ""
-	_hide_tooltip()
-
-
-# 跟随鼠标/触点，并夹在面板矩形内避免出屏。
-func _place_tooltip(pos: Vector2) -> void:
-	var area := get_global_rect()
-	var tip_size := tooltip.get_combined_minimum_size()
-	var p := pos + Vector2(16, 16)
-	p.x = clampf(p.x, area.position.x, maxf(area.position.x, area.end.x - tip_size.x))
-	p.y = clampf(p.y, area.position.y, maxf(area.position.y, area.end.y - tip_size.y))
-	tooltip.global_position = p
-
-
-# 触屏：点同一行收起，点另一行切换。
-func _toggle_touch_tooltip(row: Control) -> void:
-	var id := str(row.get_meta("mod_id", ""))
-	if _touch_tooltip_id == id:
-		_clear_tooltip()
-	else:
-		_touch_tooltip_id = id
-		_show_tooltip(row, row.global_position + Vector2(row.size.x + 8.0, 0.0))
-
-
-# 点列表空白处（未落在任何行）收起触摸 tooltip。
-func _on_list_scroll_gui_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch and event.pressed and _touch_tooltip_id != "":
-		var gpos: Vector2 = list_scroll.get_global_transform_with_canvas() * event.position
-		if _row_at(gpos) == null:
-			_clear_tooltip()
-
-
-# ---------------- 选中 / 上下箭头 ----------------
-
-func _selected_index() -> int:
-	if _selected_id == "":
-		return -1
-	for i in list_box.get_child_count():
-		if str(list_box.get_child(i).get_meta("mod_id", "")) == _selected_id:
-			return i
-	return -1
+		if c.has_meta("is_row"):
+			out.append(c)
+	return out
 
 
 func _select(row: Control) -> void:
-	_selected_id = str(row.get_meta("mod_id", ""))
-	for c in list_box.get_children():
-		var bar := c.get_node_or_null("SelectBar")
-		if bar != null:
-			bar.visible = (str(c.get_meta("mod_id", "")) == _selected_id)
+	var id := str(row.get_meta("mod_id", ""))
+	if id == _selected_id:
+		return
+	_selected_id = id
+	detail_scroll.scroll_vertical = 0
+	for c in _row_children():
+		_apply_row_style(c)
 	_update_arrows()
+	_update_detail()
 
 
 func _update_arrows() -> void:
-	var idx := _selected_index()
-	up_btn.disabled = idx <= 0
-	down_btn.disabled = idx < 0 or idx >= list_box.get_child_count() - 1
-	if uninstall_btn != null:
-		uninstall_btn.disabled = (_selected_id == "")
+	var ids := _displayed_ids()
+	var pos := ids.find(_selected_id)
+	up_btn.disabled = pos <= 0
+	down_btn.disabled = pos < 0 or pos >= ids.size() - 1
+	uninstall_btn.disabled = _selected_id == ""
 
 
 func _current_ids() -> Array:
+	# list_mods 已按用户顺序排序；分组后的节点顺序只用于定位操作目标。
 	var ids: Array = []
-	for c in list_box.get_children():
-		if c == _spacer:
-			continue
+	for m in _last_mods:
+		ids.append(str(m.id))
+	return ids
+
+
+func _displayed_ids() -> Array:
+	var ids: Array = []
+	for c in _row_children():
 		ids.append(str(c.get_meta("mod_id", "")))
 	return ids
 
 
 func _move_selected(delta: int) -> void:
-	var idx := _selected_index()
-	var target := idx + delta
-	if idx < 0 or target < 0 or target >= list_box.get_child_count():
+	var ids := _displayed_ids()
+	var pos := ids.find(_selected_id)
+	var target := pos + delta
+	if pos < 0 or target < 0 or target >= ids.size():
 		return
-	var ids := _current_ids()
-	var tmp = ids[idx]
-	ids[idx] = ids[target]
-	ids[target] = tmp
-	_pending_restart = true
-	ModManager.set_order(ids)
-	_update_arrows()
+	_move_mod(_selected_id, str(ids[target]), delta < 0)
 
 
-# ---------------- 行输入 / 拖动排序 ----------------
+func _move_mod(id: String, anchor: String, before: bool) -> bool:
+	var current := _current_ids()
+	if id == anchor or not current.has(id) or not current.has(anchor):
+		return false
+	var next := current.duplicate()
+	next.erase(id)
+	next.insert(next.find(anchor) + (0 if before else 1), id)
+	if next == current:
+		return false
+	_ensure_baseline()
+	ModManager.set_order(next)
+	return true
+
 
 func _on_row_gui_input(row: Control, event: InputEvent) -> void:
 	if _drag_active:
 		return
+	_on_row_key_input(row, event)
 	var pressed := false
 	if event is InputEventScreenTouch and event.pressed:
+		if _press_row != null:
+			return
 		pressed = true
+		_press_touch_index = event.index
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		pressed = true
+		_press_touch_index = -1
 	if not pressed:
 		return
-	row.accept_event()
+	# 触屏按下继续传给 ScrollContainer；鼠标仍保留整行拖动排序。
+	if _press_touch_index < 0:
+		row.accept_event()
+		row.grab_focus()
 	_press_row = row
 	_press_viewport = row.get_global_transform() * event.position
 	_drag_grab_offset = _press_viewport - row.global_position
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
-		_touch_mode = true
-	elif event is InputEventMouse and event.device != InputEvent.DEVICE_ID_EMULATION:
-		_touch_mode = false
 	if _press_row == null or not is_instance_valid(_press_row):
+		return
+	if _press_touch_index >= 0:
+		if event is InputEventScreenDrag and event.index == _press_touch_index:
+			if event.position.distance_to(_press_viewport) > DRAG_THRESHOLD:
+				_press_row = null
+				_press_touch_index = -1
+		elif event is InputEventScreenTouch and event.index == _press_touch_index and not event.pressed:
+			if not event.canceled:
+				_select(_press_row)
+				_press_row.grab_focus()
+			_press_row = null
+			_press_touch_index = -1
 		return
 	if _drag_active:
 		var p := _event_viewport_pos(event)
 		if p != Vector2.INF:
 			_drag_row.global_position = p - _drag_grab_offset
-			_move_spacer_to(_target_index(p.y))
+			_move_spacer_to(_target_row_index(p.y))
 		if _is_release(event):
 			_end_drag()
 			_press_row = null
@@ -347,8 +550,6 @@ func _input(event: InputEvent) -> void:
 		var released: Control = _press_row
 		_select(released)
 		_press_row = null
-		if event is InputEventScreenTouch:
-			_toggle_touch_tooltip(released)
 
 
 func _event_viewport_pos(event: InputEvent) -> Vector2:
@@ -370,9 +571,11 @@ func _is_release(event: InputEvent) -> bool:
 
 
 func _start_drag() -> void:
-	_clear_tooltip()
+	_ensure_baseline()
 	_drag_active = true
 	_drag_row = _press_row
+	_drag_origin_index = _drag_row.get_index()
+	_drag_origin_row_index = _row_children().find(_drag_row)
 	var h := _drag_row.size.y
 	_spacer = Control.new()
 	_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -390,15 +593,22 @@ func _start_drag() -> void:
 func _move_spacer_to(target: int) -> void:
 	if _spacer == null or not is_instance_valid(_spacer):
 		return
-	target = clampi(target, 0, list_box.get_child_count() - 1)
-	if _spacer.get_index() != target:
-		list_box.move_child(_spacer, target)
+	var rows := _row_children()
+	target = clampi(target, 0, rows.size())
+	var child_idx := list_box.get_child_count()
+	if target < rows.size():
+		child_idx = rows[target].get_index()
+	if _spacer.get_index() < child_idx:
+		child_idx -= 1
+	child_idx = clampi(child_idx, 0, list_box.get_child_count() - 1)
+	if _spacer.get_index() != child_idx:
+		list_box.move_child(_spacer, child_idx)
 
 
-func _target_index(y: float) -> int:
+func _target_row_index(y: float) -> int:
 	var idx := 0
-	for c in list_box.get_children():
-		if y > c.global_position.y + c.size.y * 0.5:
+	for row in _row_children():
+		if y > row.global_position.y + row.size.y * 0.5:
 			idx += 1
 		else:
 			break
@@ -418,35 +628,125 @@ func _end_drag() -> void:
 	_spacer.queue_free()
 	_spacer = null
 	_drag_row = null
+	_press_row = null
 	_selected_id = id
-	_pending_restart = true
-	ModManager.set_order(_current_ids())
+	var ids := _displayed_ids()
+	var target := ids.find(id)
+	var changed := false
+	# 只移动拖动项，保留其余 Mod 的全局相对顺序，避免分组改写冲突优先级。
+	if target > _drag_origin_row_index:
+		changed = _move_mod(id, str(ids[target - 1]), false)
+	elif target < _drag_origin_row_index:
+		changed = _move_mod(id, str(ids[target + 1]), true)
+	if not changed:
+		_refresh()
 
 
 func _cancel_drag() -> void:
 	_press_row = null
+	_press_touch_index = -1
 	if not _drag_active:
 		return
 	_drag_active = false
 	if _spacer != null and is_instance_valid(_spacer):
-		var idx := _spacer.get_index()
 		var p := _drag_row.get_parent()
 		if p != null:
 			p.remove_child(_drag_row)
-		list_box.add_child(_drag_row)
-		list_box.move_child(_drag_row, idx)
 		list_box.remove_child(_spacer)
 		_spacer.queue_free()
-	_spacer = null
+		_spacer = null
+		var idx := clampi(_drag_origin_index, 0, list_box.get_child_count())
+		list_box.add_child(_drag_row)
+		list_box.move_child(_drag_row, idx)
 	_drag_row = null
 
 
-# ---------------- 启停 / 导入 ----------------
+func _update_summary() -> void:
+	var effective := 0
+	for m in _last_mods:
+		if bool(m.get("mounted", false)) and str(m.get("error", "")) == "":
+			effective += 1
+	summary_label.text = tr("mod_summary") % [_last_mods.size(), effective, _pending_count()]
+
+
+func _update_restart_bar() -> void:
+	var count := _pending_count()
+	restart_bar.visible = count > 0
+	restart_label.text = tr("mod_restart_bar") % count
+	undo_btn.disabled = _pending_ids.is_empty()
+
+
+func _pending_count() -> int:
+	var all: Dictionary = {}
+	for id in _pending_ids:
+		all[str(id)] = true
+	for id in _pending_irreversible:
+		all[str(id)] = true
+	return all.size()
+
+
+func _is_pending(id: String) -> bool:
+	return _pending_ids.has(id) or _pending_irreversible.has(id)
+
+
+func _ensure_baseline() -> void:
+	if _baseline_valid:
+		return
+	_baseline_valid = true
+	_baseline_enabled.clear()
+	for m in ModManager.list_mods():
+		_baseline_enabled[str(m.id)] = bool(m.enabled)
+	_baseline_order = ModManager.get_order()
+	_baseline_ids = _current_ids()
+
+
+func _sync_pending() -> void:
+	_pending_ids.clear()
+	if not _baseline_valid:
+		return
+	var current: Array = []
+	for m in _last_mods:
+		var id := str(m.id)
+		if not _baseline_enabled.has(id):
+			continue
+		current.append(id)
+		if bool(m.enabled) != bool(_baseline_enabled[id]):
+			_pending_ids[id] = true
+	# 导入/卸载单独记录；比较仍在安装的基线项，避免增删项造成伪排序改动。
+	var baseline: Array = []
+	for id in _baseline_ids:
+		if current.has(id):
+			baseline.append(id)
+	for i in current.size():
+		if current[i] != baseline[i]:
+			_pending_ids[str(current[i])] = true
+
 
 func _on_toggle(id: String, on: bool) -> void:
+	_ensure_baseline()
 	ModManager.set_enabled(id, on)
-	_pending_restart = true
-	status_label.text = tr("mod_restart_notice")
+
+
+func _on_undo() -> void:
+	if not _baseline_valid or _pending_ids.is_empty():
+		return
+	_restoring = true
+	for id in _baseline_enabled:
+		ModManager.set_enabled(str(id), bool(_baseline_enabled[id]))
+	ModManager.set_order(_baseline_order)
+	_pending_ids.clear()
+	_baseline_valid = false
+	_restoring = false
+	_set_status("")
+	_refresh()
+
+
+func _on_restart_pressed() -> void:
+	_restart_confirm.popup_centered()
+
+
+func _on_restart_confirmed() -> void:
+	get_tree().quit()
 
 
 func _on_import_pressed() -> void:
@@ -456,16 +756,18 @@ func _on_import_pressed() -> void:
 func _on_zip_selected(path: String) -> void:
 	var r := ModManager.import_zip(path)
 	if r.get("ok", false):
-		_pending_restart = true
-		status_label.text = tr("mod_import_ok") % str(r.get("id", ""))
+		var id := str(r.get("id", ""))
+		if id != "":
+			_pending_irreversible[id] = true
+		_set_status(tr("mod_import_ok") % id)
 	else:
-		status_label.text = tr("mod_import_fail") % str(r.get("error", ""))
+		_set_status(tr("mod_import_fail") % str(r.get("error", "")), true)
 	_refresh()
 
 
 func _on_uninstall_pressed() -> void:
 	if _selected_id == "":
-		status_label.text = tr("mod_uninstall_select")
+		_set_status(tr("mod_uninstall_select"), true)
 		return
 	var name := _mod_display_name(_selected_id)
 	_confirm.dialog_text = tr("mod_uninstall_confirm") % name
@@ -477,19 +779,28 @@ func _on_uninstall_confirmed() -> void:
 	if id == "":
 		return
 	var name := _mod_display_name(id)
-	var r := ModManager.uninstall(id)
 	_selected_id = ""
-	_refresh()
+	var r := ModManager.uninstall(id)
 	if not r.get("ok", false):
-		status_label.text = tr("mod_uninstall_fail") % str(r.get("error", ""))
+		_refresh()
+		_set_status(tr("mod_uninstall_fail") % str(r.get("error", "")), true)
 		return
-	if r.get("deleted", false):
-		status_label.text = tr("mod_uninstall_ok") % name
+	_pending_ids.erase(id)
+	if bool(r.get("restart_required", false)) or not bool(r.get("deleted", false)):
+		_pending_irreversible[id] = true
 	else:
-		status_label.text = tr("mod_uninstall_pending")
-	if r.get("restart_required", false):
-		_pending_restart = true
-		status_label.text += "  " + tr("mod_restart_notice")
+		_pending_irreversible.erase(id)
+	var message := tr("mod_uninstall_ok") % name if bool(r.get("deleted", false)) else tr("mod_uninstall_pending")
+	if bool(r.get("restart_required", false)):
+		message += "  " + tr("mod_restart_notice")
+	_set_status(message)
+	_refresh()
+
+
+func _set_status(message: String, failed: bool = false) -> void:
+	status_label.text = message
+	status_label.visible = message != ""
+	status_label.add_theme_color_override("font_color", DANGER if failed else OK_COLOR)
 
 
 func _mod_display_name(id: String) -> String:
@@ -497,3 +808,116 @@ func _mod_display_name(id: String) -> String:
 		if str(m.id) == id:
 			return str(m.name)
 	return id
+
+
+func _find_mod(id: String) -> Dictionary:
+	for m in _last_mods:
+		if str(m.id) == id:
+			return m
+	return {}
+
+
+func _update_detail() -> void:
+	var m := _find_mod(_selected_id)
+	var has_mod := not m.is_empty()
+	empty_label.visible = not has_mod
+	detail_head.visible = has_mod
+	detail_scroll.visible = has_mod
+	detail_buttons.visible = has_mod
+	detail_error.visible = false
+	if not has_mod:
+		return
+	var name := str(m.get("name", _selected_id))
+	detail_name.text = name
+	var meta: Array = []
+	var version := str(m.get("version", ""))
+	var author := str(m.get("author", ""))
+	if version != "":
+		meta.append("v" + version)
+	if author != "":
+		meta.append(author)
+	if _is_pending(_selected_id):
+		meta.append(tr("mod_detail_pending"))
+	detail_meta.text = _join_values(meta, "  ")
+	detail_meta.visible = not meta.is_empty()
+
+	var tex := _load_icon(str(m.get("icon", "")))
+	detail_icon.texture = tex
+	detail_icon.visible = tex != null
+	detail_initial.visible = tex == null
+	detail_initial.text = _name_initial(name, _selected_id)
+
+	var err := str(m.get("error", ""))
+	detail_error.text = tr("mod_tag_error") % err
+	detail_error.visible = err != ""
+
+	var desc := str(m.get("description", ""))
+	detail_desc.text = desc
+	detail_desc.visible = desc != ""
+
+	detail_deps.text = tr("mod_detail_dependencies") % _join_or_none(Array(m.get("dependencies", [])))
+	detail_adds.text = tr("mod_detail_adds") % _content_summary(m.get("adds", {}))
+
+	var scripts: Array = []
+	for p in Array(m.get("replace_paths", [])):
+		scripts.append(str(p).get_file())
+	detail_override_scripts.text = tr("mod_detail_override_scripts") % _join_or_none(scripts)
+	detail_override_scripts.visible = not scripts.is_empty()
+
+	var overrides := Array(m.get("overrides", []))
+	detail_overrides.text = tr("mod_detail_overrides") % _join_or_none(overrides)
+	detail_overrides.visible = not overrides.is_empty()
+
+	var required := str(m.get("game_version", ""))
+	detail_min_version.text = tr("mod_detail_min_game_version") % (required if required != "" else tr("mod_detail_undeclared"))
+	var current := str(Game.version_number) if is_instance_valid(Game) else ""
+	if required == "" or current == "":
+		detail_min_state.visible = false
+	elif bool(m.get("game_version_ok", true)):
+		detail_min_state.text = tr("mod_detail_min_met") % current
+		detail_min_state.add_theme_color_override("font_color", OK_COLOR)
+		detail_min_state.visible = true
+	else:
+		detail_min_state.text = tr("mod_detail_min_unmet") % current
+		detail_min_state.add_theme_color_override("font_color", DANGER)
+		detail_min_state.visible = true
+
+	detail_dir.text = tr("mod_detail_dir") % str(m.get("dir", ""))
+
+
+func _name_initial(name: String, id: String) -> String:
+	var text := name.strip_edges()
+	if text == "":
+		text = id.strip_edges()
+	if text == "":
+		return "?"
+	var skip := [" ", "　", "\t", "\n", "·", "-", "_", ".", ":", "[", "]", "(", ")", "（", "）", "【", "】", "/", "\\"]
+	for i in text.length():
+		var ch := text.substr(i, 1)
+		if skip.has(ch):
+			continue
+		return ch.to_upper()
+	return "?"
+
+
+func _join_or_none(values: Array) -> String:
+	if values.is_empty():
+		return tr("mod_detail_none")
+	return _join_values(values, " · ")
+
+
+func _join_values(values: Array, separator: String) -> String:
+	var parts := PackedStringArray()
+	for v in values:
+		parts.append(str(v))
+	return separator.join(parts)
+
+
+func _content_summary(adds) -> String:
+	if not (adds is Dictionary) or adds.is_empty():
+		return tr("mod_detail_none")
+	var parts: Array = []
+	for kind in ["characters", "societies", "upgrades", "enemies", "supports", "clothes", "shop_characters", "game_modes", "levels"]:
+		if adds.has(kind):
+			parts.append("%s %d" % [tr("mod_kind_" + str(kind)), int(adds[kind])])
+	return _join_values(parts, " · ") if not parts.is_empty() else tr("mod_detail_none")

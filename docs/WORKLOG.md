@@ -19,6 +19,41 @@
 
 ---
 
+## 2026-10-18 — 设置页滚动条统一使用通用轨道样式
+- Correction: GAME 页脚本局部取消滚动轨道上下内边距 → 在 `ui/pixel_scrollbar_theme.tres` 中统一竖向轨道上下内边距为 0，删除页面局部覆盖（来源：user）。
+- Files / 涉及文件: `ui/pixel_scrollbar_theme.tres`、`script/game_option.gd`、`ui/game_option.tscn`、`docs/CONVENTIONS.md`。
+- Summary / 改动摘要: 横向轨道独立保留原内边距，GAME 页滚动区域仍从顶栏下沿延伸至页面底边，首张设置卡片位置保持不变。
+- Docs synced / 文档同步: `CONVENTIONS.md` §6。
+
+## 2026-10-18 — 设置页布局与字体修正
+- Files / 涉及文件: `ui/game_option.tscn`。
+- Summary / 改动摘要: 统一滑条数值槽与间距、分辨率字体字号和左内边距，分组标题垂直居中；四语言档位检查及最终运行截图已核对。
+- Correction / 修正: 分辨率仅统一字号、混用 9x9 / 7x7 字体 → 按钮及 PopupMenu 均使用 9x9、字号 12（来源：user）。
+- Correction / 修正: 左列标签左对齐 → 全屏、帧率上限、垂直同步及反馈/音频标签右对齐（来源：user）。
+- Correction / 修正: 分辨率、物理插值标签保留左对齐 → 二者也右对齐（来源：user）。
+- Docs synced / 文档同步: `CONVENTIONS.md` §6、`LEARNINGS.md`、`UI_UX_REVIEW.md` §7。
+
+## 2026-10-18 — 修正 Mod 原型对照来源
+- Correction / 修正: 以 js.design 纵向详情画板或 HTML 弹窗原型作为本轮参考 → 以用户附图「B · 列表 + 常驻详情」左右双栏方案为准（来源：user）。
+- Files / 涉及文件: `docs/LEARNINGS.md`、`docs/WORKLOG.md`。
+- Summary / 改动摘要: 更正对照来源，未修改游戏实现。
+- Docs synced / 文档同步: `docs/LEARNINGS.md`「本轮原型对照以用户附图『B · 列表 + 常驻详情』为准」。
+
+## 2026-10-17 — 设置页签恢复原版间距/动画并移除 tooltip
+- Correction / 修正: 页签行高 32 + `scale:x` 动画（PR #10）→ 用户要求保留 main 原版间距与动画；页面按钮重做过，实际只用 `on_select`/`selected`（来源：user）。
+- Files / 涉及文件: `ui/option_button.tscn`、`ui/option.tscn`、`script/option_button.gd`、`docs/*`。
+- Summary / 改动摘要: 恢复 main 的页签行高/间距与金色条动画；删除未被调用的 `on_out` 及 `RESET`/`selected` 中未用的 `position`/`rotation` 轨道；移除悬停 tooltip 与 `_resize_highlight`；VBox 回到自然宽度/间距。`ui/menu_button.tscn` 未改（`RESET` 三条轨道均被 `on_select` 使用）。
+- Reason / 原因: 用户明确页签只用 `on_select`（悬停）与 `selected`（选中整条金底），其余为遗留；`offset_transform_position` 为纯视觉偏移，不影响按钮 position/排版。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置菜单布局/页签样式边界、`docs/CONVENTIONS.md` 页签约定、`docs/PROJECT_MAP.md` 设置布局、`docs/LEARNINGS.md` 对应 SUPERSEDED 与新增条目。
+
+## 2026-10-17 — 移动端设置页签焦点修正
+- Correction / 修正: 设置页签事件去重检查已通过 → 用户指出触屏切到其他页签后 GAME 仍残留背景，须另外验证触屏切页后的导航焦点与绘制状态（来源：user）。
+- Files / 涉及文件: `script/option_button.gd`。
+- Summary / 改动摘要: 激活页签时先同步焦点，避免初始 GAME 因持有旧焦点保留背景；重复激活继续消费输入且不重复切页。
+- Verified / 验证: 隔离设置渲染回归从 4 项失败变为 49 项断言通过；进程仍有既有退出资源和临时目录清理错误。
+- Device / 真机: Pixel 5 / Android 14 已更新安装修复版，CONTROLS / MOD / COOP 切换及 GAME 往返均无背景残留。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md`「设置页签激活与焦点」、`docs/LEARNINGS.md` 对应触屏焦点条目。
+
 ## 2026-10-11 — 支援主卡焦点边框修正
 - Correction / 修正: 前轮焦点框视觉验证仅覆盖列表项目 → 用户截图指出主卡展开时圆角断边、侧边被列表遮住；已按主卡持有焦点的真实展开状态复现并补充像素检查（来源：user）。
 - Files / 涉及文件: `ui/level_select.gd`、`tests/test_ui_ux_regressions.gd`。
@@ -230,3 +265,106 @@
 - Systems / 影响系统: 无运行时改动（未并入构建）。
 - Docs synced / 文档同步: `AGENTS.md`「本地文件与在制品」、`docs/CONVENTIONS.md` §9。
 - Open / 待办: 待用户明确「结案」后移除该目录。
+
+## 2026-10-13 — 联机准入与共享金币规则确认
+- Correction / 修正: SELECT 阶段接纳新身份但不同步选人流程 → 选人开始后拒绝新加入并提示等待下一局，允许原身份重连（来源：user）。
+- Correction / 修正: 客机拾取已知网络金币仅按房主原始币值共享 → 房主使用原始币值与已同步的拾取者倍率向上取整后共享全队（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`、`i18n/coop_i18n.gd`、`tests/coop_recovery_checks.gd`。
+- Summary / 改动摘要: 记录本会话用户明确选择的两项修正规则；两项均有真实多进程回归。
+- Reason / 原因: 用户裁定选人准入和共享经济的预期行为。
+- Systems / 影响系统: 联机会话阶段、断线恢复、共享金币。
+- Docs synced / 文档同步: `docs/SYSTEMS.md` §5.8 / §8、`docs/LEARNINGS.md` 对应用户规则。
+
+## 2026-10-14 — 本地导入文件与忽略配置提交范围修正
+- Correction / 修正: soft reset 后暂存包含 `.import` 与 `.gitignore` → 忽略 `.import`，不提交 `.gitignore` 改动（来源：user）。
+- Files / 涉及文件: 本地 `.git/info/exclude`、Git 索引；`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
+- Summary / 改动摘要: 取消暂存 627 个 `.import` 与 `.gitignore`，已跟踪 `.import` 设置本地 `skip-worktree`，保留磁盘内容。
+- Docs synced / 文档同步: `docs/CONVENTIONS.md` §6.1、`docs/LEARNINGS.md` 对应 Git 条目。
+
+## 2026-10-14 — 本体与联机 Mod 发布版本回滚
+- Correction / 修正: 本体 `v0.5.1.4` / 联机 Mod `0.1.12` → 本体 `v0.5.1.3` / 联机 Mod `0.1.10`，最低本体版本声明恢复为 `v0.5.1.2-test`（来源：user）。
+- Files / 涉及文件: `script/Game.gd`、`mod_sdk/coop_mod/mods/etn_coop/mod.json`、`net/coop_net.gd`、`entry/coop_entry.gd`。
+- Summary / 改动摘要: 仅回滚发布版本标记并修正接口缺失提示；协议 v5、存档格式 v3、Android 模板版本及功能修复保留。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/LEARNINGS.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 未提交上游的联机协议统一为 v4
+- Correction / 修正: 发布版本回滚后联机协议仍为 v5 → 本批尚未提交上游的协议变更统一使用 v4（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`。
+- Summary / 改动摘要: 仅调整协议标记，保留实际 RPC 与玩法修复；发布版本及存档格式不变。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 重新划定提交范围
+- Correction / 修正: 本批提交包含独立组网拓展、设计稿及开发工具状态 → 仅重新提交本体与官方联机修复，EasyTier 联机、UI 设计草案和开发配置保留本地（来源：user）。
+- Files / 涉及文件: 本轮重新整理的源码、永久守卫及相关说明。
+- Summary / 改动摘要: 保留发行包导出隔离，拆出通用 Godot 回归工具和导出验证工具，确保被保留的检查独立于排除项；原提交与设计稿已建立本地备份。
+- Docs synced / 文档同步: `docs/PROJECT_MAP.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、相关 SDK 说明。
+- Verified / 验证: 独立候选工作区通过本体/官方联机各专项及导出隔离；公共检查不依赖被排除的拓展源码和本地审计状态。
+
+## 2026-10-14 — 补交官方联机通用接入
+- Correction / 修正: 将官方通用拓展接入与独立附属包一起排除 → 官方联机 Mod 代码提交，独立 EasyTier 附属包继续不提交（来源：user）。
+- Files / 涉及文件: 官方 `net/coop_extensions.gd`、`net/coop_net.gd`、`ui/coop_menu.gd`、`i18n/coop_i18n.gd` 及官方接口回归。
+- Summary / 改动摘要: 补交通用注册、页面工厂、交互恢复、状态栏和会话生命周期；不纳入独立附属实现、设计草案与开发配置。
+- Docs synced / 文档同步: `docs/COOP_EXTENSION_API.md`、`docs/ARCHITECTURE.md`、`docs/SYSTEMS.md`、`docs/PROJECT_MAP.md`、`docs/CONVENTIONS.md`、`docs/LEARNINGS.md`。
+- Verified / 验证: 21 项契约与 17 项官方菜单检查通过，测试只安装官方联机包。
+
+## 2026-10-14 — 升级权重判定与 PR #7 合并后联机修复
+- Correction / 修正: 「最高稀有度应完全由回合推进、刷新不应抬升；防御低血加成应随拥有数量归零」的审计判断 → 用户裁定按 PR 保留（`round_weight_curve_3` 回合曲线为主导，刷新额外抬升稀有档；防御低血旁路生效且不随拥有数量归零）（来源：user）。
+- Files / 涉及文件: `scenes/manager/upgrade_manager.gd`、`scenes/manager/upgrade_manager.tscn`、`scenes/manager/item_weight_manager.gd`（仅记录，未改）；`script/health_component.gd`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_enet_peer.gd`（A/B/D 修复）；`.gitattributes`。
+- Summary / 改动摘要: 合并 PR #7（`Merge PR #7: fix: 完善存档与 Mod 管理、联机同步及通用拓展接口`）后补 follow-up：修正客机命中预测二次乘算、ENet 强制断开重复 `peer_disconnected`，并为 `resolve_damage` 补空守卫；`.gitattributes` 为 `ETN_*localization.csv` 声明 CRLF 并规范工作区行尾。
+- Reason / 原因: 用户对升级权重（最高稀有度/防御类）的原意作出裁定并按 PR 保留；审计发现的联机边界问题经用户同意修复。
+- Systems / 影响系统: 升级权重（`upgrade_manager`/`item_weight_manager`）、联机命中预测与断线、伤害求值守卫、本地化行尾。
+- Docs synced / 文档同步: `docs/LEARNINGS.md` 新增 `[Upgrade]` 与 `[Coop]` 两条；`.gitattributes` 的 CRLF 规则落地使 `docs/CONVENTIONS.md` §6.1 描述成立。
+- Verified / 验证: 合并后本机跑通 Python 单测 16/16、persistence 7/7、support 4/4、upgrade/mod-install `failures=0`、UI/UX 133/0、export boundary EXIT=0；`tests/check_localization.py` 5/5 PASS。A/B/D 脚本经 `find_symbols`/`--check-only` 解析无语法错误；伤害契约与联机恢复回归由用户在具备 pwsh 的环境复核。
+
+## 2026-10-14 — 发布版本改定 v0.5.1.4 与文档锚点清理
+- Correction / 修正: 本体发布版本 `v0.5.1.3` → `v0.5.1.4`（`Game.version_number` 与三平台导出文件名同步 0.5.1.4，路径统一 `../GodotExport/`）；官方联机 Mod 仍 `0.1.10`（来源：user）。
+- Files / 涉及文件: `script/Game.gd`、`export_presets.cfg`；`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`；`docs/SYSTEMS.md`/`docs/ARCHITECTURE.md`（锚点）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（死代码注释）。
+- Summary / 改动摘要: 统一本体与导出文件名为 0.5.1.4；抽查并修正 `SYSTEMS`/`ARCHITECTURE`/coop README 的 `文件:行号` 锚点（审计 92 处、错 17 处 → 0，含 2 处越界）；给未用的 `will_enemy_hit_kill`/`_get_predicted_enemy_damage` 加 deprecation 注释；`SYSTEMS.md:227` 的 `SceneData` 字段表补 `game_support_id`；删除 6 个生成的 `tests/*.gd.uid` 并在 `.git/info/exclude` 本地忽略；删除本地 `pr-7` 分支。
+- Reason / 原因: 用户改定发布版本并采纳 H1/H2/死代码注释的审计处理。
+- Docs synced / 文档同步: 本文件、`docs/LEARNINGS.md`（`[Version]` 追加 SUPERSEDED）、`docs/PROJECT_MAP.md`、`docs/SYSTEMS.md`、`mod_sdk/README.md`、`mod_sdk/coop_mod/README.md`。
+
+## 2026-10-14 — 当前分支收敛为远端道具显示修复
+- Correction / 修正: 当前分支包含本体与官方联机整批修复 → 仅保留“远端道具动态表现同步与重复外观”相关改动及必要回归、说明（来源：user）。
+- Files / 涉及文件: 官方联机 `net/coop_item_state.gd`、`coop_item_visuals.gd`、`coop_net.gd`、`coop_player_proxy.gd`、`coop_visual_driver.gd`；`tests/coop_item_visual_checks.gd`、`run_coop_item_visual_checks.py`。
+- Summary / 改动摘要: 从上游 `78ed5ad` 重建，仅保留道具显示快照、菜刀瞄准、外观去重/补建/重建及道具缓存迁移；协议为 v4，Mod 版本仍为 `0.1.10`。
+- Reason / 原因: 用户明确缩小当前分支范围；原整批提交保留于 `backup/before-items-only-20261014`。
+- Systems / 影响系统: 官方联机道具纯视觉同步。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §1.13、`docs/LEARNINGS.md`、`mod_sdk/coop_mod/README.md`。
+- Verified / 验证: 独立主线候选工作区从当前源码打包，LAN / Relay 双端道具回归通过，包含房主道具缓存迁移断言；精确豁免主线缺失本地开发插件的三条加载日志及既有退出资源计数，其余 SCRIPT ERROR / ERROR 严格判失败。日志位于本地 `.godot/items_only_final/` 与 `.godot/items_only_final_relay/`。
+
+## 2026-10-15 — 合并 PR #9（远端瞄准插值与菜刀伤害数字一致）
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd`、`coop_player_proxy.gd`、`coop_net.gd`、`mod_sdk/coop_mod/README.md`、`tests/coop_item_visual_checks.gd`、`tests/coop_knife_damage_checks.gd`（含 `.uid`）、`tests/run_coop_item_visual_checks.py`、`docs/LEARNINGS.md`、`docs/SYSTEMS.md`。
+- Summary / 改动摘要: 双亲合并 PR #9（`Merge PR #9: fix(coop): 修复菜刀远端转向卡顿与双端伤害数字差异`，第二父 `0400055`）。快照缓冲 `push/sample` 新增可选 `look`，与位置共用时间戳与插值系数；`CoopPlayerProxy` 改用逐帧采样的 `render_look_position` 驱动镜像准星/身体/武器/道具。主机 `_server_enemy_hit` 从权威 `on_damage_dealt` 回调采集本次结算伤害用于飘字与归属回放，记分仍按有效扣血 `hp_before-hp_after`。新增 `tests/coop_knife_damage_checks.gd` 与 runner 的 `--damage` 选项。
+- Reason / 原因: 用户反馈远端菜刀连续转向呈台阶式卡顿；菜刀斩杀同一目标时客机显示完整伤害、主机显示剩余生命。
+- Systems / 影响系统: 官方联机远端瞄准插值、客机菜刀命中飘字/归属/记分。
+- Docs synced / 文档同步: 合并自带 `docs/LEARNINGS.md` 三条（瞄准插值、命中数字取值、PR #9 以主线契约为准）、`docs/SYSTEMS.md` §2.3 与联机菜刀瞄准段、`mod_sdk/coop_mod/README.md` 两处。
+- Verified / 验证: `python tests/run_coop_item_visual_checks.py --godot H:\Godot_v4.7-stable_win64_console.exe` 的 items / relay_items 均 PASS；加 `--damage` 后 items / relay_items 亦均 PASS。平滑探针 LAN client `mirror_hold=0.000 max_step=0.0429 max_error=0.0429`、Relay client `mirror_hold=0.042 max_step=0.0544`（阈值 hold≤0.15 / step≤0.15 / error≤0.2）；伤害用例两端一致：neutral/resistance/vulnerability=`45`、execute=`99999`（权威扣血 `50`）、ordinary_damage=`90`、ordinary_overkill=`45`（权威扣血 `30`）、execute_reset=`99999`（权威扣血 `50`），各 `COOP_ITEMS ... failures=0`。日志位于 `.godot/coop_item_visual_checks/`。
+
+## 2026-10-16 — 设置导航边界黑线修正
+- Correction / 修正: 前轮检查认为设置基础布局正常、漏检侧栏边缘 → 用户指出导航与内容之间存在明显黑色竖线，不应当作阴影忽略（来源：user）。
+- Files / 涉及文件: `ui/option.tscn`、`tests/test_ui_ux_regressions.gd`。
+- Summary / 改动摘要: 移除侧栏右侧从不透明黑色开始的渐变贴图及专用资源，补充四个设置页面的边缘像素回归；实际渲染确认黑线消失，82 项设置断言通过。
+- Correction / 修正（2026-10-16）: 移除导航右侧全部阴影 → 用户要求重新添加，现采用 14 宽、最大不透明度 35%（alpha=0.35）的柔和渐变，绘制于内容后方，继续避免纯黑竖线；82 项设置断言通过（来源：user）。
+- Reason / 原因: 用户纠正实际渲染中的漏检问题。
+- Systems / 影响系统: 设置页面背景绘制；主菜单和暂停页共用设置场景。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置侧栏边界、`docs/LEARNINGS.md` 用户修正条目。
+
+## 2026-10-16 — COOP 已安装页签样式来源核对
+- Correction / 修正: 仅根据共享按钮组件及交互回归判断导航样式统一 → 用户指出 COOP 仍有细微差异；当前安装的 0.1.10 只共享根组件，文字由 Mod 单独创建，未使用本体 Label 的新留白与排版（来源：user）。
+- Files / 涉及文件: `mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd`、`script/mod_api.gd`、`ui/option_button.tscn`（只读核对）；本机安装的 `etn_coop.pck`（隔离目录挂载核对）。
+- Summary / 改动摘要: 明确设置页注入链路及本体容器、共享组件、Mod 自建文字各自的控制范围；核实工作区源码已用工厂，已安装包仍需重新构建安装。未修改 Mod、未重新安装。
+- SUPERSEDED: 2026-10-16 进一步在空工程挂载重装前备份包，确认旧 PCK 已采用工厂；此前读到的是项目内旧镜像，误归因于安装包。用户指出的文字差异仍成立，根因改为镜像遮蔽。按用户要求已完成当前源码重新打包安装及镜像同步，保留旧文件备份，82 项设置断言通过；用户数据及 project.godot 哈希未变（来源：code | test）。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 页签样式边界、`docs/LEARNINGS.md` 页签工厂条目的后续观察。
+
+## 2026-10-16 — 设置关闭图标居中与缩小
+- Correction / 修正: 前版用文字字形显示 × → 用户要求图标与按钮居中并略微缩小，现改为独立 12×12 像素图标，通过 Button 的图标水平/垂直对齐居中（来源：user）。
+- Files / 涉及文件: `ui/option.tscn`、`ui/close_pixel.svg`、`ui/close_pixel.svg.import`。
+- Summary / 改动摘要: 使用最近邻采样保留像素边缘；按钮仍为 26×26 并保留原关闭交互。1280×720 渲染中图标实际范围为 `(222,54)–(246,78)`，中心 `(234,66)` 与按钮中心一致；82 项设置断言通过，既有插件和退出资源报错仍在。
+- Correction / 修正（2026-10-16）: 左栏标题和关闭按钮紧贴顶部装饰条 → 用户截图要求图标与导航列表略微下移；标题、关闭按钮和页签起点统一下移 8 个设计像素，顶部留出 8 像素间距，滚动区底边及 Esc 提示固定；渲染复核及 82 项设置断言通过（来源：user）。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置菜单布局。
+
+## 2026-10-16 — 滚动条视觉反馈修正
+- Correction / 修正: 像素滚动条使用描边、可见轨道和金色反馈 → 用户要求去除描边、隐藏轨道，并以灰色表示高亮反馈（来源：user）。
+- Files / 涉及文件: `ui/pixel_scrollbar_theme.tres`。
+- Summary / 改动摘要: 轨道与焦点外框改为不绘制，保留原尺寸；滑块无描边，普通、悬停和按下状态分别使用灰度 0.58、0.70、0.80。实际渲染复核及 82 项设置断言通过，既有插件和退出资源报错仍在。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置菜单布局、`docs/CONVENTIONS.md` 设置滚动条样式。

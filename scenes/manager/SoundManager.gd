@@ -12,7 +12,10 @@ signal fade_out_end
 @onready var animation_player: AnimationPlayer = $BGM/AnimationPlayer
 @onready var voice_player: AudioStreamPlayer = $SupportVoice/VoicePlayer
 
-var on_fade_out: bool = false
+const BGM_FADE_DEFAULT := 1.0
+const BGM_SILENCE_DB := -60.0
+var _bgm_fade_tween: Tween = null
+var _bgm_base_db: float = 0.0
 var game_end: bool = false
 
 const SFX_THROTTLE_DEFAULT_MS := 40
@@ -90,52 +93,76 @@ func play_talk(player_name: String, type: String):
 		return
 	player.play()
 
-func play_bgm_cut(stream: AudioStream):
+# 设定非淡变目标音量（暂停调暗等走这里，避免被淡出/淡入清掉）
+func set_bgm_base_db(db: float) -> void:
+	_bgm_base_db = db
+	if bgm_player == null:
+		return
+	if _bgm_fade_tween == null or not _bgm_fade_tween.is_running():
+		bgm_player.volume_db = db
+
+
+func _bgm_kill_fade() -> void:
+	if _bgm_fade_tween != null and _bgm_fade_tween.is_valid():
+		_bgm_fade_tween.kill()
+	_bgm_fade_tween = null
+
+
+func _bgm_fade_in(fade_in: float) -> void:
+	if bgm_player == null:
+		return
+	if fade_in > 0.0:
+		bgm_player.volume_db = BGM_SILENCE_DB
+		bgm_player.play()
+		_bgm_fade_tween = create_tween()
+		_bgm_fade_tween.tween_property(bgm_player, "volume_db", _bgm_base_db, fade_in)
+	else:
+		bgm_player.volume_db = _bgm_base_db
+		bgm_player.play()
+
+
+func play_bgm_cut(stream: AudioStream, fade_in: float = 0.0):
 	if bgm_player == null or stream == null:
 		return
 	if bgm_player.stream == stream and bgm_player.playing:
 		return
-	if on_fade_out == true:
-		await fade_out_end
+	_bgm_kill_fade()
 	bgm_player.stream = stream
-	bgm_player.play()
+	_bgm_fade_in(fade_in)
 	await bgm_player.finished
 	cut_finish.emit()
 
-func play_bgm(stream: AudioStream):
+
+func play_bgm(stream: AudioStream, fade_in: float = 0.0):
 	if bgm_player == null or stream == null:
 		return
 	if bgm_player.stream == stream and bgm_player.playing:
 		return
-	if on_fade_out == true:
-		await fade_out_end
+	_bgm_kill_fade()
 	bgm_player.stream = stream
-	bgm_player.play()
+	_bgm_fade_in(fade_in)
 
-func bgm_fade_out():
-	if animation_player == null or bgm_player == null:
+
+func bgm_fade_out(fade: float = BGM_FADE_DEFAULT):
+	if bgm_player == null:
 		return
-	on_fade_out = true
-	animation_player.play("1s")
-	await animation_player.animation_finished
-	on_fade_out = false
+	if bgm_player.playing and bgm_player.volume_db > BGM_SILENCE_DB:
+		_bgm_base_db = bgm_player.volume_db
+	_bgm_kill_fade()
+	if bgm_player.playing and fade > 0.0:
+		_bgm_fade_tween = create_tween()
+		_bgm_fade_tween.tween_property(bgm_player, "volume_db", BGM_SILENCE_DB, fade)
+		await _bgm_fade_tween.finished
 	bgm_player.stop()
-	bgm_player.volume_db = linear_to_db(1)
+	bgm_player.volume_db = _bgm_base_db
 	fade_out_end.emit()
 
-func bgm_slow_fade_out(stream: AudioStream):
-	if animation_player == null or bgm_player == null:
-		return
-	on_fade_out = true
-	animation_player.play("4s")
-	await animation_player.animation_finished
+
+func bgm_slow_fade_out(stream: AudioStream, fade_out: float = 4.0, fade_in: float = 1.0):
+	await bgm_fade_out(fade_out)
 	if game_end == true:
 		return
-	on_fade_out = false
-	bgm_player.stop()
-	bgm_player.volume_db = linear_to_db(1)
-	fade_out_end.emit()
-	play_bgm_cut(stream)
+	play_bgm_cut(stream, fade_in)
 
 func get_volume(bus_index: int):
 	if bus_index < 0 or bus_index >= AudioServer.bus_count:

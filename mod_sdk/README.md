@@ -26,8 +26,9 @@ res://mods/example/defs/characters/example_hero.tscn
 |---|---|
 | `id` | **必需**，`^[a-z0-9_]+$`，且必须等于目录名/前缀 |
 | `name` / `version` / `author` | 显示用 |
-| `description` | 可选，Mod 描述；直接字符串。MOD 管理面板悬停该行时显示（`name` + 版本 + 作者 + `description`）。文本会经 Label 自动翻译，恰好等于翻译键时命中，否则原样显示 |
-| `api_version` | 预留 |
+| `description` | 可选，Mod 描述；直接字符串。MOD 管理面板右侧常驻详情显示（`name` + 版本 + 作者 + `description`）。文本会经 Label 自动翻译，恰好等于翻译键时命中，否则原样显示 |
+| `icon` | 可选，包内图标资源路径；管理页优先使用安装目录的 `icon.png`，其次使用此字段指向的有效资源 |
+| `api_version` | 脚本入口所需 API 版本；高于本体支持版本时跳过 `entry` 并告警，不等于拒绝整包挂载 |
 | `game_version` | 声明**最低支持**的本体版本；本体低于它才告警（忽略 `-test` 等后缀），不阻断挂载 |
 | `load_order` | 加载顺序，越小越先；相同则按 id 字母序 |
 | `dependencies` / `conflicts` | 依赖/互斥（P0.5） |
@@ -181,6 +182,25 @@ func _on_first_round() -> void:
   未提供翻译的角色，PS 文案会自动回退到 `PlayerCard.description`（不再显示原始键）。
 - manifest 的 `api_version` 高于本体 `ModAPI.VERSION` 时，entry 会被跳过（保护不兼容 mod）。
 
+### 12.1 设置页签统一创建接口
+
+通过 `ExtensionHooks.populate_option_pages(menu_box, button_box)` 注入设置页时，使用本体接口创建左侧页签：
+
+```gdscript
+func _populate_option_pages(menu_box: Node, button_box: Node) -> void:
+    var page = MyOptionPageScene.instantiate()
+    page.option_id = "my_mod_settings"
+    menu_box.add_child(page)
+    var tab = ModAPI.create_option_tab("my_mod_settings", "my_mod_settings_title")
+    button_box.add_child(tab)
+```
+
+- 签名：`ModAPI.create_option_tab(button_id: String, title: String, auto_translate: bool = true) -> Control`。
+- 返回**未加入场景树**的本体 `ui/option_button.tscn` 实例；调用方负责加入 `button_box`。`button_id` 必须与对应页面的 `option_id` 相同，页面仍需实现 `menu_show()` / `menu_hide()`（可继承 `script/option_menu.gd` 并提供 `option_in` 动画）。
+- `title` 可传翻译键，默认继承自动翻译；硬编码标题使用 `ModAPI.create_option_tab("option_coop", "COOP", false)`。返回控件的 `text` 属性支持运行期更新标题。
+- 字体、字号、描边、悬停/选中动画由本体统一维护；GAME、CONTROLS、MOD 也使用同一组件。不要在左侧页签上另设独立 `theme` 或添加一套文字节点；右侧内容页可使用自己的样式。
+- 此接口为新增能力，`ModAPI.VERSION` 仍为 `1`（无破坏性变更），需要包含该接口的本体版本。已有 `.pck` 不会自动改用接口，mod 作者需更新调用并重新发布。
+
 ## 13. 深度修改（玩法重构 / 覆盖本体文件）
 
 - `replace_files: true`：用 pck 内资源覆盖本体 `res://` 路径。**仅对「挂载后加载」的场景/资源有效**；已加载的 autoload 脚本与被 `preload` 缓存的资源**覆盖不了**（要覆盖 autoload 需把 `ModManager` 提到 `[autoload]` 最前，本工具不做）。
@@ -260,3 +280,27 @@ members = Array[String](["my_mod_hero", "my_mod_leader"])
 - 打包：`build_mod.ps1`（ModPack 导出）会把 `res://mods/**` 的导入产物（含 `.translation`）打进 pck；若用 `mod_sdk/pack_mod.gd` 原样打包，须把 `.translation` 一并放进源目录（**不做运行时 CSV 解析**）。
 - ⚠ **只保证新增键**：mod 与本体若有**同 locale 同 key**，Godot `TranslationDomain` 将 `Translation` 存于 `HashSet`，同名时按迭代序取（`score >= best_score`），**谁胜不确定**——不要依赖 mod 覆盖本体既有文案。
 - `add_translation` / `register_translation*` **不会**触发 `NOTIFICATION_TRANSLATION_CHANGED`：必须在 `entry`（早于菜单构建）注册；游戏中途注册不会刷新已建 UI。
+
+## 16. 本地开发：项目根 `mods/` + `_mod_template` + `build_local_mod.ps1`
+
+- 项目根 `mods/`（gitignore 的 `/mods/`）是本仓库的「本地 mod 编辑器镜像」：放这里的 mod 源会被编辑器导入（生成 `.uid`）但不入库；运行时 `ModManager` 只扫 `user://mods/`（桌面另扫 exe 同目录 `mods/`），**不扫** `res://mods/`，故需打包安装后才生效。
+- `mods/_mod_template/` 是**可复制的 mod 角色骨架**：复制整目录 → 改名为 `<mod_id>` → 全局替换 `_mod_template`，即得 `PlayerCard`/`PSCard` + 战斗场景（复制自 `momoi.tscn`）+ 选人卡 + 社团卡。用法见 `mods/_mod_template/README.md`；角色制作完整流程见 `CHARACTER_GUIDE.md`。
+- `mods/doom_slayer_izzy/` 是由该骨架生成的示例 mod（角色 `IZZY`）。
+- `build_local_mod.ps1`：跳过工程副本，直接用本体工程 + `pack_mod.gd`(PCKPacker) 把 `mods/<id>/**` 打成 pck；`-Install` 复制 `mod.json`(+`icon.png`)+pck 到 `user://mods/<id>`。pck 输出到 `mods/_build/`（落在 gitignore 的 `/mods/` 下）。
+
+```powershell
+.\mod_sdk\build_local_mod.ps1 -ModId <mod_id> -Install   # 重启游戏生效
+```
+
+- **边界**：`pack_mod` 原样打包，**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）；自带贴图请走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
+- 注意：`build_coop_mod.ps1` 假设源与镜像目录不同（源在 `mod_sdk/coop_mod/mods/`）；源直接放项目根 `mods/` 时它会镜像自拷贝报错，这类 mod 用 `build_local_mod.ps1`。
+
+## 17. 命中前伤害修饰（协议 v4）
+
+2026-10-14 用户改定发布版本为本体 `v0.5.1.4` / 官方联机 `0.1.10`，尚未提交上游的协议变更统一为 v4；本节接口保留。SUPERSEDED: 期间曾回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），不能仅按发布版本字符串判断接口是否存在。
+
+自定义角色或藏品若要修改**本次伤害**，订阅 `GameEvents.enemy_damage_calculating(final_damage, damage_data, body_path)`，在其中调整目标 HealthComponent 的 `damage_multiplier` 或临时追加 `damage_data.damage_modifier`。前置阶段只负责数值计算，勿在此扣血、生成副作用或触发结算 proc。该阶段在客机预测/发送之前执行一次，临时修饰在结算后恢复，不跨穿透命中累积。
+
+`enemy_damage_taken` 继续保留给结算关联的施加状态/触发道具；在客机上它由房主结算后回传，因此旧 Mod 在该事件内改倍率不能改变本次权威 HP，应迁移到前置阶段。预先放入子弹 DamageData 的纯数值闭包（如距离增伤）也会在本端求值；**不传输 Callable**。
+
+官方联机协议 v4 使用可序列化的 `resolved_damage`。目标条件使用攻击者命中时的快照，房主继续负责目标合法性、无敌、阵营和真实 HP；沿用好友房可信的数值自报模型，不新增反作弊语义。双方需同时更新本体和官方 Mod，具体见 `coop_mod/README.md`。

@@ -19,7 +19,15 @@ static func resolve(from: Node) -> Node:
 	return tree.get_first_node_in_group("Player")
 
 # cached 仍有效则原样返回；为空或已释放时重新解析。调用方应把返回值写回缓存成员。
-static func ensure(from: Node, cached: Node) -> Node:
-	if cached != null and is_instance_valid(cached) and cached.is_inside_tree():
-		return cached
+#
+# cached 故意声明为 Variant 而非 Node：传入**已释放实例**时，Godot 会在进入函数前的
+# 入参类型检查就抛 "The Object-derived class of argument 2 (previously freed) is not a
+# subclass of the expected argument class."，导致 is_instance_valid 根本执行不到。改用
+# 弱类型入参 + 运行时 is_instance_valid 判定，才能真正做到"失效即重新解析"。
+static func ensure(from: Node, cached: Variant) -> Node:
+	# 先 `is_instance_valid`（对已释放实例安全），再判类型：若写成 `cached is Node` 在前，
+	# 传入已释放实例时会在该处抛 "Left operand of 'is' is a previously freed instance."，
+	# 函数体内的判定根本执行不到。
+	if is_instance_valid(cached) and cached is Node and cached.is_inside_tree():
+		return cached as Node
 	return resolve(from)

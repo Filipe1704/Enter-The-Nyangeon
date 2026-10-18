@@ -9,20 +9,52 @@ import struct
 import time
 from dataclasses import dataclass, field
 
+try:
+    # 房间码随机源必须是密码学安全随机数（原 random.choice 用 Mersenne Twister，可由少量输出预测）。
+    # 标准库必然自带 secrets，此处 try 仅为极端裁剪环境留回退路径（回退仍保持 4 字符与既有字母表）。
+    import secrets
+
+    _secure_choice = secrets.choice
+except ImportError:  # pragma: no cover
+    _secure_choice = random.choice
+
 
 PORT = int(os.environ.get("PORT", "7716"))
+RELAY_BIND_ADDRESS = os.environ.get("RELAY_BIND_ADDRESS", "0.0.0.0")
 MAX_CLIENTS_PER_ROOM = int(os.environ.get("MAX_CLIENTS_PER_ROOM", "3"))
 ROOM_TIMEOUT_MS = int(os.environ.get("ROOM_TIMEOUT_MS", str(30 * 60 * 1000)))
 HEADER_SIZE = 4
 MAX_PLAYERS_PER_ROOM = 4
-WRITE_HIGH_WATER = 256 * 1024
+# 分级背压水位：软水位先给宽限并继续写可靠帧，硬水位或宽限超时再断开慢端。
+WRITE_SOFT_WATER = 256 * 1024
+WRITE_HARD_WATER = int(os.environ.get("RELAY_WRITE_HARD_WATER", str(4 * 1024 * 1024)))
+WRITE_GRACE_SEC = float(os.environ.get("RELAY_WRITE_GRACE_SEC", "5"))
 COMPACT_THRESHOLD = 65536
 DEBUG = os.environ.get("RELAY_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
 # 连接级心跳：客户端约每 1s 有游戏数据/心跳包，超过该阈值无任何数据即判定半开连接并回收。
 PEER_TIMEOUT_MSEC = int(os.environ.get("PEER_TIMEOUT_MSEC", "20000"))
 HEARTBEAT_INTERVAL_SEC = float(os.environ.get("HEARTBEAT_INTERVAL_SEC", "5"))
+# 与 CoopRelayPeer._get_max_packet_size 的 16 MiB 契约一致，另加目标 peer 头。
+MAX_FRAME_BYTES = (1 << 24) + HEADER_SIZE
+MAX_BUFFER_BYTES = MAX_FRAME_BYTES + 65536 + 14
+HTTP_HANDSHAKE_TIMEOUT_SEC = 10.0
+JOIN_TIMEOUT_SEC = 35.0
+FRAME_TIMEOUT_SEC = 30.0
+WRITE_TIMEOUT_SEC = 5.0
+# 资源上限：房间总数与在线连接总数，超限拒绝新建（环境变量可配，默认按单机小规模中继估算）。
+MAX_ROOMS = int(os.environ.get("MAX_ROOMS", "256"))
+MAX_TOTAL_CLIENTS = int(os.environ.get("MAX_TOTAL_CLIENTS", "512"))
+# WRITE_OVERFLOW_LIMIT 已退役：可靠帧不能容忍跳过，改为分级水位——软水位给宽限、硬水位或宽限超时再断开慢端。
+# join 失败（房间不存在）限速：窗口内每连接/每 IP 的失败次数上限，超限进入冷却。
+JOIN_FAIL_WINDOW_SEC = float(os.environ.get("JOIN_FAIL_WINDOW_SEC", "60"))
+MAX_JOIN_FAILS_PER_PEER = int(os.environ.get("MAX_JOIN_FAILS_PER_PEER", "8"))
+MAX_JOIN_FAILS_PER_IP = int(os.environ.get("MAX_JOIN_FAILS_PER_IP", "40"))
+JOIN_BLOCK_SEC = float(os.environ.get("JOIN_BLOCK_SEC", "30"))
 
 rooms = {}
+connected_peers: set["Peer"] = set()
+# 每 IP 的 join 失败时间戳（滑动窗口）；仅保留窗口内的记录，条目在无近期失败时被回收。
+ip_join_fails: dict[str, list[float]] = {}
 
 
 def debug_log(*args):
@@ -43,6 +75,15 @@ class Peer:
     admitted: bool = False
     token: str = ""
     last_seen: float = 0.0
+    connected_at: float = field(default_factory=time.monotonic)
+    frame_started: float | None = None
+    # 背压：首次超过软水位的时刻（monotonic，0.0 表示未超）；超过宽限仍未回落才断开。
+    over_since: float = 0.0
+    # 对端 IP（握手后取 peername），用于每 IP 的 join 限速
+    ip: str = ""
+    # join 失败时间戳（滑动窗口）与冷却截止点（monotonic），用于每连接限速
+    join_fails: list[float] = field(default_factory=list)
+    join_blocked_until: float = 0.0
 
 
 @dataclass
@@ -95,9 +136,12 @@ def try_parse_frame(peer: Peer):
         if len(buffer) < offset + 8:
             return None
         length = struct.unpack_from(">Q", buffer, offset)[0]
-        if length > (2**53 - 1):
-            raise ValueError("frame too large")
         offset += 8
+
+    if length > MAX_FRAME_BYTES:
+        raise ValueError("frame too large")
+    if opcode in (0x8, 0x9, 0xA) and length > 125:
+        raise ValueError("control frame too large")
 
     mask = None
     if masked:
@@ -130,19 +174,44 @@ def compact_buffer(peer: Peer):
         peer.read_pos = 0
 
 
-async def send(peer: Peer, opcode: int, payload: bytes = b""):
+async def send(peer: Peer, opcode: int, payload: bytes = b"") -> bool:
+    """写入一帧，且绝不等待 drain（避免慢 peer 拖住广播/心跳）。
+
+    分级背压：超过软水位先记录时刻并继续写入（给瞬时突发一个宽限窗口），
+    持续超过 WRITE_GRACE_SEC 仍未回落、或直接超过硬水位，才断开慢端。
+    控制帧与游戏 RPC 都依赖可靠有序传输，禁止跳帧后继续发送、制造静默状态分叉。
+    返回 True 表示帧已排入传输缓冲，False 表示该连接已失败。
+    """
     writer = peer.writer
     if writer.is_closing():
-        return
-    writer.write(encode_frame(opcode, payload))
+        return False
     transport = writer.transport
-    if transport is None:
-        return
-    try:
-        if transport.get_write_buffer_size() >= WRITE_HIGH_WATER:
-            await writer.drain()
-    except (ConnectionError, RuntimeError):
-        pass
+    if transport is not None:
+        buffered = transport.get_write_buffer_size()
+        if buffered >= WRITE_HARD_WATER:
+            print(
+                f"[BACKPRESSURE] closing peer={peer.id or '?'} role={peer.role or '?'} "
+                f"buffered={buffered} hard",
+                flush=True,
+            )
+            writer.close()
+            return False
+        if buffered >= WRITE_SOFT_WATER:
+            now = time.monotonic()
+            if peer.over_since == 0.0:
+                peer.over_since = now
+            elif now - peer.over_since >= WRITE_GRACE_SEC:
+                print(
+                    f"[BACKPRESSURE] closing peer={peer.id or '?'} role={peer.role or '?'} "
+                    f"buffered={buffered} over={now - peer.over_since:.1f}s",
+                    flush=True,
+                )
+                writer.close()
+                return False
+        else:
+            peer.over_since = 0.0
+    writer.write(encode_frame(opcode, payload))
+    return True
 
 
 async def send_control(peer: Peer, message: dict):
@@ -193,11 +262,12 @@ async def route_packet(peer: Peer, payload: bytes):
     peers = room_peers(peer.room)
 
     if target_id == 0:
+        # return_exceptions=True：任一接收者发送异常只影响该 peer，不再中断整条广播链
         await asyncio.gather(*(
             send_data(receiver, peer.id, game_payload)
             for receiver in peers
             if receiver.id != peer.id
-        ))
+        ), return_exceptions=True)
         return
 
     if target_id < 0:
@@ -206,7 +276,7 @@ async def route_packet(peer: Peer, payload: bytes):
             send_data(receiver, peer.id, game_payload)
             for receiver in peers
             if receiver.id != peer.id and receiver.id != excluded_id
-        ))
+        ), return_exceptions=True)
         return
 
     for receiver in peers:
@@ -216,12 +286,68 @@ async def route_packet(peer: Peer, payload: bytes):
 
 
 def generate_room_code() -> str:
+    # 字母表与长度（4 字符）保持不变：UI 输入框与用户习惯已固定，只是把随机源换成
+    # 密码学安全的 _secure_choice，消除「房间码可预测 → 可被抢先加入 / 枚举」的问题。
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     for _ in range(1000):
-        code = "".join(random.choice(alphabet) for _ in range(4))
+        code = "".join(_secure_choice(alphabet) for _ in range(4))
         if code not in rooms:
             return code
     raise RuntimeError("room code exhausted")
+
+
+def _prune_join_fails(stamps: list[float], now: float) -> list[float]:
+    """只保留 JOIN_FAIL_WINDOW_SEC 窗口内的失败时间戳。"""
+    cutoff = now - JOIN_FAIL_WINDOW_SEC
+    return [ts for ts in stamps if ts > cutoff]
+
+
+def _prune_ip_join_fails(now: float):
+    """回收窗口外的每 IP 记录，避免字典被一次性扫描的地址撑大。"""
+    for ip in list(ip_join_fails):
+        stamps = _prune_join_fails(ip_join_fails[ip], now)
+        if stamps:
+            ip_join_fails[ip] = stamps
+        else:
+            ip_join_fails.pop(ip, None)
+
+
+def join_block_reason(peer: Peer) -> str:
+    """返回当前拒绝 join 的原因（"" 表示放行）。
+
+    房间码空间只有 20 bit，必须限制失败尝试：每连接与每 IP 各自维护滑动窗口，
+    窗口内失败次数超限即拒绝。正常用户即便手输错码也远不会到达阈值。
+    """
+    now = time.monotonic()
+    if peer.join_blocked_until > now:
+        return "peer"
+    peer.join_fails = _prune_join_fails(peer.join_fails, now)
+    if len(peer.join_fails) >= MAX_JOIN_FAILS_PER_PEER:
+        return "peer"
+    if peer.ip:
+        stamps = _prune_join_fails(ip_join_fails.get(peer.ip, []), now)
+        if stamps:
+            ip_join_fails[peer.ip] = stamps
+        else:
+            ip_join_fails.pop(peer.ip, None)
+        if len(stamps) >= MAX_JOIN_FAILS_PER_IP:
+            return "ip"
+    return ""
+
+
+def record_join_fail(peer: Peer):
+    """记录一次失败的 join 尝试（房间不存在）；连接级超限时进入冷却。"""
+    now = time.monotonic()
+    peer.join_fails = _prune_join_fails(peer.join_fails, now)
+    peer.join_fails.append(now)
+    if peer.ip:
+        if len(ip_join_fails) > 4096:
+            _prune_ip_join_fails(now)
+        stamps = _prune_join_fails(ip_join_fails.get(peer.ip, []), now)
+        stamps.append(now)
+        ip_join_fails[peer.ip] = stamps
+    if len(peer.join_fails) >= MAX_JOIN_FAILS_PER_PEER:
+        peer.join_blocked_until = now + JOIN_BLOCK_SEC
 
 
 async def handle_control(peer: Peer, payload: bytes):
@@ -251,6 +377,15 @@ async def handle_control(peer: Peer, payload: bytes):
             await send_control(peer, {"type": "error", "message": "Already in room"})
             return
 
+        # 房间总数上限：防止无限建房把 rooms 撑爆（空房回收逻辑保持不变）。
+        if len(rooms) >= MAX_ROOMS:
+            print(
+                f"[ROOM LIMIT] reject create_room: rooms={len(rooms)} >= {MAX_ROOMS}",
+                flush=True,
+            )
+            await send_control(peer, {"type": "error", "message": "Server full"})
+            return
+
         code = generate_room_code()
         room = Room(code=code, host=peer)
         rooms[code] = room
@@ -274,9 +409,24 @@ async def handle_control(peer: Peer, payload: bytes):
             await send_control(peer, {"type": "error", "message": "Already in room"})
             return
 
+        # join 限速：房间码仅 20 bit，必须挡住暴力枚举（错误消息复用既有 error 类型，不新增消息类型）。
+        block = join_block_reason(peer)
+        if block:
+            print(
+                f"[JOIN LIMIT] reject join_room peer={peer.id or '?'} ip={peer.ip or '-'} "
+                f"reason={block} fails={len(peer.join_fails)}",
+                flush=True,
+            )
+            await send_control(peer, {"type": "error", "message": "Too many join attempts"})
+            # 连接级超限（疑似枚举脚本）直接断开；每 IP 超限只做节流，保留正常重连可能。
+            if block == "peer":
+                peer.writer.close()
+            return
+
         code = str(message.get("room_code") or "").strip().upper()
         room = rooms.get(code)
         if not room or not room.host:
+            record_join_fail(peer)
             await send_control(peer, {"type": "error", "message": "Room not found"})
             return
 
@@ -293,8 +443,11 @@ async def handle_control(peer: Peer, payload: bytes):
                 await remove_peer(old)
                 old.writer.close()
 
-        # 容量含 pending（未完成 client_ready 的连接也占位），沿用量表：clients+pending 上限 = MAX_PLAYERS_PER_ROOM-1
-        if len(room.clients) + len(room.pending) + 1 >= MAX_PLAYERS_PER_ROOM:
+        # 容量含 pending（未完成 client_ready 的连接也占位）。MAX_CLIENTS_PER_ROOM 与
+        # MAX_PLAYERS_PER_ROOM-1 取小值：两处上限任一被下调都生效，默认 3 表示房主+3 客机=4，
+        # 与客户端 coop_net.gd 的 MAX_PLAYERS=4 契约一致。
+        max_clients = min(MAX_CLIENTS_PER_ROOM, MAX_PLAYERS_PER_ROOM - 1)
+        if len(room.clients) + len(room.pending) >= max_clients:
             await send_control(peer, {"type": "error", "message": "Room full"})
             return
 
@@ -339,6 +492,19 @@ async def handle_control(peer: Peer, payload: bytes):
                 "message": "client_ready before join_room",
             })
             return
+
+        if peer.admitted:
+            return
+
+        # join_prepared 是入房请求时的快照；等待 ready 期间其他 pending 客机可能已准入。
+        # 在本端准入前补齐当前成员，保证其拒收未知 sender 的边界不会丢弃合法客机数据。
+        for room_peer in room_peers(peer.room):
+            if room_peer is not peer:
+                await send_control(peer, {
+                    "type": "peer_pending",
+                    "peer_id": room_peer.id,
+                    "name": room_peer.name,
+                })
 
         print(
             f"[PROBE SUCCESS] client_ready received from peer={peer.id}. "
@@ -429,7 +595,7 @@ def close_with_http(writer: asyncio.StreamWriter, status: int, message: str):
 
 
 async def read_http_headers(reader: asyncio.StreamReader):
-    data = await reader.readuntil(b"\r\n\r\n")
+    data = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), HTTP_HANDSHAKE_TIMEOUT_SEC)
     text = data.decode("iso-8859-1")
     lines = text.split("\r\n")
     request_line = lines[0]
@@ -462,18 +628,54 @@ async def handle_websocket(reader: asyncio.StreamReader, writer: asyncio.StreamW
     writer.write(response.encode("ascii"))
     await writer.drain()
 
+    # 连接总数上限：握手已完成，先回既有 error 控制消息再关闭（不新增消息类型），
+    # 客户端 WebSocketPeer 能收到并进入 CONNECTION_DISCONNECTED，UI 可正常提示。
+    if len(connected_peers) >= MAX_TOTAL_CLIENTS:
+        print(
+            f"[SERVER LIMIT] reject connection: peers={len(connected_peers)} >= "
+            f"{MAX_TOTAL_CLIENTS} remote={writer.get_extra_info('peername')}",
+            flush=True,
+        )
+        payload = json.dumps({"type": "error", "message": "Server full"}, separators=(",", ":")).encode("utf-8")
+        writer.write(encode_frame(0x1, payload))
+        await writer.drain()
+        writer.close()
+        try:
+            await asyncio.wait_for(writer.wait_closed(), WRITE_TIMEOUT_SEC)
+        except Exception:
+            pass
+        return
+
     peer = Peer(reader=reader, writer=writer)
     peer.last_seen = time.time()
     remote = writer.get_extra_info("peername")
+    # peername 形如 (ip, port)；取出 IP 供每 IP 的 join 限速使用。
+    if isinstance(remote, (tuple, list)) and remote:
+        peer.ip = str(remote[0])
+    elif remote:
+        peer.ip = str(remote)
+    connected_peers.add(peer)
     print(f"[CONNECT] websocket remote={remote}", flush=True)
 
     try:
         while not reader.at_eof():
-            chunk = await reader.read(65536)
+            remaining = PEER_TIMEOUT_MSEC / 1000.0
+            now = time.monotonic()
+            if peer.room is None:
+                remaining = min(remaining, JOIN_TIMEOUT_SEC - (now - peer.connected_at))
+            if peer.frame_started is not None:
+                remaining = min(remaining, FRAME_TIMEOUT_SEC - (now - peer.frame_started))
+            if remaining <= 0:
+                break
+            chunk = await asyncio.wait_for(reader.read(65536), remaining)
             if not chunk:
                 break
 
             peer.last_seen = time.time()
+            if len(peer.buffer) - peer.read_pos + len(chunk) > MAX_BUFFER_BYTES:
+                raise ValueError("receive buffer too large")
+            if peer.frame_started is None:
+                peer.frame_started = time.monotonic()
             peer.buffer.extend(chunk)
             while True:
                 frame = try_parse_frame(peer)
@@ -481,6 +683,7 @@ async def handle_websocket(reader: asyncio.StreamReader, writer: asyncio.StreamW
                     break
 
                 opcode, payload = frame
+                peer.frame_started = time.monotonic() if len(peer.buffer) > peer.read_pos else None
                 if DEBUG:
                     opcode_name = {0x0: "CONTINUATION", 0x1: "TEXT", 0x2: "BINARY", 0x8: "CLOSE", 0x9: "PING", 0xA: "PONG"}.get(opcode, f"UNKNOWN({opcode})")
                     debug_log(f"[RECV FRAME] peer={peer.id or '?'} opcode={opcode_name} bytes={len(payload)}")
@@ -508,11 +711,13 @@ async def handle_websocket(reader: asyncio.StreamReader, writer: asyncio.StreamW
     except Exception:
         writer.close()
     finally:
+        connected_peers.discard(peer)
         print(f"[DISCONNECT] peer={peer.id or '?'} role={peer.role or '?'} room={peer.room.code if peer.room else '-'} admitted={peer.admitted}", flush=True)
         await remove_peer(peer)
         writer.close()
         try:
-            await writer.wait_closed()
+            # 关闭阶段同样加超时：卡死的对端不该让本协程（含 remove_peer 后的收尾）无限挂住。
+            await asyncio.wait_for(writer.wait_closed(), WRITE_TIMEOUT_SEC)
         except Exception:
             pass
 
@@ -555,26 +760,28 @@ async def cleanup_rooms():
 async def heartbeat_peers():
     # 主动发 WebSocket PING，客户端 WebSocketPeer 会自动回 PONG；无任何数据超过
     # PEER_TIMEOUT_MSEC 即判定半开连接并关闭（finally -> remove_peer 回收名额）。
+    # 每轮并发发送：peer 多时不再让心跳周期被逐个 await 拉长（send 本身已不阻塞）。
     while True:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SEC)
         now = time.time()
-        for room in list(rooms.values()):
-            for peer in all_peers(room):
-                if peer.last_seen > 0 and (now - peer.last_seen) * 1000 > PEER_TIMEOUT_MSEC:
-                    print(
-                        f"[HEARTBEAT] timeout peer={peer.id or '?'} room={room.code}; closing",
-                        flush=True,
-                    )
-                    peer.writer.close()
-                    continue
-                await send(peer, 0x9)
+        alive = []
+        for peer in list(connected_peers):
+            if peer.last_seen > 0 and (now - peer.last_seen) * 1000 > PEER_TIMEOUT_MSEC:
+                print(f"[HEARTBEAT] timeout peer={peer.id or '?'}; closing", flush=True)
+                peer.writer.close()
+                continue
+            alive.append(peer)
+        if alive:
+            await asyncio.gather(
+                *(send(peer, 0x9) for peer in alive), return_exceptions=True
+            )
 
 
 async def main():
     asyncio.create_task(cleanup_rooms())
     asyncio.create_task(heartbeat_peers())
-    server = await asyncio.start_server(handle_connection, "0.0.0.0", PORT)
-    print(f"Relay server listening on ws://0.0.0.0:{PORT}", flush=True)
+    server = await asyncio.start_server(handle_connection, RELAY_BIND_ADDRESS, PORT)
+    print(f"Relay server listening on ws://{RELAY_BIND_ADDRESS}:{PORT}", flush=True)
     async with server:
         await server.serve_forever()
 

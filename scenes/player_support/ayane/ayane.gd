@@ -4,7 +4,7 @@ var pick_manager: Node
 
 func _special_effect() -> void:
 	# 联机：医疗箱生成由 host 按各端支援聚合统一处理，本端不重复触发
-	if ExtensionHooks.is_lan_session.is_valid() and bool(ExtensionHooks.is_lan_session.call()):
+	if ExtensionHooks.intercept_named("is_lan_session", []):
 		return
 	GameEvents.player_taken_medkit.connect(add_medical_kit)
 

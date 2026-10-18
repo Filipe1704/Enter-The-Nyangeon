@@ -36,8 +36,8 @@ var _pause_locked: bool = false
 func _ready():
 	hide()
 	visibility_changed.connect(func():
-		if ExtensionHooks.pause_visibility.is_valid():
-			ExtensionHooks.notify(ExtensionHooks.pause_visibility, [visible, self])
+		if ExtensionHooks.is_hook_active("pause_visibility"):
+			ExtensionHooks.notify_named("pause_visibility", [visible, self])
 		else:
 			get_tree().paused = visible
 		)
@@ -76,7 +76,7 @@ func _input(event: InputEvent) -> void:
 			return
 		
 		# LAN：打开由 player._unhandled_input 负责；隐藏时此处直接返回，避免重复 toggle
-		if not self.visible and ExtensionHooks.is_lan_session.is_valid() and bool(ExtensionHooks.is_lan_session.call()):
+		if not self.visible and ExtensionHooks.intercept_named("is_lan_session", []):
 			return
 		
 		if on_menu_selected == true:
@@ -86,7 +86,7 @@ func _input(event: InputEvent) -> void:
 				option_menu.out_option_selected()
 		else:
 			SoundManager.play_sfx("UISounds2")
-			SoundManager.bgm_player.volume_db = linear_to_db(1)
+			SoundManager.set_bgm_base_db(linear_to_db(1))
 			Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 			hide()
 			button_close()
@@ -95,7 +95,7 @@ func _input(event: InputEvent) -> void:
 func hide_pause_screen():
 	if self.visible == true:
 		SoundManager.play_sfx("UISounds2")
-		SoundManager.bgm_player.volume_db = linear_to_db(1)
+		SoundManager.set_bgm_base_db(linear_to_db(1))
 		# 不写鼠标：升级页/商店接管时应由 crosshair(VISIBLE) 持有指针，此处强改会丢失鼠标
 		hide()
 		button_close()
@@ -113,7 +113,7 @@ func auto_text():
 func game_over_no_pause(_player_dead: bool):
 	can_pause = false
 	if self.visible == true:
-		SoundManager.bgm_player.volume_db = linear_to_db(1)
+		SoundManager.set_bgm_base_db(linear_to_db(1))
 		Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 		hide()
 		button_close()
@@ -177,7 +177,7 @@ func show_pause() -> void:
 	
 	show()
 	SoundManager.play_sfx("ButtonSounds2")
-	SoundManager.bgm_player.volume_db = linear_to_db(0.6)
+	SoundManager.set_bgm_base_db(linear_to_db(0.6))
 	get_player_coin()
 	random_player_p()
 	animation_player.play("pause_in")
@@ -327,7 +327,7 @@ func yes_mouse_selected(event: InputEvent):
 		else:
 			if PlayerData.on_endless == false:
 				SoundManager.play_sfx("UISounds2")
-				SoundManager.bgm_player.volume_db = linear_to_db(1)
+				SoundManager.set_bgm_base_db(linear_to_db(1))
 				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 				hide()
 				button_close()
@@ -336,7 +336,7 @@ func yes_mouse_selected(event: InputEvent):
 				GameEvents.emit_game_over(player_dead)
 			else:
 				SoundManager.play_sfx("UISounds2")
-				SoundManager.bgm_player.volume_db = linear_to_db(1)
+				SoundManager.set_bgm_base_db(linear_to_db(1))
 				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 				hide()
 				button_close()
@@ -358,7 +358,7 @@ func yes_mouse_selected(event: InputEvent):
 			if PlayerData.on_endless == false:
 				
 				SoundManager.play_sfx("UISounds2")
-				SoundManager.bgm_player.volume_db = linear_to_db(1)
+				SoundManager.set_bgm_base_db(linear_to_db(1))
 				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 				hide()
 				button_close()
@@ -367,7 +367,7 @@ func yes_mouse_selected(event: InputEvent):
 				GameEvents.emit_game_over(player_dead)
 			else:
 				SoundManager.play_sfx("UISounds2")
-				SoundManager.bgm_player.volume_db = linear_to_db(1)
+				SoundManager.set_bgm_base_db(linear_to_db(1))
 				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
 				hide()
 				button_close()

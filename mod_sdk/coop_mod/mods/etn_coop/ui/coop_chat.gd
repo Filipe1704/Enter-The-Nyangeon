@@ -36,10 +36,12 @@ const PING_COLOR_POOR := Color(1.0, 0.3, 0.25, 1.0)
 @onready var _upgrade_btn: TextureButton = %UpgradeChatButton
 @onready var _upgrade_ping: Label = %UpgradePingLabel
 
+var _ensure_timer: float = 0.0  # 按钮挂载/显隐节流：避免每帧 get_local_player + get_node_or_null
 var _is_open: bool = false
 var _composing: bool = false   # true=输入态（聚焦/占用控件）；false=peek（自动显示）
 var _orig_bg_alpha: float = 0.9411765
 var _prev_mouse_mode: int = Input.MOUSE_MODE_VISIBLE
+var _prev_overlay_active: bool = false
 var _frozen_player: Node = null
 var _prev_player_stop: bool = false
 var _controls_held: bool = false
@@ -50,6 +52,7 @@ var _ping_label: Label = null
 var _ping_timer: float = 0.0
 var _last_touch_frame: int = -2
 var _upgrade_active: bool = false
+var _game_over_active: bool = false
 
 
 func _ready() -> void:
@@ -106,8 +109,12 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	_ensure_button()
-	_ensure_upgrade_button()
+	# 按钮挂载/显隐节流到 0.2s：节点查找与本地玩家解析不需要每帧精度
+	_ensure_timer -= delta
+	if _ensure_timer <= 0.0:
+		_ensure_timer = 0.2
+		_ensure_button()
+		_ensure_upgrade_button()
 	_refresh_pings(delta)
 	# 本地玩家被释放（场景切换/换人/回菜单）时收起
 	if _is_open:
@@ -123,6 +130,7 @@ func _on_upgrade_begin() -> void:
 
 func _on_upgrade_end() -> void:
 	_upgrade_active = false
+	_game_over_active = false
 
 
 # ---------------- 开合 ----------------
@@ -220,6 +228,7 @@ func get_window_rect() -> Rect2:
 func _on_game_over(_player_dead: bool) -> void:
 	# 游戏结束后保留聊天窗（不隐藏），新消息仍可自动显示（peek）
 	_upgrade_active = false
+	_game_over_active = true
 
 
 # 自动显示（peek）：有新消息时展示，不聚焦、不占用控件、更透明，2 秒后淡出（新消息重置）。
@@ -267,6 +276,7 @@ func _acquire_controls() -> void:
 		if gun != null:
 			gun.set("is_shoot", false)
 	_prev_mouse_mode = Input.mouse_mode
+	_prev_overlay_active = _pointer_overlay_active()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_controls_held = true
 	# 输入态才让 Scroll 接收鼠标/触摸：滚轮原生 + ScrollBox.gd 拖拽；peek/关闭态保持 IGNORE 不吞游戏输入。
@@ -282,10 +292,18 @@ func _release_controls() -> void:
 	if _frozen_player != null and is_instance_valid(_frozen_player):
 		_frozen_player.set("player_stop", _prev_player_stop)
 	_frozen_player = null
-	Input.mouse_mode = _prev_mouse_mode
+	# 仅当阶段未变时才写回快照；开聊后进入/离开升级页、结算页等覆盖层时，
+	# 指针已由 crosshair / 结算页等当前持有者写好，不覆盖其模式。
+	if _pointer_overlay_active() == _prev_overlay_active:
+		Input.mouse_mode = _prev_mouse_mode
 	_controls_held = false
 	if _scroll != null and is_instance_valid(_scroll):
 		_scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+# 当前是否处于应持有可见指针的覆盖层阶段（升级页 / 结算页）。
+func _pointer_overlay_active() -> bool:
+	return _upgrade_active or _game_over_active
 
 
 # ---------------- 日志 ----------------

@@ -19,6 +19,8 @@ func _process(delta):
 		node_2d_2.position = player.sprite_2d.position
 
 func _on_equip():
+	# Node2D2 位置由 _process 每帧跟随玩家 sprite 写入，属"逐帧驱动视觉"，须关物理插值。
+	node_2d_2.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	player = get_tree().get_first_node_in_group("Player")
 	player.stats.hurt_invalid_changed.connect(player_get_hurt)
 	cd_timer.timeout.connect(add_player_hurt_invalid)

@@ -5,9 +5,8 @@
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="3_font7"]
 [ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="4_font9"]
 [ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="5_ui"]
-[ext_resource type="Texture2D" uid="uid://bhm8gyj1xcfnv" path="res://sprites/particle/arrow.png" id="6_arrow"]
 
-[sub_resource type="Animation" id="Animation_26t6y"]
+[sub_resource type="Animation" id="Animation_reset"]
 length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
@@ -58,7 +57,7 @@ tracks/3/keys = {
 "values": [Vector2(0, 1)]
 }
 
-[sub_resource type="Animation" id="Animation_j1eo2"]
+[sub_resource type="Animation" id="Animation_in"]
 resource_name = "option_in"
 length = 0.1
 step = 0.01
@@ -111,11 +110,20 @@ tracks/3/keys = {
 "values": [Vector2(0, 1), Vector2(1.1, 1), Vector2(1, 1)]
 }
 
-[sub_resource type="AnimationLibrary" id="AnimationLibrary_y35uc"]
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_main"]
 _data = {
-&"RESET": SubResource("Animation_26t6y"),
-&"option_in": SubResource("Animation_j1eo2")
+&"RESET": SubResource("Animation_reset"),
+&"option_in": SubResource("Animation_in")
 }
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_disabled"]
+texture = ExtResource("5_ui")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
+region_rect = Rect2(37, 35, 23, 25)
+modulate_color = Color(0.121569, 0.121569, 0.121569, 1)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_focus"]
 texture = ExtResource("5_ui")
@@ -154,24 +162,57 @@ region_rect = Rect2(37, 35, 23, 25)
 modulate_color = Color(0.458405, 0.458405, 0.458405, 1)
 
 [sub_resource type="Theme" id="Theme_btn"]
+Button/styles/disabled = SubResource("StyleBoxTexture_disabled")
 Button/styles/focus = SubResource("StyleBoxTexture_focus")
 Button/styles/hover = SubResource("StyleBoxTexture_hover")
 Button/styles/normal = SubResource("StyleBoxTexture_normal")
 Button/styles/pressed = SubResource("StyleBoxTexture_pressed")
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_tip"]
-texture = ExtResource("5_ui")
-texture_margin_left = 1.0
-texture_margin_top = 1.0
-texture_margin_right = 1.0
-texture_margin_bottom = 1.0
-expand_margin_left = 2.0
-expand_margin_top = 2.0
-expand_margin_right = 2.0
-expand_margin_bottom = 2.0
-region_rect = Rect2(44, 12, 8, 8)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_restart"]
+content_margin_left = 5.0
+content_margin_top = 2.0
+content_margin_right = 4.0
+content_margin_bottom = 2.0
+bg_color = Color(0.145098, 0.129412, 0.0196078, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.815686, 0.701961, 0.0235294, 1)
 
-[node name="Mod" type="Control" unique_id=2125108724]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_list"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(0.101961, 0.101961, 0.101961, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_detail"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.0745098, 0.0745098, 0.0745098, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_icon"]
+bg_color = Color(0.121569, 0.121569, 0.121569, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.294118, 0.294118, 0.294118, 1)
+
+[node name="Mod" type="Control" unique_id=1950278933]
 modulate = Color(1, 1, 1, 0)
 layout_mode = 3
 anchors_preset = 0
@@ -181,50 +222,30 @@ scale = Vector2(1e-05, 1)
 script = ExtResource("1_mod")
 option_id = "option_mod"
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1524665370]
-libraries/ = SubResource("AnimationLibrary_y35uc")
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1876852143]
+libraries/ = SubResource("AnimationLibrary_main")
 
-[node name="Scroll" type="ScrollContainer" parent="." unique_id=322113445]
+[node name="Content" type="VBoxContainer" parent="." unique_id=673113707]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 122.0
-offset_top = 20.0
-offset_right = 4.0
+offset_left = 134.0
+offset_top = 42.0
+offset_right = 8.0
+offset_bottom = -16.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 0
-horizontal_scroll_mode = 0
-vertical_scroll_mode = 3
-script = ExtResource("2_scroll")
+theme_override_constants/separation = 3
 
-[node name="Content" type="VBoxContainer" parent="Scroll" unique_id=1073865100]
-custom_minimum_size = Vector2(0, 340)
+[node name="Header" type="HBoxContainer" parent="Content" unique_id=442443656]
 layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Scroll/Content" unique_id=1613939147]
-layout_mode = 2
-theme_override_constants/separation = -4
-
-[node name="Header" type="Label" parent="Scroll/Content/VBoxContainer" unique_id=1981632970]
-layout_mode = 2
-offset_transform_enabled = true
-offset_transform_position = Vector2(20, 0)
-theme_override_fonts/font = ExtResource("3_font7")
-theme_override_font_sizes/font_size = 16
-text = "MOD"
-
-[node name="Divider" type="ColorRect" parent="Scroll/Content/VBoxContainer" unique_id=1188440104]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="Status" type="Label" parent="Scroll/Content" unique_id=471033552]
+[node name="Summary" type="Label" parent="Content/Header" unique_id=306674102]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 0
@@ -233,34 +254,9 @@ theme_override_constants/outline_size = 4
 theme_override_constants/shadow_outline_size = 2
 theme_override_fonts/font = ExtResource("4_font9")
 theme_override_font_sizes/font_size = 13
-text = "mod_reorder_hint"
-autowrap_mode = 3
+text = "mod_summary"
 
-[node name="Buttons" type="HBoxContainer" parent="Scroll/Content" unique_id=703764642]
-layout_mode = 2
-theme_override_constants/separation = 8
-alignment = 2
-
-[node name="UpBtn" type="TextureButton" parent="Scroll/Content/Buttons" unique_id=1161376238]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-size_flags_vertical = 4
-texture_normal = ExtResource("6_arrow")
-ignore_texture_size = true
-stretch_mode = 5
-flip_v = true
-
-[node name="DownBtn" type="TextureButton" parent="Scroll/Content/Buttons" unique_id=1831821006]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-size_flags_vertical = 4
-texture_normal = ExtResource("6_arrow")
-ignore_texture_size = true
-stretch_mode = 5
-
-[node name="ImportBtn" type="Button" parent="Scroll/Content/Buttons" unique_id=743692818]
+[node name="ImportBtn" type="Button" parent="Content/Header" unique_id=1915572661]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
@@ -268,35 +264,285 @@ theme = SubResource("Theme_btn")
 theme_override_colors/font_outline_color = Color(0.136826, 0.136826, 0.136826, 1)
 theme_override_constants/outline_size = 5
 theme_override_fonts/font = ExtResource("3_font7")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = "mod_import"
 
-[node name="UninstallBtn" type="Button" parent="Scroll/Content/Buttons" unique_id=743692819]
+[node name="Status" type="Label" parent="Content" unique_id=292201033]
 unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.74902, 0.74902, 0.74902, 1)
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+autowrap_mode = 3
+
+[node name="RestartBar" type="PanelContainer" parent="Content" unique_id=118223453]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_restart")
+
+[node name="Row" type="HBoxContainer" parent="Content/RestartBar" unique_id=1361471202]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RestartLabel" type="Label" parent="Content/RestartBar/Row" unique_id=124299618]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.815686, 0.701961, 0.0235294, 1)
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+text = "mod_restart_bar"
+vertical_alignment = 1
+
+[node name="UndoBtn" type="Button" parent="Content/RestartBar/Row" unique_id=363515604]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 size_flags_vertical = 4
 theme = SubResource("Theme_btn")
 theme_override_colors/font_outline_color = Color(0.136826, 0.136826, 0.136826, 1)
 theme_override_constants/outline_size = 5
 theme_override_fonts/font = ExtResource("3_font7")
-theme_override_font_sizes/font_size = 16
-text = "mod_uninstall"
+theme_override_font_sizes/font_size = 10
+text = "mod_undo"
 
-[node name="ScrollContainer" type="ScrollContainer" parent="Scroll/Content" unique_id=740221431]
+[node name="RestartBtn" type="Button" parent="Content/RestartBar/Row" unique_id=1822811061]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 274)
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
-horizontal_scroll_mode = 3
+size_flags_vertical = 4
+theme = SubResource("Theme_btn")
+theme_override_colors/font_outline_color = Color(0.136826, 0.136826, 0.136826, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+text = "mod_restart_now"
+
+[node name="Body" type="HBoxContainer" parent="Content" unique_id=1944387519]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="ListPanel" type="PanelContainer" parent="Content/Body" unique_id=664772787]
+custom_minimum_size = Vector2(168, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_list")
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Content/Body/ListPanel" unique_id=670827401]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_scroll_mode = 0
 vertical_scroll_mode = 3
 script = ExtResource("2_scroll")
 
-[node name="List" type="VBoxContainer" parent="Scroll/Content/ScrollContainer" unique_id=397026933]
+[node name="List" type="VBoxContainer" parent="Content/Body/ListPanel/ScrollContainer" unique_id=67262184]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="DetailPanel" type="PanelContainer" parent="Content/Body" unique_id=1887199490]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.9
+theme_override_styles/panel = SubResource("StyleBoxFlat_detail")
+
+[node name="DetailVBox" type="VBoxContainer" parent="Content/Body/DetailPanel" unique_id=808029080]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="EmptyLabel" type="Label" parent="Content/Body/DetailPanel/DetailVBox" unique_id=108523215]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.74902, 0.74902, 0.74902, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 10
+text = "mod_detail_empty"
+autowrap_mode = 3
+
+[node name="DetailScroll" type="ScrollContainer" parent="Content/Body/DetailPanel/DetailVBox" unique_id=463139936]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
+script = ExtResource("2_scroll")
+
+[node name="DetailBody" type="VBoxContainer" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll" unique_id=437389631]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 3
+
+[node name="DetailHead" type="HBoxContainer" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=882948487]
+unique_name_in_owner = true
+layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="DragLayer" type="Control" parent="." unique_id=1569081371]
+[node name="IconSlot" type="PanelContainer" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody/DetailHead" unique_id=691521564]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_icon")
+
+[node name="Icon" type="TextureRect" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody/DetailHead/IconSlot" unique_id=1193471248]
+unique_name_in_owner = true
+texture_filter = 2
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Initial" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody/DetailHead/IconSlot" unique_id=315637951]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.815686, 0.701961, 0.0235294, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DetailHeadText" type="VBoxContainer" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody/DetailHead" unique_id=1809754587]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+
+[node name="DetailName" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody/DetailHead/DetailHeadText" unique_id=1773868111]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 2
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 3
+
+[node name="DetailMeta" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody/DetailHead/DetailHeadText" unique_id=1703981178]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.74902, 0.74902, 0.74902, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailError" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=361326472]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.352941, 0.352941, 1)
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+autowrap_mode = 3
+
+[node name="DetailDesc" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=695505339]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailDeps" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=596763912]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.815686, 0.815686, 0.815686, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailAdds" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=1797405074]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.815686, 0.815686, 0.815686, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailOverrideScripts" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=1241935951]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.352941, 0.352941, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailOverrides" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=510503549]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.352941, 0.352941, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailMinVersion" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=2112420294]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.815686, 0.815686, 0.815686, 1)
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailMinState" type="Label" parent="Content/Body/DetailPanel/DetailVBox/DetailScroll/DetailBody" unique_id=1155552799]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DetailButtons" type="HBoxContainer" parent="Content/Body/DetailPanel/DetailVBox" unique_id=1767544608]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="UpBtn" type="Button" parent="Content/Body/DetailPanel/DetailVBox/DetailButtons" unique_id=1696615866]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme = SubResource("Theme_btn")
+theme_override_colors/font_outline_color = Color(0.136826, 0.136826, 0.136826, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+text = "mod_up"
+
+[node name="DownBtn" type="Button" parent="Content/Body/DetailPanel/DetailVBox/DetailButtons" unique_id=1953788435]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme = SubResource("Theme_btn")
+theme_override_colors/font_outline_color = Color(0.136826, 0.136826, 0.136826, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+text = "mod_down"
+
+[node name="UninstallBtn" type="Button" parent="Content/Body/DetailPanel/DetailVBox/DetailButtons" unique_id=667428894]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme = SubResource("Theme_btn")
+theme_override_colors/font_outline_color = Color(0.136826, 0.136826, 0.136826, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 10
+text = "mod_uninstall"
+
+[node name="DetailDir" type="Label" parent="Content/Body/DetailPanel/DetailVBox" unique_id=2113461036]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54902, 0.54902, 0.54902, 1)
+theme_override_fonts/font = ExtResource("3_font7")
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 3
+
+[node name="DragLayer" type="Control" parent="." unique_id=1641762736]
 unique_name_in_owner = true
 z_index = 10
 layout_mode = 1
@@ -306,39 +552,3 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-
-[node name="Tooltip" type="PanelContainer" parent="." unique_id=797788170]
-unique_name_in_owner = true
-visible = false
-z_index = 20
-layout_mode = 0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxTexture_tip")
-
-[node name="VBox" type="VBoxContainer" parent="Tooltip" unique_id=52083502]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 1
-
-[node name="TipName" type="Label" parent="Tooltip/VBox" unique_id=1181752594]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.815686, 0.701961, 0.0235294, 1)
-theme_override_fonts/font = ExtResource("4_font9")
-theme_override_font_sizes/font_size = 12
-
-[node name="TipMeta" type="Label" parent="Tooltip/VBox" unique_id=1650638190]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.74902, 0.74902, 0.74902, 1)
-theme_override_fonts/font = ExtResource("4_font9")
-theme_override_font_sizes/font_size = 10
-
-[node name="TipDesc" type="Label" parent="Tooltip/VBox" unique_id=1590170705]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(170, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_fonts/font = ExtResource("4_font9")
-theme_override_font_sizes/font_size = 10
-autowrap_mode = 1

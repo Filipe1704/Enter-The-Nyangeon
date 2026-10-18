@@ -21,8 +21,16 @@
 ## 待确认 / To Confirm
 
 > 高影响、低置信的结论；用户确认或纠正后按格式移入下方正文。
->
-> （暂无）
+
+### [Coop/Testing] `relay_rejoin3` 的 host 侧偶发引擎错误会让整套回归判失败
+- Evidence / 证据: `tests/run_coop_recovery_checks.py`（`--cases relay_rejoin3`，日志目录 `--log-dir`）、`tests/coop_recovery_checks.gd`；现象日志 `.godot/coop_recovery_checks/` 与 `.godot/coop_recovery_rerun/`
+- Notes / 说明: 同一天三次运行（全量失败 → 单例通过 → 全量通过）中，仅首次全量执行的 `relay_rejoin3/host` 失败，报 Godot 引擎 `ERROR: Condition "!connected_peers.has(sender)" is true. Continuing.`（中继拆除阶段）。runner 会合并 stdout/stderr 并把任何非豁免 ERROR 当作失败，因此这条时序抖动会伪装成功能回归。未复现期间不要据此判定中继重连被改坏：先看是否只出现在 host 侧、再单独重跑该用例确认。尚不清楚触发条件（疑与上一用例的中继连接释放时序有关），待确认。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+- Follow-up / 后续（2026-10-14，来源：test）：新一轮 full 的 `relay_rejoin3` 通过，但 LAN `rejoin3/host` 出现三条 `Unable to send packet on channel 0, max channels: 0`，功能断言仍为 0 失败；LAN/Relay 单独重跑通过。两种报错不能直接认定同根因；新增 AUD-TEST-002 跟踪，保持严格日志判定与原始失败证据。
+
+- SUPERSEDED: 2026-10-14 同类 Relay 报错已由排队旧包/断线事件顺序的确定性守卫复现并修复；LAN 同 poll 多端退出另复现 ENet 原生成员通知及玩法发送错误，薄适配器修复后全套与复跑严格通过。旧历史现象不删除，详见下方新记录（来源：test）。
 
 ---
 
@@ -43,6 +51,7 @@
 - Notes / 说明: WeakPart 命中会加 `TRUE_DAMAGE`，从而跳过应用与重置，pending multiplier 泄漏到下一次非真实伤害。
 - Source / 来源: code
 - Date / 日期: 2026-09-25
+- SUPERSEDED: 2026-10-14 HealthComponent 统一消费倍率，真实伤害和拒绝/零伤害命中也清理；伤害契约守卫覆盖前后两次命中。来源：code | test。
 
 ### [Combat] 空的 `source_type` 被当作玩家方
 - Evidence / 证据: `script/faction.gd:9-14`
@@ -231,6 +240,7 @@
 - Source / 来源: test
 - Date / 日期: 2026-09-26
 - SUPERSEDED: 2026-09-28 「追加用 LF」改定为 **CRLF**（来源：user；规则见 `AGENTS.md` / `docs/CONVENTIONS.md` §2.4）。各文件既有行尾仍按实况保留，避免整文件转换。
+- SUPERSEDED: 2026-10-13 5 组源文件已规范为 UTF-8 BOM/CRLF，`.gitattributes` 为 CSV 单独覆盖 eol，旧“既有行尾保留”说明不再描述当前状态。格式防护见 `tests/check_localization.py`（来源：test）。
 
 ### [Time] `process_mode` 只绕开 paused，不绕开 `Engine.time_scale`
 - Evidence / 证据: `ui/transition.tscn:733,1004`（`process_mode=3`）, `scenes/enemies/boss/goliath.tscn:2704,2740`, `scenes/game_camera/gamecamera.gd:41`
@@ -405,6 +415,8 @@
 - Notes / 说明: Resource 反序列化只填充脚本仍声明的属性，未声明者被丢弃（无警告）——所以**改名/删除存档字段是破坏性变更**：改名前须在迁移期按旧名读取再写新名，删除前确认确为冗余。`SceneData.save_version` 默认值必须是 **0** 而非当前版本：旧档无该字段会解析为默认值，若默认=当前版本则旧档被误判为最新、永久跳过迁移。`save_playerdata` 采用「临时文件 → 备份旧档 `.bak` → 替换」的原子写，避免写坏唯一存档。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-04
+- SUPERSEDED: 2026-10-13 仅修正末句“原子写”的可靠性结论：当前是两次 rename，无失败回滚或备份加载；损坏主档还会在首次货币变化时覆盖有效 `.bak`。字段迁移结论仍有效。隔离复现见根 `CODEBASE_AUDIT.md` 的 AUD-SAVE-001，准确流程已更新 `ARCHITECTURE.md` §2（来源：test）。
+- SUPERSEDED: 2026-10-13 本轮已修复恢复/写入路径：`scene_data_store.gd:15,41` 验证主档后读取备份，只轮换有效主档，不先移走主路径；双坏档/未来版本禁止自动覆盖。7 类回归通过。原字段迁移结论保留（来源：test）。
 
 ### [UI] 升级卡/道具卡文本只来自 `id` 派生的翻译 key，不读 `AbilityUpgrade` 文本字段
 - Evidence / 证据: `ui/ability_upgrade_card.gd:76-79`（`upgrade.id + "_name"/"_description"/"_forward"/"_negative"`）、`ui/upgrade_item_card.gd:34-37`（同）；全项目无 `upgrade.name/description/forward/negative` 的显示消费
@@ -472,6 +484,7 @@
 - Notes / 说明: `ui/society_card.gd` **没有 `class_name`**，子类必须用 `extends "res://ui/society_card.gd"`（路径继承）而非标识符继承。MOD 社团卡覆写 `check_group()`（按 `ModManager.get_characters()` 是否非空显隐，绕过 `PlayerData.group` 门）与 `mouse_select_anim`/`mouse_out_anim`/`on_select_handle`/`out_select_card`（避免依赖 AnimationPlayer 动画资源）。通用卡实例化后**必须在 `add_child` 前**设 `player_card`（否则 `_ready` 读到 null）。`game_eval` 验证：`society_card_box` 出现 MOD 卡、`populate_player_cards` 填入 1 张卡、`_on_pressed` 后 `LevelSelect.player == card.player`。
 - Source / 来源: test
 - Date / 日期: 2026-10-04
+- SUPERSEDED: 2026-10-17 通用「MOD」卡现于 `ui/mod_society_card.gd` 照搬本体社团卡的悬停/选中动画；`mod_society_base` 的空实现仍适用于 mod 自带卡。
 
 ### [Mod] 补丁/依赖引擎（P0.5）：注册表内存合并 + 拓扑排序
 - Evidence / 证据: `script/mod_patch.gd`（`class_name ModPatch`；`apply_all`/`apply_one`/`_op_set`/`_op_inherit`）、`script/mod_manager.gd`（`_resolve_order`/`_apply_patches`/`_collect_patch_files`/`_register_path` 覆盖分支）。
@@ -941,6 +954,8 @@
 ### [Mod/UI] MOD 管理迁入 option 页签：排序持久化 + 图标 + 共享 toggle；页签列会遮挡左对齐内容
 - Evidence / 证据: `script/mod_manager.gd`（`ORDER_PATH=user://mods/mods_order.json`；`_load_order`/`_save_order`/`get_order`/`set_order`；`_cmp_order` 先用户序、后 `(load_order,id)`；`list_mods()` 返回 `icon` 并按 `_cmp_order` 排序；`_mod_icon_path` 先 loose `rec.dir/icon.png` 再 `manifest.icon`）；`script/mod_option.gd`（`extends OptionMenu`；行 = SelectBar + `TextureRect` 图标 + Label + `ui/option_toggle.tscn`；`_input` 手写鼠标/触屏拖动 + `_target_index`/spacer 换位；`_move_selected` 上下箭头；`Image.load`→`ImageTexture`）；`script/option_toggle.gd`（`set_on(v, animate)`，`seek(current_animation_length, true)` 无动画定位）；`ui/mod_option.tscn`（`Scroll.offset_left=122` 避开页签列、`Content.size_flags_horizontal=3`）；`ui/option.tscn`（`menu_box/Mod` + 第三个 `option_button.tscn`，`button_id=option_mod`）；`scenes/main/menu_screen.gd`（删自建 MOD 按钮，`ensure_unlocked()` 移入 `_ready`）；`ETN_localization.csv`（`mod_*`）。
 - Notes / 说明: ① **页签列遮挡**：`ui/option.tscn` 内页签列 `Node2D`（含 `ColorRect` x 0..139）排在 `menu_box` **之后** → 绘制在子页内容之上；GAME 页靠 Label `horizontal_alignment=2`（右对齐）+ `offset_transform_position` 规避，**左对齐的新子页**必须把 `Scroll.offset_left` 推到页签列（≈139）之外，否则开头被裁（本次 MOD 提示首两字消失即此因）。② `user://` 下的裸 PNG **不能用 `load()`**（未 import），须 `Image.load(path)`→`ImageTexture.create_from_image()`；`res://`（pck 内）才走 `load()`。③ 用户排序只作**同级 tie-break**，依赖/冲突仍由拓扑强约束；且与启停一样**重启生效**（pck 不可卸载）。④ 小坑：`@onready var x: Button = %UpBtn` 若节点实为 `TextureButton` → 运行时 `Trying to assign value of type 'TextureButton' to a variable of type 'Button'`（断点），类型须写 `TextureButton`/`BaseButton`。⑤ 共享 `ui/option_toggle.tscn` 抽自 game_option 的开关三件套，仅 MOD 页使用（未重构 game 页）。
+- SUPERSEDED: 2026-10-18 管理页改为分栏布局（Content 左 144、左侧分组列表/右侧详情），旧 `Scroll.offset_left=122`、`SelectBar` 与行内 tooltip 描述失效；页签列遮挡仍需保持内容左边界在 139 之外。（来源：code）
+- SUPERSEDED: 2026-10-18 GAME 页改为卡片分区并复用 `ui/option_toggle.tscn`；GAME 不再靠 Label 右对齐 + `offset_transform_position` 规避页签列，内容统一从 x=150 起排；共享开关现同时服务 GAME 与 MOD，并补了 focus/`ui_accept`。（来源：code）
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-04
 
@@ -1022,6 +1037,8 @@
 - Notes / 说明: **目标**：每个玩家的道具/PS 只为**自己的伤害**触发，且触发在**自己端**；host 不再被客机伤害误触发。**机制**：`owner_peer` 作"独立 id"落点；host 结算后按 `owner_peer` 决定：本机 → 自然 emit；客机 → `suppress_proc` 抑制 host 本地 emit + `_remote_enemy_proc` 发回归属端发射。击杀（`hp_before>0 && hp_after<=0`）与 DOT（`entry.applier_peer`）同归属。**为什么不是"过滤 51 个监听器"**：全局信号无法按归属过滤；但每个客户端进程只有本机玩家的道具/PS，故"只在归属端发射"即等价归属。**β 难点（`source_node` 需活来源）**：权威回传是延迟的，届时来源子弹已 `idle_state` 回池 → `iori_ps`（分裂）/`mint_chocolate_parfait`（按 `flight_time` 加乘）失效；改为二者监听 `GameEvents.player_projectile_hit`（`HitBox._emit_self_hit` 命中瞬间发射、携带 live bullet），其余仍走权威回传。**通用教训**：① 多玩家共享"全局权威事件"（如 `enemy_damage_taken`）时，用"归属 id + 只在归属端发射"代替"在权威端统一发射"，可零侵入所有监听器地实现归属；② 需要"活对象"的旧式 proc（从事件里 `get_node(source_node)`）与"权威延迟回放"天然冲突，应改挂到**命中瞬间**的信号；③ 一次性/延迟回放路径要把**权威数值**与**归属 id**一起带回，且击杀判定用 hp 前后差比 `is_dead` 信号更精确（复活型敌人）。验证：`--coop-devowner` 客机命中 → host `proc=0`、客机 `proc=1`（`op=<客机 id>`）；`--coop-devbattle --coop-devreset --coop-devpause --coop-devpreplaced --coop-devfollow --coop-devbuff` 无 `SCRIPT ERROR`。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-05
+- 补充 / 2026-10-14: 活对象信号迁移不等于前置数值已跨端生效；COOP-008 的实际 wire roundtrip 证明仍缺伤害修饰契约，见文末 [Coop/Combat] 条目。
+- SUPERSEDED: 2026-10-14 随后以本体前置阶段和协议 v5 补齐数值契约，真实双端 damage 场景已通过；上述补充保留为修复前观察。
 
 ### [Mod] 命中闭包本地回放 / 测试房重置-换角色同步 / 道具视觉同步
 - Evidence / 证据: `scenes/bullet/poison_ring.gd:44-57`（`apply_buff` 在 `hit_box.damage_data.on_damage_dealt` 闭包内，只在 `_take_damage_internal` 执行）、`ui/character_test_menu.gd:31-47 reset_player()`（`emit_test_room_reset`）、`scenes/main/test_room.gd:56-91`（`reset_clear_unit` 清 PlayerRoot 非"Player"/召唤物/特效；`refresh_enemies` 清非 `initial_enemies`）、mod `net/coop_net.gd`（`_intercept_enemy_damage`/`_gate_projectile_self_hit` 本地跑 `on_damage_dealt`；`_replace_player_for_peer` 远端分支补 `player_scene_by_peer`；`_on_local_test_room_reset`/`_despawn_owned_summons_local`；`_remote_item_visual`/`_hook_visual_roots`/`_remote_visual_node`）；本体 `script/hit_box.gd`（**移除** `on_remote_hit`/`run_remote_hit`）、`script/player_bullet.gd`/`normal_bullet.gd`/`megu_bullet.gd`。
@@ -1653,12 +1670,14 @@
 - Notes / 说明: 需求（user）：MOD 行悬停显示跟随鼠标的描述框（名字+版本+作者+描述）、触屏点按显示/再点或点空白隐藏/拖动隐藏。**复用模式**：① 鼠标悬停用 `_process` 每帧 `get_global_mouse_position()` + 整行 `get_global_rect().has_point()` 轮询（比 `mouse_entered/exited` 稳，且覆盖行内开关等子控件），并用 `_touch_mode`（`_input` 里 `InputEventScreenTouch` 置真、真实 `InputEventMouse`（`device != DEVICE_ID_EMULATION`）置假）在触屏时关闭轮询；② 触屏点按切换、点列表空白/拖动隐藏。**坐标要点**：MOD 面板挂在 `CanvasLayer` 下且无缩放，`get_global_mouse_position()` 与 `get_global_rect()` 同系可直接比较；列表空白处用 `list_scroll.get_global_transform_with_canvas() * event.position` 把 `gui_input` 本地坐标换算到画布（同 `enemy_test_menu`）。tooltip 节点是场景静态节点（便于可视化编辑），描述为空时隐藏描述行、不加新本地化键。`game_eval` 实测：悬停跟随、触摸点按切换、`_row_at` 整行命中、长描述自动换行均正常。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-08
+- SUPERSEDED: 2026-10-18 管理页改为右侧常驻详情，tooltip 节点、`_process` 轮询与触屏点按显隐逻辑已移除；描述改由详情页 Label 常驻显示。（来源：code）
 
 ### [Mod] MOD 描述本地化用「中文原句作翻译键」+ PowerShell 读 mod.json 必须 UTF-8
 - Evidence / 证据: `mods/etn_coop/mod.json`、`mod_sdk/coop_mod/mods/etn_coop/mod.json`（`author` / `description`）；`mods/etn_coop/i18n/coop_i18n.gd` 与打包源同名文件（`MESSAGES` 新增「中文原句」为键 + en，`install()` 对缺失语言回落 en）；`mod_sdk/build_coop_mod.ps1`（原 `Get-Content -Raw | ConvertFrom-Json` 改为 `[System.IO.File]::ReadAllText(path, UTF8) | ConvertFrom-Json`）。
 - Notes / 说明: ① 本体 MOD 面板 tooltip 的 `TipDesc` 是**默认自动翻译的 Label**，故 mod.json `description` 可直接填中文原句（它同时作为翻译键），mod 侧在 `coop_i18n.gd` 以该原句为 key 提供 en 即可中英切换。相比用语义键（如 `coop_description`）：这样在 mod 未挂载/未启用、i18n 未注册时仍显示可读中文，而非露出原始键。未给 pt/vi 时 `install()` 自动回落 en。② **坑**：`mod.json` 一旦含中文，`build_coop_mod.ps1` 原用 `Get-Content -Raw | ConvertFrom-Json` 在 PowerShell 5.1 下按 ANSI(GBK) 读取 → JSON 解析失败、`$version` 变空（漏生成版本化 zip）并刷 `ConvertFrom-Json` 报错；改 `ReadAllText(..., UTF8)` 后正常。**通用规则：脚本/工具读取可能含非 ASCII 的 UTF-8 文件必须显式指定 UTF-8。**
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-08
+- SUPERSEDED: 2026-10-18 `description` 现由 MOD 管理页右侧详情常驻展示；自动翻译规则与中文原句作 key 的用法不变。（来源：code）
 
 ### [Buff] buff 场景→组件重构丢失 `player_buff_success` 广播：tsurugi PS[1] 濒死复活加成失效
 - Evidence / 证据: 旧 `scenes/player_buff/last_stand_buff.gd:clear_buff()` 调 `GameEvents.emit_player_buff_success(self)`；新组件 `resources/buff/components/last_stand_component.gd` 成功路径 `check_player_hp()`→`_remove_self()`→`deactivate()` 未再发。`GameEvents.emit_player_buff_success` 定义于 `script/GameEvents.gd`，全仓仅 `scenes/player/tsurugi/tsurugi_ps.gd:35` 订阅（`add_player_ability`）。修法：组件在 `deactivate()` 非超时分支 `manager.buff_success.emit(resource)`，`scenes/manager/player_buff_manager.gd:_relay_buff_success` 转发到 `GameEvents.player_buff_success(buff: Buff)`；payload 由 Node 改为 Buff（无其它订阅者/mod 引用）。
@@ -2107,6 +2126,104 @@
 - Source / 来源: test
 - Date / 日期: 2026-10-13
 
+### [UI/Mod] 页签工厂只统一采用接口的控件，旧安装包不会自动变样式
+- Evidence / 证据: 用户确认目标为已安装 COOP；直接挂载其 `etn_coop.pck` 核对 `entry/coop_entry.gd:138`、`ui/coop_ui_style.gd:23`，与工作区 `mods/etn_coop/` 副本一致；`script/mod_api.gd:13`；`tests/test_ui_ux_regressions.gd:_check_settings`。
+- Notes / 说明: 已安装 COOP 0.1.14 自建 `Button`，使用 11 号字、独立绿色主题和 32 像素最小高度；本体页签为带动画的 `PanelContainer` 和 19 号文字。隔离验证确认即使移除 mod 主题，组件和动画差异仍在。新增 `ModAPI.create_option_tab` 后，本体与采用接口的 mod 页签共用场景；带原安装包的渲染检查中，测试页签外观统一，旧 COOP 页签仍保持其自定义样式。SDK 示例更新不会替换玩家已有 `.pck`，需 mod 作者采用接口并重新发布。不要把“共存检查通过”写成“旧 COOP 样式已修复”。
+- Follow-up / 后续（2026-10-16，来源：user | code | test）：用户指出当前 COOP 导航仍有细微差异。隔离复制并挂载当前安装的 **0.1.10** 后，运行时确认它与本体共用 `res://ui/option_button.tscn` 根组件，但其已打包 entry 仍自行 `Label.new()`，节点名 `coop_option`，字体/字号/描边由 Mod 写死；本体的 `Label` 文本为空。两者同为 19 号字，差异来自新共享 Label 的内部留白、裁切及垂直排版：本体 Label 局部矩形 `(6,3,116,25)`、`clip_text=true`，Mod 自建 Label 为 `(6,5,116,22)`、`clip_text=false` 且未采用内部留白；因此仅根节点一致不能证明文字一致。工作区 `mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:139` 已用 `ModAPI.create_option_tab`，需重新打包安装才影响实际游戏。此次 0.1.10 与此前 0.1.14 是不同安装包的观察，不能混写为同一实现。核对记录：`.godot/settings_nav_audit_20261016/installed-tab-inspection.log`。
+- SUPERSEDED: 2026-10-16 上述将旧文字实现归因于“当前已安装 PCK”的结论不成立。空工程独立挂载重装前备份 `installed-backup/etn_coop.pck`，输出 `OLD_PCK_USES_FACTORY=true`、`OLD_PCK_MANUAL_LABEL=false`；旧实现实际来自项目内 `mods/etn_coop/` 镜像。此前只隔离了 user://，未隔离 res://，读取的虚拟路径不能证明来自安装包。用户指出的视觉差异仍成立，原因修正为旧镜像遮蔽安装包（来源：code | test）。
+- Follow-up / 后续（2026-10-16，来源：code | test）：按用户“重新安装”要求，已用当前 SDK 源构建 87 文件 PCK，并替换用户安装目录，同时备份并同步项目镜像。空工程校验新 PCK entry 与源文件 SHA-256 一致；运行时 COOP 只有共享 Label，矩形、字体、留白与本体一致。82 项设置断言通过，存档、联机配置、Mod 状态和 project.godot 哈希不变；旧包/镜像保留于 `.godot/coop_reinstall_20261016/2db82db4/`。现有插件及退出资源报错仍保留。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-13
+
+
+### [Mod] ZIP 中存在 PCK 条目不等于安装成功；重装失败不会自动保留旧包
+- Evidence / 证据: `script/mod_manager.gd:1241,1255,1259`、`script/mod_option.gd:457`；根 `CODEBASE_AUDIT.md` AUD-MOD-001。
+- Notes / 说明: 当前导入先清旧目录，文件打开失败时跳过但仍返回 `ok=true`。隔离探针先安装真实 PCK，再用 PCK 同路径目录/文件冲突包重装，结果提示成功却无 PCK。需要先暂存并完整校验，再交换目录；修复前调用者不能把成功返回当作所有文件写入成功，也不能依赖失败回滚。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+- SUPERSEDED: 2026-10-13 本轮已改为 `mod_installer.gd:4` 的暂存/验证/交换事务，文件/目录冲突、写入/交换失败及超限明确失败并保留旧安装。真实已挂载 PCK 更新亦通过。旧“失败不保留旧包”仅描述修复前行为（来源：test）。
+
+### [Testing] Godot 退出 0 与断言完成标记不能排除原生错误
+- Evidence / 证据: `tests/run_ui_ux_checks.py:98`、`tests/test_ui_ux_regressions.gd:127`；根 `CODEBASE_AUDIT.md` AUD-TEST-001。
+- Notes / 说明: 两次隔离 UI 回归均 133 项断言通过、runner 退出 0，仍打印信号发射期间同步 `free()` 导致的原生 `ERROR:`。当前 runner 只检查 stderr 的 `SCRIPT ERROR:` 和 stdout 完成标记。错误检查应合并两条流，精确区分退出资源计数例外和真正错误；在动画信号恢复栈中拆除场景要延迟/队列释放并等待完成。此现象定位于测试拆除，不能直接当作正式 UI 故障。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+- SUPERSEDED: 2026-10-13 runner 已使用 `godot_check_output.py` 合并检查两条输出流，只精确豁免退出资源计数；动画信号恢复后的场景改为 queue_free 并等待一帧。133 项 UI 回归通过，原信号释放错误消失；通用“退出 0 不足以证明成功”结论保留（来源：test）。
+
+### [Android] 自适应图标必须按安全圆校验，不能只检查方形留白
+- Evidence / 证据: `android/icons/launcher_foreground.svg:2`、`android/icons/launcher_monochrome.svg:2`、`export_presets.cfg:137`；维护规则见 `docs/CONVENTIONS.md` §6.1。
+- Notes / 说明: 432×432 图层的安全区为居中、直径 264 px 的圆，位于同尺寸方形角落的猫耳仍可能被裁切。隔离 APK 中实际导出的前景及单色层最远像素半径约 127.47 px，低于安全半径 132 px；后续调整需要重新校验完整主体。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+### [Android] 图层尺寸合规与主体最小尺寸需分别核验
+- Evidence / 证据: `android/icons/launcher_foreground.svg:1`、`:2`、`android/icons/launcher_monochrome.svg:2`、`export_presets.cfg:138`；[Android 官方设计要求](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)。
+- Notes / 说明: 当前自适应图层 432×432 px 对应 xxxhdpi 下的 108×108 dp；彩色前景与单色层可见主体均为 216×174 px，即 54×43.5 dp。SVG 矩形轮廓顶点距中心最远约 128.16 px，小于安全圆半径 132 px，且主体距画布四边至少 108 px，大于外缘保留区 72 px。安全区与留白符合要求，但若按主体宽高均至少 48 dp 严格核验，高度仍不足；不能用画布大小代替可见主体大小。轮廓顶点距离与上条 APK 栅格像素距离采用不同测量口径。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-13
+
+### [Coop] 选人准入与共享金币规则由用户敲定
+- Evidence / 证据: 当前会话用户选择；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:1046,6941,6954`；`docs/SYSTEMS.md` §5.8 / §8。
+- Notes / 说明: 选人开始后拒绝新加入、允许原身份断线重连；共享金币按拾取者倍率向上取整后共享全队。后续不得仅凭旧实现恢复成 SELECT 中随意接纳新身份，或对客机只结算未乘倍率的币值。倍率属性继续沿用现有客机自报、有界同步模型。
+- Source / 来源: user
+- Date / 日期: 2026-10-13
+
+### [Coop] 延迟节点回调传 ObjectID；重连中的召唤物必须等待连接与握手
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:4200,7230`、`net/coop_summoned_proxy.gd:98`；`tests/coop_recovery_checks.gd`。
+- Notes / 说明: `call_deferred(child)` 传入类型为 Node 的参数时，child 若已释放，错误发生在参数转换阶段，函数内部 is_instance_valid 尚未执行。改为传 instance_id 和会话代次，执行时重新解析、校验节点和所属会话。另一处实测错误来自保留场景重连时召唤物 proxy 在 CONNECTING 阶段发送 RPC：不仅需要 peer 非 null，还要 CONNECTED 及客机握手通过，再标记 despawn_sent 或发送状态。两项错误均被严格日志回归捕获并修复。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+### [Localization] Python strict CSV 仍会漏掉 Godot 吞引号的写法
+- Evidence / 证据: `tests/check_localization.py:10`、`tests/test_localization_format.py`；`.godot/repository_audit_full/csv_messages.log`。
+- Notes / 说明: 原字段中裸 `"Samuela the Beyond"` / `"Fruit Jelly"` / `"Momoyodou"` 被 Python csv.reader(strict=True) 保留，却被 Godot importer 去掉引号。须将整个字段括起、内部双引号写为两个。本分支原本修正 5 处 CSV 写法并重新生成 3 个 item 翻译资源；对齐上游时确认 `3e77cb5`/`44e2651` 已独立落地同样的修正（合并后 CSV 逐字节一致），故 rebase 后本分支不再改动 CSV 与 `.translation`，只保留 `.gitattributes` 行尾规则与守卫脚本。新守卫同时检查裸引号。
+- Source / 来源: test
+- Date / 日期: 2026-10-13
+
+### [Mod] `ExtensionHooks` 的命名链式钩子（add_hook/run_hooks）全仓库零调用，实际语义是「后赋值者覆盖」
+- Evidence / 证据: `script/extension_hooks.gd:128-174`（定义 add_hook/remove_hook/has_hook/run_hooks/notify_hooks）；本体 78 个调用点全部走单 Callable 的 `ExtensionHooks.intercept/notify`（如 `script/buff_router.gd:5`、`script/GameEvents.gd:186`）；联机 Mod 直接赋值约 40 个槽（`mod_sdk/coop_mod/mods/etn_coop/entry/coop_entry.gd:63-64`、`net/coop_net.gd:1780-1830`）。
+- Notes / 说明: `:129` 的注释宣称「多个 mod 需要挂钩同一扩展点时用 add_hook/remove_hook，避免直接赋值互相覆盖」，但本体从未调用 `run_hooks/notify_hooks`，该能力实际未接通：第二个 Mod 挂钩同类扩展点会静默覆盖前一个，无告警。要真正支持多 Mod 共存，需让本体调用点改走命名钩子并按 Mod 归属登记。
+- SUPERSEDED: 2026-10-13 已修复——新增 `intercept_named`/`notify_named`/`is_hook_active`，本体 86 处调用点迁移到命名入口，命名回调与字段赋值双轨共存（见下方同名条目的新记录）。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Mod] 启动期自动停用（缺依赖/依赖环/冲突）会被写进 `mods_state.json`，造成永久禁用
+- Evidence / 证据: `script/mod_manager.gd:344-350`（`_fail_mod` 写 `_mods[id]["enabled"] = false`）、`:119-127`（`_save_state` 遍历全部 Mod 落盘）、`:1171-1176`（`set_enabled` 触发保存）。
+- Notes / 说明: Mod A 因依赖 B 缺失被停用时，用户此后任意一次切换别的 Mod 开关都会把 `A: false` 持久化；即使之后装上 B，A 也不会自动恢复。应把「用户启用状态」与「本次解析结果」分开存储。
+- SUPERSEDED: 2026-10-13 已修复——`_fail_mod()` 不再改 `enabled`（只写 `error`/`mounted`），`enabled` 回归「用户启用意图」并被 `_save_state` 持久化；另新增 `_disable_dependents()`：某 Mod 挂载失败时递归摘除依赖它的 Mod（同样只写运行期字段）。已用隔离 user 目录 + 3 个测试 Mod（缺依赖 / 缺 pck / 依赖缺 pck）验证：自动停用不再落到 `mods_state.json`，依赖方被正确摘出 `_resolved_order`。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Coop] 本体倒地文案键由联机 Mod 提供，本体 CSV 未定义
+- Evidence / 证据: `script/player.gd:138,144` 使用 `lan_player_down` / `lan_player_revived`（`_downed_text` 在同名或空翻译时回退英文 `DOWN!`/`REVIVED!`）；5 个 `ETN_*localization.csv` 均无这两个键；由 `mod_sdk/coop_mod/mods/etn_coop/i18n/coop_i18n.gd:130-132` 注入。
+- Notes / 说明: 未安装联机 Mod 时这两条文案永远是英文，单机中文本地化被 Mod 绑架。跨模块复用文案键应回归本体 CSV。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Coop] 联机信任模型由用户敲定：好友房默认可信，不做反作弊校验
+- Evidence / 证据: 用户 2026-10-13 判断（主机/客机数据校验「没有必要，而且对主机性能和延迟都拖累比较大」）；涉及 `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:3776-3784`（青辉石来源）、`:5988-6028`（命中位置历史）、`:6007`（回滚校验）、`:7479-7523`（召唤物所有权）；性能相关 `:325-358`（限流）、`:6157-6159`、`:6260-6262`（per-peer 转发）、`:1084`、`:6240`（reliable 大包）。
+- Notes / 说明: **反作弊类语义校验＝可选/可删**：青辉石来源校验、命中位置历史回滚、召唤物所有权拒绝分支、`max_hp`/`ammo` 语义上限、命中音效 key 白名单。**必须保留的三类护栏不是反作弊**：① 防崩 / 防远程代码执行——`_is_safe_remote_path` 路径白名单（客机可借此在 host 上 `load()` 任意场景并执行其脚本）、`is_finite`/`_finite_v2` 有限性、条目数上限（`BULLET_BATCH_LIMIT`、召唤物 32 上限）；② 防会话错乱——`_server_sender_ok()` 握手门控、`_session_generation` 代次校验；③ 玩法正确性——召唤物 owner 路由、`MapBounds.nearest_inside` 位置夹取、青辉石同颗 key 去重、客机拾取医疗箱后 host 端实体必须移除。性能事实：`_rate_allow`/`_rate_allow_tokens` 与 `_sanitize_*` 都是每 RPC / 每视觉条目一次的本地计算（量级 μs，无往返），且限流是**提前丢弃洪泛的性能保护**——删校验基本省不到 CPU，也不会降低延迟。真正拖累 host 与延迟的是：客机→host 视觉转发的 per-peer `rpc_id` 循环（每条包序列化 `peers-1` 次）、发送侧视觉队列无上限、以及 reliable 通道承载大包（`:1084` 全表广播、`:6240` 可靠视觉批）造成的队头阻塞。**落地（2026-10-13，code）**：已删除命中位置历史回滚及其全部连带结构（`_record_enemy_pos` / `_enemy_expected_pos` / `_enemy_pos_history` / `HIT_VALIDATE_MAX_DIST` / `HIT_VALIDATE_TOL` / `HIT_HISTORY_MAX` 与调用点），`_validate_enemy_hit` 精简为「目标存活」检查，`attacker`/`victim_pos` 保留为参数占位以免改动 RPC 签名；纯表现发送队列封顶（`_queue_visual`/`_queue_effect` + `PENDING_VISUAL_MAX=256`/`PENDING_VISUAL_RELIABLE_MAX=512`/`PENDING_EFFECT_MAX=256`）；UI 每帧轮询加早退与节流（`coop_menu`/`coop_room_label`/`coop_chat`/`coop_downed_indicator`）。per-peer 扇出改广播、reliable 全表 roster 改增量经评估后**未做**：前者需在包内携带来源 peer id 才能让 sender 忽略自身，后者要同步改 5 处 `_client_sync_roster` 接收语义，收益与风险不匹配。
+- Source / 来源: user
+- Date / 日期: 2026-10-13
+
+### [Mod] ExtensionHooks 命名钩子已接通：本体调用点走 `*_named`，字段直接赋值继续兼容
+- Evidence / 证据: `script/extension_hooks.gd:134-160`（`intercept_named`/`notify_named`/`_slot_of`/`is_hook_active`）；本体 78 处 `intercept/notify(ExtensionHooks.xxx,...)` 迁移为 `*_named("xxx",...)`，另有 8 处改用 `is_hook_active`（`scenes/main/main.gd:71`、`scenes/main/menu_screen.gd:52`、`script/projectile_spawner.gd:83,96`、`scenes/manager/enemy_buff_manager.gd:67`、`ui/pause_screen.gd:39,79`、`ui/round_timer.gd:73`、`scenes/player/hina/hina_ps.gd:36`、`scenes/player_support/ayane/ayane.gd:7`、`script/summoned_follower.gd:233`）。
+- Notes / 说明: 语义＝先跑 `add_hook` 命名回调（按 priority，接管类任一 true 短路），再跑同名字段赋值；`hook_name` 必须与字段同名，拼错在运行期 `push_error`（不再静默失效）；`is_hook_active(name)` 供「注入才覆盖默认值」的查询式分支。**例外**：`enemy_spawn_stat_scale` / `enemy_spawn_count_scale` 返回数值，属覆盖语义，仍走字段直接调用，不参与命名链式。旧 `intercept(cb,args)`/`notify(cb,args)` 保留给已发布 mod（本体已不再调用）。验证：56→58 个改动脚本 Godot 解析全过；`enemy_*_scale` 之外的直连 `.call()/.is_valid()` 已清零（静态集合比对 45 个调用名全部命中声明字段）。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Relay] `relay_server.py` 加固：CSPRNG 房间码、join 限速、资源上限、丢帧背压与并发心跳
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py`（608 → 760 行）—— `_secure_choice = secrets.choice`、`generate_room_code()`（长度/字母表不变）、`join_block_reason`/`record_join_fail`（每连接 8 次/60 s、每 IP 40 次/60 s、30 s 冷却）、`MAX_ROOMS=256` / `MAX_TOTAL_CLIENTS=512`、`send()` 超水位丢帧 + 连续 3 次断开、`heartbeat_peers()` 并发 gather；`tests/test_relay_limits.py`。
+- Notes / 说明: 帧格式、控制消息类型与字段名、房间码字母表、帧长上限全部未变（客户端无需改动）；新增行为均由带默认值的环境变量控制：`MAX_ROOMS`、`MAX_TOTAL_CLIENTS`、`WRITE_OVERFLOW_LIMIT`、`JOIN_FAIL_WINDOW_SEC`、`MAX_JOIN_FAILS_PER_PEER`、`MAX_JOIN_FAILS_PER_IP`、`JOIN_BLOCK_SEC`。原实现「超水位 `await drain()` 5 s」会让一个只发不读的客户端拖住整条广播链与心跳，现改为丢帧保全部。注意：房间码仍是 4 字符（20 bit），限速只缓解枚举、不改变熵；如需强抗枚举必须加长或引入口令（会破坏现有 UI/客户端约定）。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
+### [Mod] `etn_coop` 不再整文件覆盖本体脚本：manifest 去掉 `replace_files`/`replace_paths`
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/mod.json`（删除 `replace_files: true` 与 `replace_paths: ["res://ui/round_timer.gd","res://scenes/item/pyroxenes.gd"]`，`name` 改为「ETN Coop 联机」）；本体这两个文件已内建 `ExtensionHooks` 调用（`ui/round_timer.gd:73,77,81`、`scenes/item/pyroxenes.gd:20,63`）。
+- Notes / 说明: 覆盖是冗余的，且经 `ModPackReplace` 构建时会把打包时刻的本体脚本嵌进 pck，在用户机上覆盖本体、把本体后续修复回退；`docs/ARCHITECTURE.md:161` 记录过同类事故（0.1.9 携带 `ScrollBox.gd.remap`）。`version` 字段刻意未改：它需与 `coop_net.gd` 的 `MOD_VERSION` 保持一致。
+- Source / 来源: code
+- Date / 日期: 2026-10-13
+
 ### [Render] 2D 物理插值开启后：逐帧 `_process` 驱动的节点须关插值，传送/复用点须 `reset_physics_interpolation()`
 - Evidence / 证据: `project.godot` `[physics] common/physics_interpolation=true`；`scenes/game_camera/gamecamera.tscn`、`camera_2d.tscn` 的 Camera2D `physics_interpolation_mode = 2`(OFF)；`script/player.gd` 的 `halo` 设 OFF；池化基类 `script/player_bullet.gd`、`script/entity_ENEMY.gd`、`scenes/item/coin.gd` 等的 `active_state()`/`idle_state()` 顶部 `reset_physics_interpolation()`；`script/map_bounds.gd` 拉回后 reset；coop 镜像 `coop_enemy_proxy.gd`/`coop_summoned_proxy.gd` 关插值、`coop_visual_sync.gd`/`coop_net.gd` 出生点 reset。依据 issue #4（Naitrate，高刷显示器角色/摄像机抖动）。
 - Notes / 说明: 高刷屏下渲染帧率 > 物理 60Hz 时，物理体按 60Hz 跳步、而相机在 `_process` 每帧跟随 → 相对抖动。开启插值让物理体在 tick 间平滑，但：① 位置在 `_process` 每帧赋值的节点（相机、逐帧 lerp 的视觉子节点）会与内插叠加 → 必须 `physics_interpolation_mode = OFF`（相机建议配 `position_smoothing` 由引擎在 `_process` 平滑）；② 对象池复用/传送时若不理会，会从旧坐标插值「拉丝」一帧 → 在最终定位后 `reset_physics_interpolation()`；③ 在 `_physics_process` 内移动的节点**不要**每 tick reset（会抵消内插）；④ 迁移期：新增需要逐帧 `_process` 定位的视觉节点应主动设 OFF，新增池化/传送点应补 reset。移动端原先硬编码 `Engine.max_fps = 60` 的 workaround 已由「帧率上限设置」取代。
@@ -2131,3 +2248,491 @@
 - Notes / 说明: ①「下拉 + 手输」用 Godot 原生 `PROPERTY_HINT_ENUM_SUGGESTION`（`@export_custom`）——`@export_enum` 只能下拉、不能输入（`core/object/property_info.h` 列有 `PROPERTY_HINT_ENUM_SUGGESTION`）。② `_scan_content()`（`mod_manager.gd:87`）早于 `_run_entry_scripts`（`:90`），mod 在 entry 里注册的类型扫描期不可见 → 合成商店卡只存 `weapon_type` code，名称/图标延迟到 `character_shop_card.get_card()` 用注册表解析（卡片自带非空优先）。③ `register_weapon_type` 的 code 仅允许字母/数字/下划线/短横线（防路径穿越），图标只从“已注册 `icon_path`”加载；内置图标目录固定 `res://ui/weapon/<code>_icon.png`。④ 未知类型：名称回退原 code、图标 null，不崩。⑤ 编辑器 inspection：`@export_custom` 不做语法校验，但 hint 简单无碍。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-13
+
+### [Mod] 角色 id 必须 `<mod_id>_` 前缀；想「无后缀」只能把 mod_id 取短
+- Evidence / 证据: `script/mod_manager.gd:930-937`（`if not id.begins_with(mod_id + "_"): return "缺少 mod 前缀..."`）
+- Notes / 说明: 自动注册 id 一律要求以 `<mod_id>_` 开头，否则被拒、角色不出现（非致命：push_warning + 跳过）。若想让角色 id 无额外后缀（如 `foo_izzy`），须令 `mod_id=foo` + 角色 id=`foo_izzy`；`mod_id=foo_izzy` + 角色 id=`foo_izzy` 不合法。`overrides` 可绕过该前缀校验（`_validate_id` 开头 `if overrides.has(id): return ""`），但语义不符且丧失 reserved 冲突保护，勿用。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-14
+
+### [Mod] 复制本体角色场景做 mod 角色：删 `[gd_scene]` 的 uid，只改 3 处引用
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_izzy.tscn:1`（`[gd_scene format=3]` 去 uid）、`:4`（`player_card`→mod `.tres`）、`:7`（`ps_card`→mod PS `.tres`）、`:29`（PS 节点→mod `_ps.tscn`）；游戏进程实测 `get_characters()` 含该角色、`mounted=true`、无 `player_card 对齐` 告警。
+- Notes / 说明: 场景 `uid` 全局唯一，复制必须删（编辑器重分配）；指向**新建** mod 资源的 `ext_resource` 只写 `path`（不写 uid），指向本体资源的保留原 uid/path。节点 `unique_id` 是场景内唯一，整树复制安全。PS 节点由 `script/player.gd:169-186` 按**方法名**扫描子节点定位 → 节点名可任意改（如 `MomoiPS`→`PS`）。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Mod] mod 源放项目根 `mods/` 时别用 `build_coop_mod.ps1`（会镜像自拷贝）
+- Evidence / 证据: `mod_sdk/build_coop_mod.ps1:51-67`（`$mirror = <Project>/mods/<ModId>`；Source 与 mirror 同为项目根 `mods/<id>` 时 `Copy-Item` 自我复制报错）；`mod_sdk/build_local_mod.ps1`（PCKPacker 直打 + `-Install`）
+- Notes / 说明: `build_coop_mod.ps1` 假设「源在 `mod_sdk/coop_mod/mods/`、镜像在项目根 `mods/`」两者不同；源若直接放项目根 `mods/`，Source==mirror → `.uid` 同步阶段自我复制报错。改用 `build_local_mod.ps1`（直接 `--script pack_mod.gd` 打 `mods/<id>/**`，无需工程副本/镜像），pck 输出 `mods/_build/`（落在 gitignore 的 `/mods/` 下，保持 git 干净）。边界：PCKPacker 原样打包**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）→ 自带贴图走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Tooling] 含中文的 `.ps1` 必须存为 UTF-8 **带 BOM**（PS 5.1 否则按 ANSI 解析）
+- Evidence / 证据: `mod_sdk/build_local_mod.ps1` 无 BOM 时 `Write-Host "已生成：$pck（...）"` 的中文引号被 ANSI 撕裂 → `TerminatorExpectedAtEndOfString`；`mod_sdk/build_coop_mod.ps1`/`setup_mod_project.ps1` 均为 UTF-8 BOM。
+- Notes / 说明: Windows PowerShell 5.1 读无 BOM 脚本按系统 ANSI(GBK)。写文件用 `[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($true)))` 生成 BOM。同理：从 PS 读含中文的 JSON 用 `[IO.File]::ReadAllText(path,[Text.Encoding]::UTF8)`，别用 `Get-Content`（默认 ANSI，会把合法 JSON 读坏报错）。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Editor] 在 `mods/` 下新增文件后，编辑器 Errors 面板可能残留 stale parse error（游戏进程正常）
+- Evidence / 证据: 新增 mod 文件后编辑器报 `Function "_seed_weapon_types()" not found in base self`（`res://script/mod_manager.gd:86`），但磁盘 `mod_manager.gd:1184` 有该定义；从编辑器运行游戏时 `/root/ModManager` 存在、`doom_slayer_izzy` `mounted=true`、角色注册成功。
+- Notes / 说明: 属编辑器脚本重载缓存滞后（与 AGENTS 所述新增 autoload 的静态分析滞后同类）；重启编辑器可清。判定以「磁盘 grep + 游戏日志/`game_eval`」为准，勿据编辑器残留报错否定改动。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Mod] 聊天窗释放鼠标须按「当前阶段」还原，不能写回过期快照
+- Evidence / 证据: `mods/etn_coop/ui/coop_chat.gd` 与 `mod_sdk/coop_mod/mods/etn_coop/ui/coop_chat.gd`（`_acquire_controls` 记 `_prev_mouse_mode` + 新增 `_prev_overlay_active`；`_release_controls` 仅当 `_pointer_overlay_active()` 与捕获时相同才 `Input.mouse_mode = _prev_mouse_mode`；新增 `_game_over_active` 与 `_pointer_overlay_active()`）；阶段写指针者 `scenes/crosshair/crosshair.gd:33-39`（`round_upgrade`→VISIBLE、`round_start`→CONFINED_HIDDEN）、`ui/game_over_page.gd:105`（VISIBLE）、`scenes/manager/upgrade_manager.gd:60-62`。
+- Notes / 说明: **现象**（user）：升级页（鼠标可见）里用聊天窗发送消息后鼠标被隐藏。**根因**：`_release_controls` 无条件写回**开聊瞬间**的快照 `_prev_mouse_mode`，而快照会随游戏阶段过期——游玩期开聊捕获 `CONFINED_HIDDEN`，随后回合结束、升级页由 `crosshair` 置 `VISIBLE`，发送时又写回过期的 `CONFINED_HIDDEN`；反向（升级页开聊 → 回到游玩）同理会写出错误值。**修法**：释放时仅当「当前是否处于可见指针覆盖层阶段」（`_upgrade_active`/`_game_over_active`）与捕获时一致，才写回快照；阶段已变则**不覆盖**（`crosshair`/结算页等当前持有者已写好正确模式）。纯游玩期发送仍还原为游玩捕获模式（隐藏），符合既有的「发送即释放、游玩态指针隐藏属预期」约定（见 2026-10-07 同主题条目）。不硬编码任何鼠标常量；两处副本同改。验证：`godot-ai_script_patch` 对镜像 `res://mods/etn_coop/ui/coop_chat.gd` 解析 `diagnostics=[]`（无语法错误），两副本 `MD5` 一致。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Relay] 可靠 WebSocket 连接不能在背压时跳整帧后继续工作
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py:175-202`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_relay_peer.gd:268`；`CODEBASE_AUDIT.md` AUD-NET-001。
+- Notes / 说明: 中继首两次超水位直接跳帧，水位恢复即清计数，不关闭连接。控制帧与可靠 RPC 共用此路径，客户端没有额外重传。真实发送函数配合可控 transport 水位，已复现控制帧丢失、下一游戏包仍发送；不能把“慢端不阻塞广播”视为可靠性已保证。修法需有界排队或明确断连；当前尚未实施。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 首次超水位改为明确断开慢端，保留非阻塞广播；2 项背压回归先红后绿，不再容忍跳帧。（来源：test）
+- SUPERSEDED: 2026-10-14 进一步改为分级水位：软水位（256 KiB）给宽限（默认 5s）继续写可靠帧，硬水位（默认 4 MiB）或宽限超时再断开慢端；仍禁止跳帧。证据：`mod_sdk/coop_mod/server/relay_server.py:28-30,172-205`、`tests/test_relay_limits.py`。（来源：user + code）
+
+### [Mod] 依赖校验必须覆盖冲突过滤后的最终集合
+- Evidence / 证据: `script/mod_manager.gd:272-340`；本地审计记录（未入本次提交）；AUD-MOD-002。
+- Notes / 说明: 缺依赖检查在 conflicts 之前，挂载失败传播无法覆盖排序阶段的冲突剔除。A/B 冲突、C 依赖 B、D 依赖 C 时，真实排序返回 `[a,c,d]`。最终集合需要满足依赖闭包，同时继续保留 `enabled` 为用户意图，不能借机恢复永久停用行为。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 按拓扑顺序验证依赖已进入 kept，直接/传递依赖随冲突停用；用户启用意图保留，生命周期回归通过。（来源：test）
+
+### [Mod] 安装清理与卸载递归的链接行为不同，字符串前缀不能证明删除边界
+- Evidence / 证据: `script/mod_manager.gd:1262-1287`；`script/mod_installer.gd:124`；AUD-MOD-003。
+- Notes / 说明: 安装器清理会检查链接，但卸载对 `current_is_dir()` 直接递归。Windows 隔离实验在 Mod 子目录创建 junction 指向 Mod 根外、同一实验根中的哨兵，真实卸载返回成功且删除外部哨兵。此结论需要已有本地链接，不表示 ZIPReader 会生成链接。后续统一清理时须保留“不跟随链接”原则，普通路径前缀检查不足以替代它。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 卸载已在根/嵌套目录先检测链接，Windows 两类 junction 哨兵保留且隐藏目录可删除；不跟随链接的原则继续有效。（来源：test）
+
+### [Save/Mod] 旧 Resource 存档迁移要保留对象身份，不能按文件名猜内容 ID
+- Evidence / 证据: `script/scene_data_store.gd:18`、`script/Game.gd:250`；`tests/run_support_persistence_checks.py`。
+- Notes / 说明: 支援真实 ID 与资源文件名可以不同；旧档所选资源与已购字典引用同一个 ext_resource。只在同步读档期间为明确缺失的 Mod 依赖提供临时 SupportCard 占位，便可按对象身份从已购字典 key 恢复真实 ID，再转 v3 纯 ID/LV/exp。加载后移除 ResourceFormatLoader，不污染普通资源缓存；未来版本与坏档保护保持。启停、旧备份、仅购买未选中支援及不同文件名均由真实 PCK 跨进程验证。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Coop] 同 poll 多端退出需同时处理底层 ENet 状态和 Relay 排队包
+- Evidence / 证据: `net/coop_enet_peer.gd:48,75`、`net/coop_relay_peer.gd:139,227`（均位于 `mod_sdk/coop_mod/mods/etn_coop/`）；`tests/coop_recovery_checks.gd:_simultaneous_leave_case/_relay_queue_case`。
+- Notes / 说明: 原生 ENet poll 发出断线信号时，其他底层 peer 可能已无通道但尚在 SceneMultiplayer 成员表，既有引擎成员广播与玩法 RPC 都会报 max channels: 0；汇总一次原生 poll 的事件并检查底层目标状态后转发可避免该路径。Relay 则须在移除 sender 时丢弃其已排队数据、禁止晚到数据自动重建身份，并让同 ID 重连先断后连；仅修复 getter 的 peek 顺序不足以解决此类报错。两类新增守卫先红后绿，全套 12 组与三组复跑严格通过，没有扩大日志豁免。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-14
+
+
+### [Relay] 准入时必须补齐最新成员，join_prepared 的快照可能漏掉并发 pending 客机
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py:441,465,490`、`mod_sdk/coop_mod/mods/etn_coop/net/coop_relay_peer.gd:233`；本地审计记录（未入本次提交） --case relay_join`
+- Notes / 说明: 两端均 join 后再依次 ready，第二端的初始 peers 只有 host；第一端 ready 的公告不送 pending 第二端，第二端 ready 也不补第一端。未知 sender 拒收本身是正确边界，漏公告会让可靠数据被持续静默丢弃。真实三端回归首轮失败、单例复跑成功不能消除竞态；应修准入公告而非放宽未知数据接入。当前未修，见 AUD-NET-002。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 服务端在 client_ready 准入前补发当前成员公告，并对重复 ready 幂等；确定性测试及真实三端重连通过。AUD-NET-002 resolved。来源：code | test。
+
+### [Coop/Combat] 前置伤害修饰不能通过结算后 proc 补偿，必须进入本次命中的数值契约
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:2255,5823,6000,8548`、`script/health_component.gd:146-155`；诊断 `--case damage_wire`
+- Notes / 说明: SDK 实际 wire roundtrip 丢失 damage_modifier（1→0），同一 base=10、×2 修饰从本地扣 20 变为权威扣 10；组件 damage_multiplier 也没有携带。host 抑制前置 proc，归属端回传事件在扣血之后，修改镜像不能改变本次权威 HP。旧「活对象信号迁移」只解决引用有效性，不证明 mint_chocolate_parfait 等增伤已跨端结算；COOP-008 当前未修。不能简单传 Callable 或放开 host 全局 proc。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 新增前置阶段和 v5 resolved_damage 数值契约；真实 wire、Hina/Kotori/近战藏品、Mint 自管理子弹及独立部件双端检查通过。COOP-008 resolved；目标条件使用命中端快照。来源：code | test。
+- SUPERSEDED: 2026-10-14 用户要求将尚未提交上游的本批协议变更统一为 v4，以上 v5 为调整前标记；数值契约保持。
+
+### [Upgrade] 归零后只乘增长系数不能产生刷新增益，稀有度权重会被清零
+- Evidence / 证据: `scenes/manager/upgrade_manager.gd:35,131,138,205,293`；诊断 `--case gameplay`
+- Notes / 说明: refresh_mult 初始/选中复位为 0，*=1.1 后仍为 0；rare=2 权重乘它，真实刷新后约 0.01→0，建池排除。基准乘区与累计增益需分开考虑。health_percent 还使用 int/int，81/82 得到 0；当前低血量奖励又乘恒零倍率，此问题应在修刷新时一并覆盖。AUD-LOOT-001 当前未修，勿把观察型诊断当通过型守卫。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 改为累计额外增益、总倍率保留基准 1；浮点血量比例同时修复。刷新/选择复位守卫通过，AUD-LOOT-001 resolved。来源：code | test。
+
+### [Coop/Interpolation] 衰减速度必须积分成位移，v*t*damp 会让位置回退
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd:124-130`；诊断 `--case snapshot`
+- Notes / 说明: T=120ms、最新 x=10/vx=100，当前采样 10→12.25→13→12.25→10，且超过 T 后速度从 0 恢复为旧 100。公式 t*(1-t/T) 后半段减少，不能表示平滑停止；应积分速度并保持末端位置和零速度。AUD-NET-003 当前未修，玩家/敌人/召唤物 proxy 共用该缓冲。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 使用衰减速度积分并保持末端位置/零速度，逐毫秒单调性与冻结守卫通过。AUD-NET-003 resolved。来源：code | test。
+
+
+### [Coop/Equip] 跟随图标必须只占用所属玩家的一个 Follow 挂点
+- Evidence / 证据: `script/equip_item.gd:79`、`scenes/update_item/mint_chocolate_parfait.gd:5`、`tests/coop_recovery_checks.gd:_damage_case`
+- Notes / 说明: 联机镜像可能保留 Follow 组，旧 Mint 遍历所有空挂点会把同一节点重复 add_child，真实双端测试出现 already has a parent。Mint 改走通用 helper；helper 用所属玩家 is_ancestor_of 过滤，只占一个点后返回。数值回归必须保留严格原生错误检查，不能仅看 failures=0。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [UI/Mod] 已挂载不代表脚本入口已运行，兼容信息需区分最低本体版本与 API 要求
+- Evidence / 证据: `script/mod_manager.gd:538,976`；`mod_sdk/README.md` §2。
+- Notes / 说明: game_version 是最低本体版本声明，不足时只告警；api_version 超过本体支持版本时跳过 entry，但此前资源包可能已经 mounted=true，列表 error 也未因此写入错误。兼容 UI 不能仅凭 mounted 显示“完整运行正常”，也不能将这两类检查统一标为整包拒载。当前 list_mods 尚未公开版本要求与 entry 执行结果，新增详情须补相应数据契约。
+- SUPERSEDED: 2026-10-18 `list_mods()` 现已返回 `game_version`/`game_version_ok`/`dependencies`/`overrides`/`replace_paths`/`adds`，详情页以「支持版本」展示最低支持本体版本并做兼容判定；entry 执行结果仍未单独暴露，UI 不把 `mounted` 写成 entry 已成功运行。（来源：code）
+- Source / 来源: code
+- Date / 日期: 2026-10-14
+
+### [Mod/UI] 管理页分栏详情的数据与交互边界
+- Evidence / 证据: `script/mod_manager.gd:list_mods/_content_counts/_manifest_array`；`script/mod_option.gd`（`_refresh`/`_group_key`/`_make_row`/`_update_detail`/`_update_restart_bar`/`_on_undo`/`_move_spacer_to`）；`ui/mod_option.tscn`（`Summary`/`RestartBar`/`ListPanel`/`DetailPanel`）。
+- Notes / 说明: ① `list_mods()` 的兼容字段必须同时暴露声明值与判定结果（`game_version` + `game_version_ok`）；仅给声明值会让 UI 自行重复版本解析，且 `Game` 未就绪时容易误判。② 分组只影响展示：`_current_ids()` 只收 `is_row` 行，上下按钮/拖动按用户顺序写 `mods_order.json`，`set_order()` 的 `mods_changed` 会在拖动结束后重建列表并重新分组。③ 带分组头时 spacer 的 `get_index()` 含表头，拖动目标索引必须先按行计算、再按 spacer 是否位于目标前修正，否则会插到错误位置；`_cancel_drag()` 应恢复到 `_drag_origin_index`，不能使用当前 spacer 位置。④ 待重启是 UI 会话态：启停/排序可撤销到本次基线；导入/卸载不可逆（pck 运行期不可卸），仍计入待重启。⑤ “重启游戏”只能退出进程（`get_tree().quit()`），引擎运行期无法真正热重载 pck。⑥ 列表行与详情无图标时均显示名称首字符（中文首字、英文转大写，跳过空白/标点），不要用 mod id 代替显示名。⑦ 描述/详情 Label 自动翻译，mod 可用中文原句作翻译键。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-18
+
+- SUPERSEDED: 2026-10-18 上述②把「过滤表头后的显示顺序」等同于「用户顺序」的实现判断不成立，④的首次拖动撤销也缺少基线。现分别读取全局顺序与显示目标，仅移动所选 ID；首次拖动保存基线，刷新前取消拖动，待重启按净差异重算。35 项隔离断言通过，覆盖错误分组不改变无关冲突优先级、交错停用项、首次拖动/混合操作撤销、原地/取消拖动、空顺序配置、实际磁盘恢复与不可逆标记保留。此前「排序可撤销」只能作为设计意图，不能当作旧实现已正确的证明。稳定规则已上提 `SYSTEMS.md`「管理面板排序与状态修正」。（来源：code | test）
+- Validation / 验证（2026-10-18）: 设置集成另有 45 项断言通过；旧本地测试仍检查 `ColorRect.scale.x`，与恢复原版后写 `size.x`（选中 114、悬停 9、收起 0）的动画不符，已仅在本地测试中修正断言。两项命令仍因既有 `godot_ai/runtime/game_helper.gd` 缺失及退出资源日志返回非零，未处理 `project.godot`。（来源：code | test）
+
+### [Git] 本地忽略 `.import`，不提交 `.gitignore` 改动
+- Evidence / 证据: `docs/CONVENTIONS.md` §6.1；本地 `.git/info/exclude` 的 `*.import` 与索引 `skip-worktree` 标记。
+- Notes / 说明: 用户要求忽略 `.import` 且不提交 `.gitignore`。2026-10-14 已将 627 个 `.import` 改动及 `.gitignore` 从暂存区排除；972 个已跟踪 `.import` 用本地 `skip-worktree` 跳过，新文件用 `.git/info/exclude` 忽略，不删除文件或取消既有跟踪。后续暂存须继续排除 `.gitignore`。`skip-worktree` 只影响本地索引，未来上游若修改这些文件，同步前需按需清除标记并保留本地内容。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Localization] CSV 引号修复后须同时核验生成的 Translation 资源
+- Evidence / 证据: `ETN_item_localization.csv`；`ETN_item_localization.en.translation`、`ETN_item_localization.vi_VN.translation`；Godot 4.7 隔离工程逐 key 对照 CSV，结果 `TRANSLATION_CHECK failures=0 changes=4`。
+- Notes / 说明: 上游 CSV 已修正字段内双引号，但既有英/越 Translation 仍缺少部分引号；当前重新导入结果补回 `samuela_the_beyond_description` 的英/越引号及 `jellies_cushion_description`、`sakura_daifuku_description` 的越南语引号。SUPERSEDED: 2026-10-14 先前「对齐上游后本分支不再改动 `.translation`」仅描述当时提交范围，本次分类提交纳入已逐项验证的两份生成资源；CSV 未改动。
+- Source / 来源: test
+- Date / 日期: 2026-10-14
+
+### [Version] 本体与联机 Mod 发布版本回滚，格式版本保留
+- Evidence / 证据: `script/Game.gd:13`；`mod_sdk/coop_mod/mods/etn_coop/mod.json`、`net/coop_net.gd:32-33`；`script/scene_data.gd:7`。
+- Notes / 说明: 用户明确回滚本体与联机 Mod 的发布版本：`v0.5.1.4` → `v0.5.1.3`、`0.1.12` → `0.1.10`，manifest 的最低本体版本声明同步恢复为上游原值 `v0.5.1.2-test`。协议 v5、存档格式 v3 和 Android 模板版本保留，既有功能修复不回滚；entry 继续按前置伤害信号是否存在进行能力检查。后续不能仅凭发布版本号推断是否具备本轮新接口。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-14 用户确认本批变更尚未提交上游，联机协议由 v5 统一调整为 v4；存档格式 v3 及其他版本约定不变。
+- SUPERSEDED: 2026-10-14 用户改定本体发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4），联机 Mod 仍 `0.1.10`；本条回滚结论仅适用于当时。（来源：user）
+
+### [Coop/Version] 尚未提交上游的联机协议变更统一为 v4
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:32`（`PROTOCOL_VERSION = 4`）；上游基线 `78ed5ad` 同字段为 3。
+- Notes / 说明: 用户说明本批变更尚未提交上游，要求协议从 v5 调整为 v4，将新增身份恢复、金币倍率与前置伤害等契约变化合并为相对上游 v3 的一次升级。发布版本继续保持本体 `v0.5.1.3` / 联机 Mod `0.1.10`，存档格式 v3 保留；联机双方需使用本批一致的新构建。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Git/Scope] 本批重新提交仅包含本体与官方联机修复
+- Evidence / 证据: 本轮提交清单；`tests/isolated_godot.py`、`tests/export_boundary_helpers.py`。
+- Notes / 说明: 用户明确排除 EasyTier 联机、UI 设计草案及开发配置。开发配置范围已确认包含 `.gitattributes`、`android/.build_version`、`.repository-audit/`，以及既有 `.gitignore`、`project.godot`、`.import`；`export_presets.cfg` 的发行包隔离修复保留。被排除内容与原提交在本地备份保留，公共回归工具已从拓展测试中拆出，永久守卫不再依赖本地审计工具状态。本体/官方联机发布版本仍为 `v0.5.1.3` / `0.1.10`，协议为 v4。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+- Implementation / 实现: CSV 的 CRLF 规则移到本地 `.git/info/attributes`；验证目录按项目约定校准行尾，本次不改动 CSV 源内容或提交开发配置。
+- Validation / 验证: 独立候选工作区通过 16 项 Python 单元测试、23 项设置检查、7 组存档恢复、4 组支援跨进程迁移，以及安装、生命周期、伤害契约、5 组联机场景、刷新/外推和实际 PCK 导出隔离检查。
+
+### [Git/Scope] 官方联机通用接入应提交，独立附属包不提交
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_extensions.gd`、`net/coop_net.gd`、`ui/coop_menu.gd`；`docs/COOP_EXTENSION_API.md`。
+- Notes / 说明: 用户再次明确：涉及官方联机 Mod 的代码应提交，独立 EasyTier 附属包不要提交。官方通用提供者注册、菜单页签、状态栏及生命周期接入属于官方代码；附属包源码、工具清单、构建/下载脚本及附属专用测试继续保留本地。UI 设计草案与开发配置仍排除。
+- SUPERSEDED: 2026-10-14 上轮把官方通用拓展接入一并排除的执行范围过宽，本轮补交官方部分；前条记录的其他提交边界不变。
+- Validation / 验证: 仅安装官方源码 PCK，通用提供者的 21 项生命周期契约和 17 项实际菜单检查通过；未安装任何附属 Mod。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Upgrade] 最高稀有度由回合曲线主导、刷新额外抬升；防御低血加成不随拥有数量归零
+- Evidence / 证据: `scenes/manager/upgrade_manager.tscn`（`round_weight_curve_3` 0.01→0.55，`curve1` 1→0.35，`curve2` 0.05→0.75）；`scenes/manager/upgrade_manager.gd:64-70`（回合基准权重）、`:132/139`（`refresh_mult=(1+x)*1.1-1`，稀有档×`(1+refresh_mult)`）、`:294`（`health_percent` 浮点）；`scenes/manager/item_weight_manager.gd:52`（`DEFENSE` 标签权重 0）、`:150-153`（`max(0, defense_bonus - defense_tag_quantity*0.3)` + 低血项）。
+- Notes / 说明: 用户裁定**升级权重按 PR 保留**。最高稀有度「早期回合抽不到、随回合推进才给权重」由 `round_weight_curve_3`（回合曲线）承担，PR 未改回合边界路径（`round_weight_upgrade`）；PR 只把刷新路径从 `curve3 * refresh_mult`（`refresh_mult` 初值 0、`*=1.1` 恒 0 → 稀有档归零）改为 `curve3 * (1 + refresh_mult)`，故刷新次数也会额外抬升稀有档（且无上限）。防御类由 `max(0, defense_bonus - 0.3×拥有数)` 随获取数量衰减回基准；PR 未改 `item_weight_manager.gd`（与 main 零差异），仅令低血旁路 `(2+now_round)*refresh_mult` 从恒 0 变为生效——该项是加法且与拥有数量无关。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Coop] 命中预测二次乘算与强制断线重复信号（PR #7 合并后修复）
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:2041-2043,2251-2253,5831-5836`（`cfg.resolved_damage` 已含 `global_hurt_damage`+前置修饰）、`:8626-8633`（`_get_predicted_enemy_damage` 再乘一次 `global_hurt_damage`）、`:8658-8666`（`_predict_enemy_death`）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_enet_peer.gd:38-46,127-130`（`_disconnect_peer(force=true)` 手动调用 + 原生 `peer_disconnected` 各排一次事件）；`script/health_component.gd:213-240`。
+- Notes / 说明: ① 客机命中预测把已求值的 `resolved_damage` 又乘一次 `global_hurt_damage` → 镜像血条/致死预测偏大、与飘字不一致；改为 `_predict_enemy_death` 直接取 `maxi(0, damage)`（入参已是最终值）。② ENet 强制断开时断线事件在同一 poll 入队两次 → `peer_disconnected` 双发；`_poll` 断线分支先判 `_admitted.has(id)`、出表即视为重复跳过。③ `resolve_damage` 补 `damage_data==null or stats==null` 空守卫，`_resolve_damage` 对 `owner.get_path()` 判空，防 RPC 路径崩溃。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Git/Scope] 当前分支仅保留远端道具动态表现同步与重复外观修复
+- Evidence / 证据: 用户 2026-10-14 明确要求；本地备份分支 `backup/before-items-only-20261014`；`tests/coop_item_visual_checks.gd`。
+- Notes / 说明: 本轮以 `upstream/main` 的 `78ed5ad` 重建分支，只保留菜刀瞄准回填、内部道具显示快照/驱动、外观去重/补建/重建、必要的道具缓存迁移、协议 v4 及专用回归和说明。此前本体存档、伤害、Mod 生命周期、设置页签、中继加固、通用联机拓展及分享标签等改动保存在备份分支，不属于本分支交付范围；主线已有内容保留。
+- Source / 来源: user
+- Date / 日期: 2026-10-14
+
+### [Coop/Visual] 纯视觉道具动画必须隔离资源并过滤玩法轨道
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_item_visuals.gd:_prepare_visual_resources`、`coop_visual_driver.gd:apply_state`；`tests/coop_item_visual_checks.gd:_item_visual_case`。
+- Notes / 说明: 原场景动画可能重新启用碰撞；只在生成时禁用形状不足以隔离远端伤害。复制材质与动画库后过滤方法/音频及碰撞/计时器/Label 轨道，避免 seek 改动拥有者的共享材质。远端绕行和护盾/触发动画来自拥有者快照，不能依赖已剥离的 EquipItem 脚本。
+- Source / 来源: code
+- Date / 日期: 2026-10-14
+
+### [Combat] `PlayerRef.ensure` 形参不能用强类型 `Node`：已释放实例会在入参检查处就崩
+- Evidence / 证据: `script/player_ref.gd:27`（`static func ensure(from: Node, cached: Variant)`）；崩溃点 `script/summoned.gd:38`（`player = PlayerRef.ensure(self, player)`），经 `script/summoned_follower.gd:146 get_direction_to_player()` 触发，报 `MobSummoned._ensure_player: Invalid type in function 'ensure' in base 'GDScript'. The Object-derived class of argument 2 (previously freed) is not a subclass of the expected argument class.`，游戏开局即 `game_status.status=break`（`can_debug=false`，无法继续）。
+- Notes / 说明: `PlayerRef` 收口（2026-10-09 条目）只防了「读属性时 previously freed」，漏了「把已释放实例当实参传给强类型形参」——Godot 在**进入函数前的入参类型检查**就抛错，函数体内的 `is_instance_valid(cached)` 根本执行不到。修法：`cached` 改弱类型 `Variant`，但**必须先判 `is_instance_valid` 再判类型**——写成 `cached is Node and is_instance_valid(cached)` 时，`cached is Node` 会在已释放实例上先抛 `Left operand of 'is' is a previously freed instance.`，函数体内的判定同样执行不到；正确顺序为 `is_instance_valid(cached) and cached is Node and cached.is_inside_tree()`（`is_instance_valid` 对已释放实例安全），一处收口即覆盖全部 65 处调用点。通用：任何「接收可失效对象缓存」的工具函数，形参都别用具体 Object 类型，一律收成 `Variant` 再运行期校验。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Render] 2D 物理插值改为设置项（默认关）；逐帧驱动视觉须关插值（`3e21ac0` 遗漏项）
+- Evidence / 证据: `script/Game.gd`（`var physics_interp: bool = false`、`apply_physics_interp()` 运行期设 `get_tree().physics_interpolation`；`config.ini` 的 `[game] physics_interp`）；`ui/game_option.tscn` / `script/game_option.gd`（Graphics 页开关 `%PhysicsInterp`，移动端隐藏）；`scenes/crosshair/crosshair.gd:_ready`、`scenes/player/momoi/momoi_ex_range.gd:_ready`、`scenes/manager/interact_prompt.gd:_ready`、`scenes/player_support/serina/serina_as.gd:_on_ready`（`aura`）、`scenes/update_item/life_jacket.gd:_on_equip`（`Node2D2`）均设 `physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF`。
+- Notes / 说明: ① `3e21ac0` 全局开启物理插值后，凡「由 `_process` 每帧写自身 transform」的视觉节点都须关插值（`CONVENTIONS.md:102` 规则①），否则插值会在物理 tick 间把它渲染在上一次位置 → 准星/指示器滞后、与真实瞄准点错位；该提交漏了准星、Momoi EX 指示器、交互气泡、serina aura、救生衣护盾。② `SceneTree.physics_interpolation` 可在运行期安全赋值，故做成 Graphics 设置项、默认关（迁移期仍可能有个别视觉错位），无需重启；用户 2026-10-14 裁定默认关。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Render] 物理插值开启时射击特效“频闪”——调查结论（暂不修，保留开关）
+- Evidence / 证据: 现象（user）：开插值后玩家/炮塔开火时枪口火焰、子弹烟、子弹“频闪（一闪一闪）/偏移”，关闭插值即消失。尝试 B（射击栈 FX 根 `physics_interpolation_mode=OFF` + `turret_summoned._shoot_bullet` 由 `call_deferred` 改物理 tick 内直接调用）**实测无效**；未验证 A（射击栈 `GPUParticles2D` 转 `CPUParticles2D`）。Godot 4.7 文档：2D 物理插值只支持 `CPUParticles2D`、GPU 粒子不插值；物理 tick 外写被插值对象 transform 会 jitter。
+- Notes / 说明: 根因**未定位**。处理=保留 `Game.physics_interp` 设置项（默认关，Graphics 页 `RowPhysicsInterp` 可开，见 `9ffece1`），由玩家自行取舍；后续若要根治，优先评估 A（转 `CPUParticles2D`，射击栈粒子量小、代价可忽略）。**勿重复 B**。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-14
+
+### [Coop/Visual] 远端瞄准必须与位置共用插值时间
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_snapshot_buffer.gd:85`、`coop_player_proxy.gd:170`；`tests/coop_item_visual_checks.gd:_knife_smoothness_probe`；用户 2026-10-15 反馈另一客户端菜刀卡顿。
+- Notes / 说明: 用户确认症状为「菜刀移动或挥砍画面跳动，但角色移动正常」。静态方向检查通过不能证明连续转向平滑。已提交版本在双进程 LAN、60 FPS 连续扫动准星时，远端菜刀 75% 帧保持不动，而拥有者持续转动；原因是镜像准星只在收包时回填。瞄准点与位置一起入缓冲并按同一时间采样后，镜像准星和身体/武器统一读取采样值，避免位置滞后但瞄准超前。世界原点也是有效目标，不能用 `Vector2.ZERO` 作为未初始化哨兵。已有在制插值只完成入缓冲、未接回表现时，远端菜刀会完全停止转向，故回归必须覆盖实际镜像道具驱动。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-15
+
+### [Coop/Damage] 命中伤害数字不能用目标 HP 差替代
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_server_enemy_hit`、`_get_predicted_enemy_damage`、`_predict_enemy_death`；`script/health_component.gd:_take_damage_internal`；`tests/coop_knife_damage_checks.gd`。
+- Notes / 说明: 用户确认「客机玩家的菜刀，同次命中的伤害数字在主机与客机视角不同」。双端回归复现：减伤目标主机 `45`/客机 `22`，易伤目标主机 `45`/客机 `90`，斩杀主机 `50`/客机 `99999`。预测遗漏 TRUE_DAMAGE 且血条路径重复乘承伤倍率；主机以 HP 差作为飘字又截断了过量伤害。统一从真实结算取得命中数值、保留有效扣血记分后，两端数字一致。沙袋回血经 `Enemy._on_is_dead → on_dead.call_deferred()` 发生，回归若跨帧取 HP 差会误把回血计入同次命中。契约已上提 `SYSTEMS.md` §2.3。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-15
+
+### [Coop/Integration] PR #9 以最新主线求值契约为准，移除重复预测修复
+- Evidence / 证据: `upstream/main@0b7e446`；主线提交 `7cc6cc3`、`8a992ff`、`7dd2470`；`coop_net.gd:_prepare_enemy_hit`、`_server_enemy_hit`；`coop_snapshot_buffer.gd:sample`。
+- Notes / 说明: 核对主线后确认：主线已统一 `resolve_damage` 与 `resolved_damage`、支持真实伤害并修正预测二次乘算。本分支旧版数值修复与其重叠，合并时沿用主线；新增差异仅保留瞄准插值与主机命中数字取值，不恢复旧预测助手。快照欠载外推沿用主线的积分位移，追加瞄准目标保持。上条菜刀数值复现描述针对更新主线前的旧分支，不能当作最新主线仍存在全部问题的证据。
+- Validation / 验证: 对齐主线后的 LAN/Relay 道具视觉及菜刀伤害双端回归均通过；主线伤害契约断言 `DAMAGE_CONTRACT_RESULT failures=0`，本机只按既有道具 runner 精确豁免缺失 godot_ai 的三条日志与退出资源计数。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-15
+
+### [Mod/UI] 旧 `replace_files` 覆盖包会把新版 `ui/option_button.tscn` 打回无 `Label` 版本 → 设置页内置页签文字全空、只剩 COOP
+- Evidence / 证据: 本机 `user://mods/etn_coop/mod.json`（`"name":"ETN Coop (skeleton)"`、`"replace_files":true`、`replace_paths:["res://ui/round_timer.gd","res://scenes/item/pyroxenes.gd"]`）；`logs/ETN_debug2026-10-16T01.54.55.log` 的 `[ModManager] etn_coop 使用 replace_files 覆盖本体文件`；安装包 `etn_coop.pck` 目录表除 `mods/etn_coop/**` 外还含 `ui/option_button.tscn`、`script/option_button.gd`、`ui/option_toggle.tscn`、`script/ScrollBox.gd`、`script/Game.gd`、`script/extension_hooks.gd` 等本体文件；该 pck 内 `ui/option_button.tscn` 节点仅 `Game/Node2D/ColorRect/AnimationPlayer`（**无 `Label`**），而现行 `ui/option_button.tscn:261` 有 `Label`、`script/option_button.gd:5` 的 `@export var text` 把标题写入该 `Label`。
+- Notes / 说明: `ui/option_button.tscn` 本是 `coop_menu.tscn`（覆盖层页签）的依赖，`ModPackReplace` 预设 `export_filter="resources"` 会连带导出依赖，被 `replace_files=true` 一并覆盖到用户机 → 新版本体 UI 被旧快照回退。本体 `ui/option.tscn` 仍实例化 3 个内置页签并设 `text="GAME"/"CONTROLS"/"MOD"`，但旧组件无 `Label`，文字无处可写 → 内置页签渲染为空白；只有 mod 自建 COOP 页签（自带 `Label`）可见，表现为「option 里只剩 COOP」。根源是覆盖型打包把本体依赖当覆盖文件（同类事故见本文件 2084/2213）。修复=删除旧安装目录 + 用当前源码重打（`mod_sdk/build_coop_mod.ps1`，源码 `mod.json` 已去 `replace_files`，走 `pack_mod.gd` 的 PCKPacker 路线；新包 87 文件、目录表仅 `mods/etn_coop/**`、无本体覆盖）。实测（`game_eval` 实例化 `ui/option.tscn`）：四页签 `option_game=GAME / option_controls=CONTROLS / option_mod=MOD / option_coop=COOP` 全部有文字。注意编辑器下 `res://mods/etn_coop/` 镜像会遮蔽 pck，镜像仍为旧实现（`mod.json` 带 `replace_files`、entry 手搓额外 `Label`），与运行期 pck 不同源，需另行同步。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod] replace_files 挂载前目录审计：未声明本体覆盖降级为不覆盖
+- Evidence / 证据: `script/pck_directory.gd:list_paths`（只读解析 PCK v4 目录表，校验 magic/version/flags/dir_offset，异常返回 `null`）；`script/mod_manager.gd:_mount_one`（`replace_files` 分支调 `_audit_replace`，未声明则置 `replace_files=false` + `push_error`）、`_audit_replace`/`_covered`。
+- Notes / 说明: 承接同日「旧覆盖包打回本体 UI」事故，加运行期守卫：`replace_files=true` 的包挂载前核对目录表，`res://mods/<id>/` 之外且未在 `manifest.replace_paths` 声明的路径判为未声明覆盖 → 降级挂载（mod 内容照常加载、本体零覆盖）；已声明则保留 `replace_files=true` 放行。匹配含 `<decl>.` 前缀（覆盖 `.gdc/.remap/.import` 边车），避免精确匹配误判。目录无法解析（非 v4/目录加密/损坏）时跳过守卫不误拦。**仅写日志**，不改 MOD 管理页。隔离 user:// 实测三情形：坏包(未声明)→降级、无 `replace_files`→不动作、全量声明→放行。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/VFX] IZZY 裁决处决 AoE 改「来源侧 Area2D + `hit_received`」，并加红色冲击波
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:456`（`_aoe_execute` 用 `$AoEHitBox` 圆形 Area2D + `get_overlapping_areas()`）、`:494`（`_spawn_shockwave` 挂 `SELayer`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.tscn`（`AoEHitBox`：`collision_layer=0`/`collision_mask=16384`/`monitorable=false`/`monitoring=false`，`CircleShape2D radius=80`）；`mods/doom_slayer_izzy/vfx/doom_shockwave.tscn`+`.gd`；`script/hit_box.gd:27`（`ENEMY_HURTBOX_LAYER=16384`）、`script/hurt_box.gd:39`（目标侧只认 `HitBox`）、`script/health_component.gd:21`（`hit_received`→`take_damage`）。
+- Notes / 说明: 原 `_aoe_execute` 是 `get_nodes_in_group("Enemy")` 手动距离扫描 + 直接 `health_component.take_damage`，伤害类型 `EXPLOSION_DAMAGE`。改为来源侧 Area2D（与近战 `_swing` 同路径）：AoE 检测敌方 `HurtBox`（层 16384）并 `hit_received.emit`，伤害因此走标准管线（护甲/加成/无敌帧）且类型改 `MELEE_DAMAGE`。要点：①AoE 的 Area2D 必须 `monitorable=false` 且层=0，否则会被敌方 HurtBox 当入射 HitBox 触发误命中；②切换 `monitoring`/`shape.disabled` 后要 `await get_tree().physics_frame`（这里等 2 帧）重叠表才刷新，`get_overlapping_areas()` 才读得到；③过滤取 `a.get_parent()`（HurtBox 的父即敌人实体）判 `EnemyPart`/`is_idle`，因为 `EnemyPart` 也有同层 HurtBox；④已处决目标同帧 HurtBox 可能仍在，用 `ent == center` 排除。冲击波用本体 `shaders/shock_wave_2.gdshader` 的 ColorRect 环：环 RGB = `ColorRect.color`，且**环仅在 `size > thickness` 时显形**（`mask` 公式所致），故 `thickness` 要设细值（0.05→0.02）而非 0.6→0，环才由小到大可见；半径按 `size(0..0.5) × 矩形边长` 计，取 160px 矩形 → 0.5 即半径 80、对齐 AoE。特效一次性，播完 `queue_free`（本体 `range_explosion` 不自动回收）。另：该 AoE **命中至少一个敌人时播一次 `HurtSounds2`**（`hit_any` 布尔，口径同 `_crucible3_tick:337-339`；只命中被处决目标时因 `ent == center` 排除而不响——处决本身已有 `execute_sounds`）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Audio] 替换 mod BGM 资源后裁决 BGM 静默不出：`load()` 返回 null 被 `_bgm_enter` 静默早退 + 未重启/重导入
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:88`（旧代码 `if intro == null: return`，在 `SoundManager.bgm_fade_out`/`play_bgm` 之前 → 本体 BGM 一秒不断）；`mods/doom_slayer_izzy/script/doom_audio.gd:22-37`（旧 `load_stream` 失败无任何告警）；修复后实测 `BGMCHECK intro_null=false intro_len=9.24 loop_null=false loop_len=59.16`、`LOOPMODE=1 loop_end=2839679`，`_bgm_enter` 后 `ENTER@3.5 playing=true db=0.0 len=9.24`→`ENTER@12 len=59.16 loop=true`。
+- Notes / 说明: 症状「进裁决 DOOM BGM 完全不响、本体 BGM 一秒不断、无淡出切换」= `_bgm_enter` 在动 BGM 前 early return，唯一路径是 `intro == null`（`bgm_intro()` 加载失败）。触发条件：**编辑器内运行 + 替换了 `res://mods/<id>/BGM/*.wav` + 未重启 Godot / 未 reimport** → 该资源的导入缓存/引用未复位，`load()` 拿不到新文件。要点：①编辑器内联调时 mod 源（`res://mods/<id>/`）优先于 `user://mods` 的 pck（`mod_manager.gd:570` `load_resource_pack(pck, replace_files=false)` → 项目文件优先），所以**换 BGM 不必重打 pck，但必须让 Godot 重新导入**（重开编辑器或 `filesystem reimport`）。②失败要**告警**，不要静默 return，否则只表现为「没声音」。③`_bgm_enter` 切 loop 曾用 `await SoundManager.bgm_player.finished`：本体任何换歌（`cut_finish`→`bgm_loop_play`；捡紫水晶 `main.gd:33`→`_on_bgm_timer_timeout`；boss）只要在 intro 期间换掉 `bgm_player.stream`，`finished` 就**永不触发**、loop 永不播 → 改用 `create_timer(intro.get_length(), true, false, true)`（`ignore_time_scale=true`，避免处决慢放拉伸计时）+ `_bgm_gen` 守卫。④`bgm_loop()` 旧版 `loop_end = data.size()/(2*ch)` 在 QOA（`compress/mode=2`）下用的是**压缩字节**，会把 59.16s 的循环截成 ~11.95s；应直接信任导入的 `edit/loop_mode=2`（本次实测 `loop_end=2839679` 即完整），仅在导入未设循环时兜底且用 `get_length()*mix_rate` 算帧数。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Camera] 处决镜头倾斜改 15°、命中震屏加强且随连击档位递增（震屏互斥，勿叠加第二个）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:44`（`EXEC_TILT := 0.261799`）、`:191`（`_cam_execute` 用 `EXEC_TILT * ±1`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:276`（`apply_execution_camera` → `emit_shake_screen(8 + tier, 55.0 + 10.0 * tier, 0.03)`）、`:274-275`；`scenes/game_camera/gamecamera.gd:71-89`（`shake_screen(length, shake_range, freq)` = length 次、每次 ±range 像素随机、freq 秒补间）、`:76`（`on_shake` 互斥）。
+- Notes / 说明: 处决**命中**震屏走既有 `apply_execution_camera`（`_execute:429` 对**普通+裁决处决都调**），故「加强」= 直接改该处参数而非再 `emit_shake_screen` 一次 —— 因 `gamecamera.gd:76` 的 `on_shake` 同一时刻只跑一个震屏，后发的会被忽略，新增会把 `apply_execution_camera` 那次吞掉。`EXEC_TILT` 由 `0.07`(≈4°) 改 `0.261799`(15°=π/12，与 `HELD_ROT` 同值)，普通/裁决共用 `_cam_execute` 故都生效。实测 `get_script_constant_map()`：`EXEC_TILT=0.261799 deg≈15.000`。`emit_shake_screen` 参数含义易误读：第 1 参是**次数**（非时长）、第 3 参是每步补间秒数。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Audio] 调整个别 SFX 音量：mod SFX 是各自 AudioStreamPlayer，只能改节点的 `volume_db`
+- Evidence / 证据: `mods/doom_slayer_izzy/script/doom_audio.gd:16-20`（`SFX_VOLUME_DB` 增益表）、`:60-80`（`register_sfx` 新建/已存在都设 `volume_db`）；`scenes/manager/SoundManager.gd:38-42`（`play_sfx(name)` 仅 `$SFX/<name>.play()`，无音量参数）。实测 `SFXVOL crucible_sword_attack db=6.0 / crucible_sword_start db=6.0 / execute_sounds db=0.0`。
+- Notes / 说明: mod 音效经 `DOOM_AUDIO.register_sfx` 注册为 `SoundManager/SFX/<name>` 的独立 `AudioStreamPlayer`（`bus="SFX"`）。`play_sfx` 没有音量参数、WAV 导入也无音量项，所以调音量 = 改该节点 `volume_db`（`SFX_VOLUME_DB` 表，未列出为 0）。注意「已存在则跳过」分支**也要同步 `volume_db`**，否则复用旧节点时改动不生效（本次已处理）。只对 mod 自带音有效；本体音（如 `Swing1`/`HurtSounds2`）不在此表内、改不到。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/SFX] 裁决处决起手补放挥砍音 `crucible_sword_attack`
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:414-415`（`_execute` 内 `if crucible_exec: SoundManager.play_sfx("crucible_sword_attack")`）；`:412`（动画 `play(anim)` 之后）、`:448`（`_kill` 命中时的 `execute_sounds` 不变）。实测 `SFX/crucible_sword_attack` 存在、`db=6.0`、可 `play()`。
+- Notes / 说明: 裁决处决此前只有命中音（`execute_sounds`），无挥舞音；补上与裁决挥舞同源的 `crucible_sword_attack`，**仅裁决处决、起手播放一次**（`crucible_exec` 分支），普通处决不补。音量沿用 `SFX_VOLUME_DB`(+6 dB)。判定标志 `crucible_exec` 在 `_execute:401` 已算好，复用之。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Glory] 「可处决」概率固定为 60%（原 25%+5%×PS等级）
+- Evidence / 证据: `mods/doom_slayer_izzy/script/glory_manager.gd:17-18`（`BASE_CHANCE := 60.0`、`CHANCE_PER_PS := 0.0`）、`:226-227`（`_chance() = BASE_CHANCE + CHANCE_PER_PS * _ps_level()`）。实测运行时 `_chance()=60.0`、`BASE_CHANCE=60.0 CHANCE_PER_PS=0.0`。
+- Notes / 说明: 由「25/30/35/40%（T0–T3）」改为**恒 60%**（把 PS 档位增量置 0，保留公式结构便于回改）。该概率仅在**致死命中**时滚动（`try_stagger:185-206`），且受 `MAX_EXEC=3`、`CD_MS=2000`、非 BOSS/EnemyPart、需有描边材质等门控；敌人不会出生即可处决（除非自带 `ds_executable` buff，走 `_process:41-47`）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/PS] IZZY 裁决三段倍率按 PS 等级查表 + T2 挥砍 hitbox×2 + T3 子弹命中回能/计量
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:62`（`COMBO_MULT := [[2,2,3],[3,3,4],[3,4,5],[4,5,6]]`）、`:252`（`_tier()=clampi(now_t,0,3)`）、`:265`（第1/2段 `dmg=base*COMBO_MULT[_tier()][idx]`）、`:309`（第3段 `base=kick*global*COMBO_MULT[_tier()][2]`，`tick=base*0.4`×4）、`:368-370`（`_apply_hitbox`：`_tier()>=2` 时 `_shapes[idx].radius/height×2`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:42`（连接 `GameEvents.player_bullet_hit_enemy`）、`:202-208`（handler）。实测：`COMBO_MULT` 正确、`hitbox@T2 r=48/h=156`（×2）、`hitbox@T1 r=24/h=78`、`hook_connected=true`、非裁决期 `now_t=3` 手动 emit 后 `meter=4.0`（=T3 上限 400×1%）。
+- Notes / 说明: 三段倍率改为按 `now_t` 查表（T3=原 4/5/6，低阶更低，属「基础调低由升级补回」的设计）；第1/2段取 `[tier][0/1]`，第3段(投掷)取 `[tier][2]`。T2 起**只放大挥砍 capsule**（第3段判定 `CRUCIBLE3_HIT_RANGE=120`、处决 AoE `80` 不变；普通近战走 `_default_shape` 不受影响）——在 `_apply_hitbox` 里改 `_shapes[idx]` 的 `radius/height`，每次挥砍按当前 tier 重算。T3 起子弹命中：**裁决期回能量、非裁决期回计量条**（各 `max_meter()*1%`，不设限）；用本体 `GameEvents.player_bullet_hit_enemy`（`GameEvents.gd:132`，由 `player_bullet.gd:87` 经 `player.gd:480-481 apply_penetrate_dealt` 触发，霰弹多弹丸=多次）。注意 `add_meter` 满会 `activate_crucible()`，故子弹命中可把计量打满自动进裁决；`add_energy`/`add_meter` 各自内部按 `crucible` 状态门控。文案（PS 卡 `t_level`）本次未做。另：**T2 起每次处决叠 2 层 combo**（T0/T1 +1）；`add_combo(units:=1)` 加层数、`add_execution_combo()` 封装 `2 if now_t>=2 else 1`，`melee.gd:449` 改调 `add_execution_combo()`。实测 `now_t` T1/T2/T3 调一次后 `combo=1/2/2`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+- SUPERSEDED: 2026-10-16 上条「T2 起放大挥砍 capsule」已改为 **T1 起**（`melee.gd:368` `_tier()>=1`）；文案与弹匣封顶见下条。
+
+### [Mod/PS] IZZY：判定扩大改到 T1；弹匣上限封顶 2（参考 tsurugi）；PS 文案注册(zh_CN+en)
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:368`（`var s := 2.0 if _tier() >= 1 else 1.0`）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd`（`_ready` 内 `PlayerData.set_player.connect(_apply_ammo_cap)` + `PlayerData.max_ammo_value = 2`；`_apply_ammo_cap(): PlayerData.max_ammo_value = 2`）；`mods/doom_slayer_izzy/entry/doom_slayer_izzy_entry.gd`（`_ready` 同步调 `_register_texts()`，8 条 `ModAPI.add_translation`）；封顶机制 `script/PlayerData.gd:364`（`clamp(1, base_max_ammo + max_ammo_add*max_ammo_mult, max_ammo_value)`）、`:201`（每轮重置 9999）、`scenes/player/tsurugi/tsurugi_ps.gd:22,28`（参考实现）。
+- Notes / 说明: ①判定扩大由 T2 提到 **T1**（`_tier()>=1` 挥砍 capsule `radius/height×2`；T0 仍 1×；T2 只保留处决叠 2 层）。②弹匣**上限封顶 2**：走 `PlayerData.max_ammo_value`（拾取 `max_ammo_add` 只加在 clamp 前，被上限截住）；每轮 `reset_date()` 置 9999，靠 `set_player` 信号由角色 PS 重新封顶（与 tsurugi/Hibiki 同法），PS `_ready` 也立即设一次兜底。③PS 文案键 `doom_slayer_izzy_izzy_ps_0..3`，在 `entry` 同步注册 `zh_CN`+`en`（`add_translation` 不触发 TRANSLATION_CHANGED，须早于菜单/商店构建）；选人卡取 `_ps_0`（`ui/player_card.gd:150`）、局内 PS 卡取 `_ps_0..3`（`ability_shop_ps_card.gd:178-183`），缺键回退 en。实测：`tr(_ps_0)` 中/英文正确、`max_ammo_value=2`、`hitbox@T0 r=24`/`@T1 r=48`、`max_ammo_add=50` 后 `stats.max_ammo=2`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Egg] IZZY 彩蛋：每回合 10% 把局内 HUD 名字 IZZY → 122V
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:22-23`（`EGG_NAME := "122V"`、`EGG_CHANCE := 0.10`）、`:45`（`GameEvents.round_start.connect(_on_round_start_name)`）、`:225-234`（`_on_round_start_name` 覆写 `GameUI.player_name.text`）；名字来源 `ui/game_ui.gd:51`（`player_name.text = player.player_card.name`，仅 `_ready` 设一次）。实测：`gui/label/connected` 正常、300 次调用命中 29 次 `122V`（≈10%）。
+- Notes / 说明: 彩蛋**只覆写局内 HUD 标签**（`GameUI/PlayerName`），`GameUI` 是 `player` 根节点的兄弟（PS `player = NodePath("..")`），故 `player.get_node("GameUI").player_name` 可达；每回合重掷（命中 `122V`、否则还原 `IZZY`）。**故意不改 `player.player_card.name`**：那是共享 `PlayerCard` 资源，HUD/暂停页(`pause_screen.gd:162`)/结算页(`game_over_page.gd:157`)/选人卡(`player_card.gd:148`)/联机名都读它，改了会泄漏且需还原。触发用 `GameEvents.round_start`（每回合含第 1 回合）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [Mod/Coop] IZZY 联机同步：状态/事件镜像、镜像隐藏 HUD、待处决 host 权威、LAN 处决不慢放
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd`（`get/apply_network_character_state`、`apply_network_character_event`、`_build_hud` 远端 return、`_setup_local` 本地独占、`_is_lan`、`apply_execution_camera` 慢放门、`enter_crucible` 广播 `ds_crucible_on`）；`scenes/doom_slayer_izzy_melee.gd`（`_is_lan`、`_execute:443` 慢放门、`_kill` 广播 `ds_execute`、AoE `HurtSounds2` 走 `on_hit_sfx`）；`script/glory_manager.gd:189`（`try_stagger` host 门）+`:233`（`_is_lan`）。参考：`scenes/player/hina/hina_ps.gd:31-49`（LAN 不用全局 `Engine.time_scale`）；`mods/etn_coop/net/coop_net.gd:4615/250/2124/1755`；`coop_player_proxy.gd:82`(`network_remote_player`)/`:250`/`:314-319`；`script/extension_hooks.gd:92-94,104`。单端实测：`is_lan=false`、`apply_network_character_state` 置位→镜像 `crucible=true`、remote guard 不改 `max_ammo_value`、local `_setup_local`→cap=2。
+- Notes / 说明: **A 视觉镜像**——`apply_network_character_state(state)` 解析 `combo(state&0xFF)`/`crucible(state>>8&1)`，**只写镜像 `crucible`**（借 melee `_update_held` 显示持剑），不触发玩法；镜像 `_build_hud` 直接 return（隐藏 combo/能量条，避免与本地串味）。**B 一次性事件**——`player.broadcast_character_event`→`on_character_event`→coop 转发→对端 `apply_network_character_event` 仅回放**世界表现**（`ds_crucible_on`→`crucible_sword_start`；`ds_execute`→`execute_sounds`+mirror `Kick/crucible_burst`.restart()），不含镜头/震屏/慢放。**C 待处决 host 权威**——`try_stagger` 在 `_is_lan() and not multiplayer.is_server()` 时直接 `return false`（客机不掷骰/不打标记），等 host 掷中后 coop 复制 `ds_executable` buff，客机 `_process` 见 buff 本地标记描边；host 端行为不变。**D LAN 处决不慢放**——`_execute`/`apply_execution_camera` 的 `request_slow` 在 LAN 跳过（世界与动画都正常速度，无等比慢）。**关键坑**：coop 镜像实例化整个玩家场景 → 镜像 PS `_ready` 也会跑，**必须把全局副作用（`PlayerData.max_ammo_value=2` / `set_player` 连接 / 子弹命中 hook）限制为本地**（`_setup_local` deferred + `_is_remote()` 守卫），否则客机玩别的角色会被误封顶弹匣/误充能。**待补**：完整双端联机回归（需本地两实例）尚未跑。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-16
+
+### [UI] 通用「MOD」社团卡不可点/无悬停：整卡 ColorRect 默认 STOP 吞事件 + base 悬停为空实现
+- Evidence / 证据: `ui/mod_society_card.tscn`（旧版 `Node2D/ColorRect` 未设 `mouse_filter`，默认 `STOP`；对照本体卡 `ui/ED_card.tscn:258` 设 `mouse_filter = 2`）、`ui/mod_society_base.gd:12-17`（`mouse_select_anim`/`mouse_out_anim` 为 `pass`）、`ui/mod_society_card.gd`（现照搬 `ui/society_card.gd:68-100` 的四个交互方法，播放 `select_anim`/`out_anim`/`on_select_anim`/`out_select_anim`）。
+- Notes / 说明: 根 `PanelContainer` 的 `gui_input`/`mouse_entered` 会被覆盖其上的子 `ColorRect` 拦截（只有右侧十几像素空白可点）；任何整卡覆盖层都必须 `MOUSE_FILTER_IGNORE`。通用卡改为**照搬本体社团卡场景**（`StyleBoxEmpty` 主题、深色条、渐变、完整 `AnimationPlayer` 动画库），仅把图标 `TextureRect` 换成页码 `Label`（`MOD`/`MOD 2`）；悬停可见效果为本体卡同款底部 2px 白色下划线 + `ButtonSounds2`。`mod_society_base` 的空悬停实现仍只用于 mod 自带卡。实测：`hovered=ModSociety`、`current_animation=select_anim`、点击后 `on_select=true`/`on_select_anim`、`Node2D.position.x` 动画到 -24。
+- Source / 来源: user + test
+- Date / 日期: 2026-10-17
+- SUPERSEDED: 2026-10-17 初版悬停用 Tween 做高度 28→30；已改为照搬本体社团卡动画；ColorRect IGNORE 结论不变。
+### [UI/Layout] 滚动容器会被内容最小宽度反向撑开，页签动画不能写死容器位置
+- Evidence / 证据: `ui/game_option.tscn:320`、`ui/option_button.tscn:12`、`tests/test_ui_ux_regressions.gd` 的 `_check_settings_layout`。
+- Notes / 说明: GAME 的横向滚动禁用，内容最小宽度超过预留空间时，`grow_horizontal=2` 会让滚动区向左右扩张；仅增大左边距后实测内容从 x=143 开始，而非目标 x=162。同步收紧首行标签及频率滑条的最小宽度后，滚动区稳定为 `(162,40)`、宽 450。VBox 管理页签位置，RESET 中的绝对 `position=(24,40)` 应移除，`on_out` 的绝对位移须改为等量相对 `offset_transform_position`，避免改布局后动画覆盖排版；高亮轨道及样式不变。
+- SUPERSEDED: 2026-10-16 页签改为固定位置，动画仅缩放背景，不再使用 `offset_transform_position`；GAME 的内容最小宽度结论仍适用。详见下方长扩展标题条目及 `ARCHITECTURE.md` 设置菜单布局（来源：code | test）。
+- SUPERSEDED: 2026-10-17 用户要求页签间距/动画保留 main 原版：恢复 `on_select`/`selected`，删除未被调用的 `on_out` 及 `RESET`/`selected` 中的 `position`/`rotation` 轨道，不再使用 scale 动画（来源：user）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-15
+
+### [UI/Layout] 长扩展页签会撑宽导航内容，焦点跟随可使整列横向偏移
+- Evidence / 证据: 修复前 `ui/option.tscn:200-213`（横纵滚动均为模式 3、`follow_focus=true`）、`ui/option_button.tscn:244-261`（Label 无宽度收敛或省略）、`script/option_button.gd:5-10`（标题直接传给 Label）；2026-10-16 当前工作区 Godot 4.7 渲染复现，截图 `.godot/settings_nav_audit_20261016/07-long-title.png`。
+- Notes / 说明: 用 `ModAPI.create_option_tab` 加入 `NETWORK SETTINGS` 后，导航项宽度从 128 增至 184；聚焦长标题后，不仅长标题裁切，原有 CONTROLS 也出现左侧裁切，整列内容发生横向偏移。导航隐藏滚动条不等于禁止横向滚动，`follow_focus` 也会影响横轴。现有设置布局回归只覆盖短标题 CUSTOM / EXTRA，60 项断言通过不能证明长标题安全。后续修复应同时约束共享页签的文字最小宽度和导航横向滚动策略，并保留完整标题的可获取方式；本次仅检查，未改实现。
+- Follow-up / 后续（2026-10-16，来源：code | test）：已禁用横向滚动，并让共享 Label 单行省略、根 tooltip 同步完整标题；纵向溢出显示滚动条。页签与文字位置固定，仅背景按行尺寸缩放，消除动画打断导致的对齐差异。`clip_text` 会连像素字的外描边一起裁掉，须用 Label 的 `normal` StyleBox 内部留白保护描边和阴影，不能只增加父容器外边距。首次打开自动显示 GAME，重开聚焦当前页。新增回归在修复前捕获 9 项失败，修复后断言全部通过；测试命令仍因本地 godot_ai 缺失及既有退出资源日志判为非零，未改本地插件配置。
+- SUPERSEDED: 2026-10-17 用户要求保留原版页签间距与动画并移除悬停 tooltip：恢复 main 的 Label 排版（不省略、无内部留白），长标题直接裁切；页签只保留 `on_select`/`selected`，删除 `on_out` 与未用轨道（来源：user）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Rendering] 设置导航右缘的黑色竖线是需修复的绘制缺陷
+- Evidence / 证据: 用户明确指出“导航栏与右侧内容区有一条明显的黑色竖线，不是阴影”；修复前 `ui/option.tscn` 的 `Node2D/TextureRect` 在 x=140–156 绘制黑色到透明的渐变，起始颜色为 `(0,0,0,1)`；`tests/test_ui_ux_regressions.gd:_check_settings_seam`；截图 `.godot/settings_nav_audit_20261016/seam-before.png` / `seam-after.png`。
+- Notes / 说明: 前轮“基础布局正常”的检查漏掉该边界缺陷；用户修正为权威输入，不能以阴影设计解释而忽略。像素复核确认 1280×720 渲染的 x=280 起始列为 `(0,0,0)`，右侧背景为 `(18,18,18)`。移除额外贴图及其资源后，x=280–310 与右侧背景一致；GAME / MOD / CONTROLS / COOP 的新增像素断言均通过，设置专项 82 项断言通过。整次运行仍因本地 godot_ai 缺失和已有退出资源报错返回非零，未修改插件配置。
+- SUPERSEDED: 2026-10-16 用户明确要求重新添加右侧阴影；“移除全部阴影”的处理改为“保留柔和阴影，避免纯黑竖线”，此前黑线观察仍成立（来源：user）。
+- Follow-up / 后续（2026-10-16，来源：code | test）：新增宽 14、最大 alpha=0.35 的渐变 `SidebarShadow`，置于内容后方且忽略鼠标；纹理使用 `expand_mode=1`，避免 64 宽资源撑大节点。实际像素从 `(12,12,12)` 平滑回到背景 `(18,18,18)`，四页阴影像素检查通过；设置专项 82 项断言通过。截图：`.godot/settings_nav_audit_20261016/soft-shadow-game.png`。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Input] 设置页签的选中动画去重不会阻止重复切页事件
+- Evidence / 证据: `script/option_button.gd:46`、`ui/option.gd:menu_button_press`、`tests/test_ui_ux_regressions.gd:_check_settings_repeat_activation`；`.godot/settings_repeat_before.log` / `.godot/settings_repeat_final.log`。
+- Notes / 说明: 用户报告重复点击激活项仍触发事件。原 `set_selected()` 虽对相同状态直接返回，但执行在音效及 `GameEvents.menu_button` 发出之后，无法阻止页面重新显示或刷新。修复在点击入口消费激活输入后检查 `on_show`，对当前项直接返回。鼠标、触屏、Enter 的修复前检查共捕获 6 项失败；修复后带已安装 MOD 副本的隔离设置专项 41 项断言通过，含关闭/重开与切页。测试命令仍因已有 godot_ai 文件缺失及退出资源错误返回非零，不能宣称整次运行无错误；未改 `project.godot`。本地 tests 改动按约定不提交。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-16
+
+### [UI/Input] 触屏切换设置页签必须同步导航焦点
+- Evidence / 证据: 用户报告移动端切到其他页签后 GAME 仍有选中态；`ui/option.gd:button_open`、`script/option_button.gd:26-35,46-58`；`.godot/settings_touch_before.log`、`.godot/settings_touch_focus_probe.log`、`.godot/settings_touch_after.log`。
+- Notes / 说明: 设置打开时 GAME 持有焦点，ScreenTouch 不会自动把焦点交给新页签。原逻辑虽把 GAME 的 `on_show` 置 false，仍因 `has_focus()` 播放 `on_select`，留下宽度 4% 的金色背景。隔离渲染回归通过真实触屏输入复现 4 项失败；只释放旧焦点即可消除背景，鼠标不在 GAME 区域，动画等待结束后结果相同。修复在激活入口先 `grab_focus()`，再处理重复点击及切页。此前重复激活检查通过不代表触屏切页焦点正确；原有结论仅覆盖事件去重。稳定职责见 `ARCHITECTURE.md` 的「设置页签激活与焦点」。
+- Validation / 验证: 修复后设置专项 49 项断言通过，覆盖本体/扩展页签触屏往返、唯一高亮、重复触摸去重、鼠标及 Enter；测试仍有既有退出渲染资源错误和临时目录清理错误，不能宣称测试进程无错误。本地测试不提交。
+- Device / 真机: Pixel 5 / Android 14 同签名覆盖安装成功，保留应用数据与已安装 Mod。修复前实际点击 CONTROLS 可见 GAME 左缘金色残留；修复后 CONTROLS / MOD / COOP 以及返回 GAME 再切出均无残留。截图与 APK 在 `.godot/settings_touch_20261017/`。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-17
+
+
+### [Godot/GDScript] 脚本里的空字符转义字面量会在 Godot 4.5+ 刷 "Unexpected NUL character"
+- Evidence / 证据: 修复前 `script/pck_directory.gd:66` 的 `path.ends_with("\u0000")`；本机 Godot v4.7.stable 无头复现：含该字面量的脚本会让启动日志多出该报错，去掉 `pck_directory.gd` 中唯一一处后，完整启动（`--headless --verbose --quit`）由 3 条降为 0 条（连续两次）。
+- Notes / 说明: Godot 4.5/4.7 给字符串解析加上 NUL 检查后，GDScript 里写 `"\u0000"` 这种含空字符的字符串字面量，会被当成非法字符处理并打印 `Unicode parsing error ... Unexpected NUL character`（实测一个字面量约 3 条）。启动日志开头那 3 条报错即来自 `pck_directory.gd`（被 `mod_manager.gd:28` 以 `preload` 引入，ModManager autoload 编译时触发）。PCK 目录表的路径字段按 4 字节对齐并以 NUL 填充、`path_len` 含填充，正确做法是按**字节**裁掉尾部 NUL 再 `get_string_from_utf8()`，不要用含空字符的字符串字面量比较。与本地 godot_ai 缺失、PCK 挂载本身无关。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-17
+
+### [UI] 设置页签保留 main 原版间距/动画，清理未用轨道并移除悬停 tooltip
+- Evidence / 证据: `ui/option_button.tscn`（保留 `on_select` 三条轨道与 `selected` 的 size/position；删除未被调用的 `on_out`；`RESET` 仅留 `Node2D/ColorRect:position`/`size` 与 `.:offset_transform_position`；`selected` 删除 `ColorRect:rotation`）；`ui/option.tscn` 移除 VBox 的 `size_flags_horizontal=3` 与显式 `separation=4`，回到原版自然行高/间距；`script/option_button.gd:26-35,46-58`（删除 `_resize_highlight` 与两处 `tooltip_text`，`set_selected(false)` 回退为 `play_backwards("on_select")`）；`ui/menu_button.tscn` 的 `RESET` 三条轨道均被 `on_select` 使用，未改。
+- Notes / 说明: 用户（source）指出页签按钮重做过，实际只用 `on_select`（悬停）与 `selected`（点击后整条金色底）；`on_out`、`RESET` 及 `.:position`/`rotation` 属遗留未用部分。`offset_transform_position` 在 Godot 4.7 默认 `offset_transform_visual_only=true`，只做视觉偏移，不改按钮自身 position/size，不影响 VBox 排版。长标题不再省略且无 tooltip，超出导航区直接裁切。设置专项回归与截图见 `tests/run_ui_ux_checks.py --settings-only`。
+
+### [Mod/Melee] IZZY 近战暴击（对齐本体；此前近战完全不暴击）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:264-267`（`_roll_melee`）、`:294-296`（`_swing` 写 `base_damage`/`is_crit`）、`:347/365`（`_crucible3_tick` 每 tick roll）、`:499/502`（`_aoe_execute` 整次 roll）；`_kill` 保持 `TRUE_DAMAGE` 不变。本体参考 `scenes/player/chinatsu/chinatsu_melee.gd:69-75`、`hoshino/melee.gd:126-132`、`utaha/melee.gd:72-78`、`script/kick.gd:39-44`；`damage_data.gd:127-128`（`DamageData.make` 支持 `crit` 键）。实测：`crit_luck=100` → `_roll_melee(100)=150/crit=true`；`crit_luck=0` → `100/false`；`_swing(100,...)` 后 `hit_box.base=150 is_crit=true`。
+- Notes / 说明: 之前 IZZY 的 `_swing` 只写 `hit_box.damage_data.base_damage`、**从不 roll `critical_luck`/设 `is_crit`**，`_crucible3_tick`/`_aoe_execute` 的 `DamageData.make` 也未带 `crit` → 近战（普通/裁决连击/处决 AoE）**全部不暴击**。现对齐本体：`luck<critical_luck → base*critical_damage, is_crit=true`；**普通近战+裁决1/2段**经 `_swing` roll；**第3段每 tick 各自 roll**；**AoE 整次 roll 一次**（命中同伤害）；**处决本体 TRUE_DAMAGE 仍不暴击**（直接取 hp）。`critical_damage` 实测基础值 `1.5`；`is_crit` 驱动暴击飘字（`enemy_hurt_floating_text.gd:30`）。联机下 `base_damage` 已含暴击倍率，随伤害字典传 host（`coop_net.gd:_damage_to_dict`），权威结算一致。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Melee] 裁决剑伤害继承 50% 子弹基础伤害（B 口径：段倍率之后加固定值）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:70`（`BULLET_INHERIT := 0.5`）、`:274-280`（`_bullet_inherit()`/`_crucible_hit_base(mult)`）、`:288`（裁决 1/2 段）、`:336`（第 3 段 `tick = base*0.4 + _bullet_inherit()`，**每 tick 各自 +50% 子弹**）、`:511`（AoE `_crucible_hit_base(3.0)`）。实测（kick=20、bullet=10、global=1、crit=1.5）：`_bullet_inherit()=5`、`_crucible_hit_base(2)=45`、`_crucible_hit_base(3)=65`、`crit_luck=100` 时 `_roll_melee(45)=68/crit=true`。
+- Notes / 说明: 仅**裁决剑**（1/2/3 段 + 处决 AoE）继承；**普通近战/枪托不继承**。口径 B：继承部分 = **固定 `0.5 × stats.bullet_damage`**，**不吃 `global_damage`、不吃段倍率**；第 3 段**每个 tick 各加一次**（4 tick → 共 `2×bullet`），不是分摊。暴击作用于含继承的总伤害（`_roll_melee` ×`critical_damage`），即「暴击考虑 50% 子弹伤害」。数值样例（IZZY 基础）：第1段 T0 非暴击 45 / 暴击 68；第3段 T0 throw base=60、tick=24+5=29（4 tick 共 116）；AoE 65 / 暴击 98。联机无额外改动（`base_damage` 已含继承+暴击，随伤害字典传 host）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/PS] `_ps_0` 文案补充连击说明（处决获每层 +10% 全局伤害）
+- Evidence / 证据: `mods/doom_slayer_izzy/entry/doom_slayer_izzy_entry.gd:28,34`（`_register_texts()` 的 `doom_slayer_izzy_izzy_ps_0` zh/en）；`ui/player_card.gd:150`（选人卡取 `_ps_0`）。实测 `tr(_ps_0)` 中/英均为新文案，pck 已重打安装。
+- Notes / 说明: 句序为「弹匣上限 → 待处决概率 → 处决连击（每层 +10% 全局伤害）→ 计量满换裁决剑」；en 同步调整语序。因选人卡描述直接用 `_ps_0`，该句也会出现在选人卡上（符合既有约定）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Society] 社团卡照搬本体（BOOM 图标）+ buff 图标改 mod 自带
+- Evidence / 证据: `mods/doom_slayer_izzy/defs/societies/doom_slayer_izzy_team.tscn`（照搬 `ui/ED_card.tscn`；脚本 `res://ui/mod_society_card.gd`；`group_id="doom_slayer_izzy_team"`、`members=["doom_slayer_izzy_izzy"]`；图标 `res://mods/doom_slayer_izzy/sprites/BOOM_icon.png`）；`mods/doom_slayer_izzy/resources/buff/executable.tres`（图标 → `res://mods/doom_slayer_izzy/sprites/dead_buff.png`，uid `uid://bk6jwuhcqcm4v`）。实测：root/script/gid/members 正确、icon 路径正确、动画列表 `[RESET,on_select_anim,out_anim,out_select_anim,select_anim]`、`buff.icon` 指向 mod 自带、`ModManager.get_mod_societies()=1` 且 gid 正确。
+- Notes / 说明: ①复制 `ui/ED_card.tscn` 时**必须去掉 `[gd_scene]` 里重复的 uid**（否则与本体 ED_card 的 uid 冲突），本次已移除；②社团卡用 `mod_society_card.gd`（继承 `mod_society_base.gd`，带本体悬停/选中动画）；③`BOOM_icon.png` 与 `ED_icon.png` 同为 **223×50**，`TextureRect` 的 offsets/scale 无需改；④buff 图标改为 mod 自带后，**mod 不再依赖未跟踪的本体 `sprites/buff_icon/dead_buff.png`**（该文件在 0.5.1.3 不存在、也不在 git 中），提升了 0.5.1.3 兼容性与干净 checkout 可用性。mod 社团 `group_id` 由 `ModManager._scan_societies` 自动加入 `PlayerData.group`（`mod_manager.gd:1195-1197`），`menu_screen._setup_societies` 据此显示。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/PS] 计量/能量跨回合继承 50%（回合结束减半；裁决态保留）
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:46`（`GameEvents.round_upgrade.connect(_on_round_upgrade_carry)`）、`:80`（`_on_round_upgrade_carry`：裁决期 `energy*=0.5`、否则 `meter*=0.5`）、`_reset_soft`（不再清 `meter/energy/crucible/BGM`，只重置 combo/`crucible_index`）、`_on_change_scene`（换关全清）。实测：非裁决 `meter 120 → round_upgrade → 60` 且 `_reset_soft` 保留 60；裁决 `energy 200 → 100`、`crucible=true` 保持；`_on_change_scene` 后 `meter/energy/crucible = 0/0/false`。
+- Notes / 说明: 目的=缓解「每回合重新处决攒能量、前期攒够时回合快结束」的节奏问题。触发点 `GameEvents.round_upgrade`（回合结束、升级界面前，`round_manager.gd:143`，每回合一次）。裁决态**跨回合保留**（不退出、DOOM BGM 继续），只把剩余 `energy` 减半；非裁决则 `meter` 减半带着走。换关/新局/`reset_done` 仍全清。**已知未处理**：关卡 BGM 轮替（`main.gd:33` 捡紫水晶 + 240s `BGM_timer` → `_on_bgm_timer_timeout` → `bgm_slow_fade_out`）仍会把裁决 BGM 顶掉；纯 mod 挡需依赖本体私有方法名/节点（脆弱 hack），本次按用户意见不做。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Fix] 导出游戏里角色立绘/头像缺失：`sprite_path` 不能用 mod 本地 UID，必须写路径
+- Evidence / 证据: `mods/doom_slayer_izzy/defs/characters/doom_slayer_izzy_izzy.tres:10` 原 `sprite_path = "uid://cpi3qx3s5vgqn"`，改为 `sprite_path = "res://mods/doom_slayer_izzy/sprites/izzy_picture.png"`；读取处 `ui/player_card.gd`（`_apply_sprite(card.sprite_path)`）、`ui/game_ui.gd:50`、`ui/pause_screen.gd:160`、`ui/game_over_page.gd:155`、`ui/menu_box_button.gd:49`、`ui/score_card.gd:164`、`ui/test_character_card.gd:42` 均为 `LazyTexture.load_uncached(path)` → `ResourceLoader.load(path, "", CACHE_MODE_IGNORE)`。实测：`sprite_path` 为路径后 `LazyTexture.load_uncached()` 返回非空、`resource_path` 正确；mod 内已无 `= "uid://"` 字符串。
+- Notes / 说明: 导出游戏的基础 `uid_cache.bin` **不含 mod 的 UID**（导出 `exclude_filter` 排掉 `mods/*`，uid_cache 按导出资源重建），因此 `load("uid://...")` 返回 null → 立绘、局内 HUD 头像、暂停/结算/分数卡头像、测试房头像全缺；脚本/文本/场景路径都正常，所以只表现为「图没了」。`PlayerCard.sprite_path` 这类**普通字符串属性**无法像 `ext_resource` 那样按 `path=` 回退，**必须写 `res://` 路径**。`ext_resource` 同时带 `uid`+`path` 的可回退，无需改。此问题与版本无关（0.5.1.3/0.5.1.4 导出都会中招）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-17
+
+### [Mod/Packaging] mod 元数据改名 + 换 mod 图标；zip 暂存别放构建副本内
+- Evidence / 证据: `mods/doom_slayer_izzy/mod.json`（`name=DOOM SLAYER IZZY`、`author=SH`、`description=神秘穿越而来的BOOM…→https://space.bilibili.com/21140459←`、`game_version=v0.5.1.4`、`version` 保持 `0.1.0`）；`mods/doom_slayer_izzy/icon.png` 为 `izzy_mod_icon.png`（256×256）的副本。实测安装目录 `icon.png=256x256`、`mod.json` 解析正确、pck 内含新 `name/author/game_version`、zip 含 `pck/icon.png/mod.json`。
+- Notes / 说明: ①MOD 管理面板**优先用安装目录的 `icon.png`**（README §2），所以换图标必须把新图复制成 **mod 根目录 `icon.png`** 并在安装时覆盖旧图；只放在 `sprites/` 或只写 `mod.json.icon` 字段不够（旧 `icon.png` 优先）。②打包脚本末尾不自建 zip 时，手动 `Compress-Archive` 的**暂存目录不要放在构建副本内**（如 `<copy>/build/<id>/`）——ModPack 预设的 `exclude_filter` 未排除 `build/`，下次导出会把 `res://build/...` 一起打进 pck（本次已改用 `%TEMP%` 暂存并清掉旧 stage）。③`mod.json` 用 UTF-8 保存，`description` 可含全角标点与 URL（JSON 字符串内无需转义）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [UI] GAME 设置页用 MOD 同款卡片分区；ScrollContainer 子项最小宽度超出会反向撑宽并两侧回弹
+- Evidence / 证据: `ui/game_option.tscn`（`Scroll` offset_left=134（右侧无额外偏移），`Content` → `DisplayCard`/`FeedbackCard`/`AudioCard`，卡片 `StyleBoxFlat_card` 与 `Theme_row`/`Theme_section`；四个 `option_toggle.tscn` 实例 `track_color=Color(0.164706,...)`）；`script/game_option.gd`（`_bind_toggle`/`_bind_toggle_label`/`_set_full_screen` 等，`setting_status()` 用 `set_on(v,false)`）；`script/option_toggle.gd`（`focus_entered/focus_exited`、`ui_accept`、`track_color`）；`ETN_localization.csv`（`option_group_display/feedback/audio`）。
+- Notes / 说明: ① GAME 页原 `Graphics`/`Sounds` 长列表改为三张深色卡片；DISPLAY 两行标签左对齐并包 126×22 固定 wrapper，滑条行固定「标签 126 + 滑条扩展 + 数值 64」，右控件槽 128；FEEDBACK/AUDIO 仍为右对齐标签。内容最小宽度 446，须落在 ScrollContainer 可视宽 446（454 - 8 滚动条）内；超出时 `grow_horizontal=BOTH` 会把 `Scroll` 撑出页面边界。② 关闭态开关在页面暗底上几乎不可见；共享 `option_toggle` 新增导出 `track_color`，GAME 实例设为 0.164706，MOD 保持默认 0.0784314。③ 共享开关新增焦点高亮与 `ui_accept`（Enter/Space/手柄 A），处理输入后 `accept_event()`；GAME 行标签点击转发到 `toggle()`，移动端全屏/垂直同步仍由 `_on_toggle_changed` 回滚并提示。④ 三组标题使用新增本地化键，CSV 仍在末尾追加（UTF-8 BOM + CRLF）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+- Follow-up / 后续（2026-10-18，来源：user + test）：DISPLAY 两行原本 `CellA`/`CellB` 都设 `size_flags_horizontal=3`，RowDisplay 的右列（下拉框）更宽时 HBox 会给两行 `CellA` 分配不同宽度，导致左列开关与右列控件错位。现固定 `CellA=152`、`CellB=262`，仅 `CellB` 扩展；标签改为 126×22 固定 wrapper + 左对齐 + `clip_text`，两行右控件槽统一 128。4 语言下 `FullScreen`/`VSync`/`MaxFps` 的 x 一致、`Resolutions`/`PhysicsInterp` 的 x 一致，`Content` 最小宽 446（Scroll 宽 454，x=134）。
+- SUPERSEDED: 2026-10-18 设置项标签最终统一右对齐，数值槽改为 96×22 并启用 `clip_text`，避免文本最小宽度挤短滑条；按钮与 PopupMenu 须分别统一字体。当前规范见 `CONVENTIONS.md` §6。（来源：user | code | test）
+
+### [Mod/UI] 本轮原型对照以用户附图「B · 列表 + 常驻详情」为准
+- Evidence / 证据: 用户 2026-10-18 附图 `codex-clipboard-413402ed-c756-48c6-a76e-191da22bba18.png`；历史同方向截图 `.godot/prototype_mod_list/mod_list_B.png`；实现 `ui/mod_option.tscn`、`script/mod_option.gd`。
+- Notes / 说明: 用户明确纠正参考对象为附图中的左右双栏方案，包含顶部统计/待重启条、左侧三组列表及右侧常驻详情；此前找到的 js.design 纵向详情画板与 HTML 弹窗原型均不能代替此参考。历史 B 截图的底色、分组数量与待重启数量不同，也不能视为附图的同一状态。此纠正只确定本轮对照来源，不代表用户已要求改代码或确认全部视觉细节。
+- Source / 来源: user
+- Date / 日期: 2026-10-18
+
+
+### [Mod/UI] 行排序会抢占触屏滚动；开关支持确认键不等于可获得焦点
+- Evidence / 证据: `script/mod_option.gd:397`、`:413`；`ui/option_toggle.tscn:160`；本地复现 `tests/mod_ui_audit.gd`，日志 `.godot/mod_ui_audit_20261018/audit.log`。
+- Notes / 说明: 当前 Mod 行在触屏按下时 `accept_event()`，移动超过 6 像素即进入排序，父级 `ScrollContainer` 无法接管。隔离渲染检查中，从行上向上滑动 100 个逻辑像素，`scroll_vertical` 始终为 0，却改写顺序并产生待重启项；尚未 Android 实机复核。另：共享 Toggle 脚本虽处理 `ui_accept`，场景根 `PanelContainer` 未设焦点，Mod 创建行也未补设；运行时行与开关 `focus_mode=0`，`grab_focus()` 被拒绝，不能据处理函数存在就认定键盘可用。本条记录现状，尚未修复。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+- SUPERSEDED: 2026-10-18 已修复：Mod 行设为 `MOUSE_FILTER_PASS`，触屏按下/拖动交给父级滚动，轻点选中，触屏排序使用上下移按钮；鼠标仍可整行拖动排序。Mod 页创建的行与 Toggle 显式启用焦点，方向键选择、Tab 切换与刷新后的焦点恢复均经真实输入验证。共享 Toggle 场景仍不默认启用焦点，其他使用方须按需设置。复现脚本已转为断言回归，修复后日志 `.godot/mod_ui_fix_20261018/audit.log`：触屏滑动 `scroll=59`、顺序不变，无待重启改动。Android 实机仍待验证。来源：code | test。
+
+### [Coop/UI] 联机覆盖层卡片化：LAN 左右分栏常驻房间列表；PageScroll 与动态房间按钮必须进白名单
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/ui/coop_menu.tscn`（Panel `(146,32) 489×320`；Header → `PageScroll/PageContent` → StatusBox；LAN `LanSplit` 左 272 / 右 190；RoomList/RoomStatus/RoomCount）；`ui/coop_menu.gd`（`_build_room_list`/`_refresh_room_list`/`_clear_room_list`/`_refresh_room_status`/`_set_selected_mode`/`_build_interactive_controls`）；`ui/coop_option.gd` + `ui/coop_option.tscn` + `ui/coop_theme.tres`；`i18n/coop_i18n.gd`（`coop_section_*`）。实测 4 语言：Panel 489、PageScroll 478、PageContent 470、Left 272 / Right 190、RoomList 178，右边缘 635 不越界；扩展契约 `checks=17 failures=0`。
+- Notes / 说明: ① `_set_buttons_enabled()` 会把 `_panel` 全部后代设 `IGNORE`，`PageScroll` 本身、竖向滚动条和动态房间按钮都必须加入 `_build_interactive_controls()`，否则触摸拖动/房间点击失效。② 房间列表改为 `%RoomList` 常驻右列，`_clear_room_list()` 同时从白名单移除旧按钮；`_refresh_room_status()` 区分扫描中/无房间/有房间数量。③ 房间行点击沿用 `_on_room_pressed`：回填 IP/端口并直接加入，不再走二级菜单。④ 紧凑字号（分区 12 / 行 13 / LAN 分栏行 12 / 按钮与输入 11 / 说明 IP 9）避免 272/190 两列撑宽；按钮 `clip_text + text_overrun_behavior=3`。⑤ 编辑器里 coop 翻译未注册时 Label 以原始 key 计算最小宽度，Panel 可能显示 500 宽；运行期注册 `coop_i18n` 后为 489，不要按编辑器宽度改布局。⑥ `SakiServerRow` 移入 Relay 卡片后改名查找易失效，已加 `unique_name_in_owner` 并用 `%SakiServerRow`。⑦ `coop_option.tscn` 自带 `coop_theme.tres`，所以本体 option 的 COOP 页也获得同一卡片/像素按钮样式。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+- Follow-up / 后续（2026-10-18，来源：user + test）：仅把 PageScroll 放进白名单仍不够——vbar 可能在构建白名单之后才创建。 `_set_buttons_enabled(true)` 现显式设 PageScroll/vbar STOP，并给白名单控件 `mouse_force_pass_scroll_events=true`；`_input` 增加页面矩形内滚轮兜底（服务器子菜单打开时跳过）。运行期探针：wheel=48 / drag=80 / vbar=57，Filters scroll=0 vbar=0。
+
+### [Mod/UI] 第三方 mod 的 pck 夹带 `mods/etn_coop` 旧编译脚本会遮蔽联机 UI（新场景 + 旧脚本）
+- Evidence / 证据: `user://mods/doom_slayer_izzy/doom_slayer_izzy.pck` 内含 `mods/etn_coop/ui/coop_menu.gdc`、`coop_menu.gd.remap` 与旧 `coop_menu.tscn`；`ModManager` 只扫描 `user://mods`，etn_coop 的镜像 `res://mods/etn_coop` 仅提供项目资源，doom pck 的 `.gd.remap` 让新场景加载旧编译脚本。实测新 etn_coop pck + 镜像后：`coop_menu.gd` 仍 `has_method("_resolve_page_scroll")==false`、`PageScroll.mouse_filter==2`、点击命中 `CoopMenu`；禁用 doom pck 后：`has_resolve=true`、`filter=0`、滚轮 `48`、vbar 拖动 `57`。另：镜像的 `net/coop_net.gd` 仍是旧版，导致 `coop.extensions` 访问报错；对镜像做完整 SDK 同步后消失。
+- Notes / 说明: ① 排查时不要只看 `option.tscn`/新卡片是否出现——**场景可以来自镜像，脚本却来自第三方 pck 的 `.gdc`**；用 `has_method` 或新加的方法确认运行脚本版本。② 第三方 mod 打包时若工程里包含 `res://mods/etn_coop/`（例如复制了联机镜像），会把 `mods/etn_coop/**` 一并打进自己的 pck；它的 `.gdc`/`.remap` 会遮蔽同名 `.gd`，且其 load_order 更高时更明显。修复=重打该 mod 时排除 `mods/etn_coop/**`，或临时把该 pck 移出 `user://mods`。③ 只同步 UI 文件不够；编辑器镜像若长期未全量同步，会出现 `coop_net.gd` 等旧依赖报错，需用 SDK 源整体覆盖镜像。④ `PageScroll` 的 vbar 可能晚于白名单创建，启用时必须动态 `get_v_scroll_bar()` 补 `STOP`；页面矩形内保留 `_input` 滚轮兜底。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [Coop/UI] 手动给页签加 `option_button_box` 后，脚本必须兼容新旧 VBox 路径
+- Evidence / 证据: 镜像 `ui/coop_menu.tscn` 的页签移到 `Node2D/option_button_box/VBoxContainer`（用户手动加 `Title` + ScrollContainer），SDK 源仍是 `Node2D/VBoxContainer`；`script/coop_menu.gd` 新增 `_tabs_vbox()`（新路径优先、旧路径回退），`_setup_tab_input()` 设 `focus_mode=ALL`。运行期验证：`_tabs_vbox()` 返回 VBox、LAN/RELAY/OPTION `focus_mode=2`、`PageScroll.mouse_filter=0`，红字 `Node not found` 消失。
+- Notes / 说明: ① 用户手动调整镜像后不要直接整体同步 SDK→镜像，否则会覆盖 `Title`/`option_button_box`；先保留镜像，等用户确认后再把场景搬回 `mod_sdk/`。② `_build_extension_pages()` 找不到页签容器时 `push_warning` 并返回，避免无条件 `get_node()` 抛红字。③ 内置页签设置 `focus_mode=ALL` 可消除 `option_button.gd:54 grab_focus()` 警告。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [Coop/UI] 语义色 + 粗体层级 + LAN 扫描省略号动画
+- Evidence / 证据: `ui/coop_menu.tscn`（`Theme_section` 浅绿 `0.549/0.941/0.721` + Bold，分隔线低透明绿；`RoomCount`/`RelayRoomCodeLabel` 浅绿 Bold；`LocalIpLabel` 青；说明冷灰；`Title` 浅绿 Bold）；`ui/coop_theme.tres`（按钮 hover/focus 文字浅绿、占位符冷灰）；`ui/coop_option.gd`（卡片标题/数值 Bold + 浅绿）；`ui/coop_menu.gd`（`_scanning_text`/`_tick_scan_dots`，`SCAN_DOT_INTERVAL=0.38`，`coop_lan_scanning_base`；`_set_status` 同时给状态点与文字上色）。运行期实测：状态文本 `正在扫描局域网..` → `...`，`_scan_phase=2→3`，`RoomStatus` 颜色 `(1,0.78,0.12)`，`RoomCount` 颜色 `(0.549,0.941,0.721)` 且字体为 `BoutiqueBitmap9x9_Bold_1.9.ttf`。
+- Notes / 说明: ① 配色走语义而非每卡主题：浅绿=标题/数值，青=地址，琥珀=扫描/等待，红=错误，冷灰=说明；主文本保持白色。② 只有分区标题和数值用 Bold，行标签保持 regular，避免字号/字重一起变重。③ 扫描动画只在 `_browsing && 无房间` 时运行，有房间隐藏、无房间显示静态“未发现房间”；同色点循环不改布局。④ 用户手动加的 `Title`/`option_button_box` 场景已搬回 `mod_sdk`，镜像与源码同步；安装版 pck 已重打。⑤ `doom_slayer_izzy.pck` 仍禁用（旧 `mods/etn_coop` 会遮蔽新 UI）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+- SUPERSEDED: 2026-10-18 用户反馈绿色标题/Bold 过土；分区标题与 COOP 题头恢复灰/白 regular，数值恢复白 regular；仅保留状态色、IP 青和扫描动画。（来源：user）
+
+### [Coop/UI] ESC 关闭联机覆盖层要走 `_input`，且不能先做手柄判断
+- Evidence / 证据: `ui/coop_menu.gd` 新增 `_handle_cancel_input()`，在 `_input()` 顶部优先处理；`_unhandled_input()` 只保留手柄方向/确认。运行期实测：首次 ESC `on_coop=false`；重开后打开服务器子菜单，ESC 只关子菜单（`submenu.visible=false`、`on_coop=true`）；再按 ESC `on_coop=false`。旧实现把 `if not _is_gamepad_event(event): return` 放在 `_is_ui_cancel()` 之前，键盘 ESC 被提前丢弃。
+- Notes / 说明: ① 取消键统一在 `_input()` 消费，早于 GUI/`_unhandled_input`，避免主菜单/暂停页同时响应 ESC。② 顺序：已打开的删除确认框先让弹窗处理；服务器子菜单先只关子菜单；否则 `out_coop_selected()`。③ `ui_cancel`/`pause` 都走 `_is_ui_cancel`，键盘 ESC 与手柄 B 一致；`set_input_as_handled()` 防止重复关闭。④ 旧 `_file_dialog` 守卫是误加（本场景没有该变量），已移除；确认框是 `_saved_confirm`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-18
+
+### [UI] 支援列表展开后主卡背景覆盖候选区域，悬停命中须先查候选
+- Evidence / 证据: `ui/support_ui/support_select_ui.tscn:55-62`（`select_anim` 的 `main_card:size` 轨道将高度从 140 扩到 260；:67-79 是 `MarginContainer` 轨道）、`ui/support_ui/support_select_ui.gd:37`（主卡绑定的 `hit_test` 排除列表矩形，候选优先命中）、`:207`（候选绑定设 `hover_root`，允许按容器实际悬停命中）、本地 `tests/test_ui_ux_regressions.gd:_check_support_details`。
+- Notes / 说明: 主卡与候选列表互为兄弟节点，但展开后的主卡背景矩形包含列表区域；不能先用 `main_card.get_global_rect().has_point()` 决定详情，否则鼠标指向候选也会显示当前支援。应先检查裁剪后的列表区域与候选矩形，再回退主卡。已选候选可能忽略鼠标事件，需结合实际 GUI 悬停所属区域和几何位置读取；边缘截图测试定位到立绘区时也不能使用动画后的主卡底边。浮层贴边只做 clamp 会让它在列表区域纵向钉住（下界 = 视口底 - 浮层高），必须越界时翻到指针另一侧；已显示后换卡不应重新等待悬停延迟。跟随定位要用 `InputEventMouseMotion.position` 缓存（现为 `ui/hover_tooltip.gd:115` 的 `shared.pointer`，锚点见 `:232`），不要用 `get_mouse_position()`：窗口拉伸或测试注入合成事件时它与 GUI hover 不同步、可能滞后一帧，浮层会显得“鼠标动完才动”；缓存后可在 `_input` 里当帧 `place_at`。触屏不显示详情（工程关闭 `emulate_mouse_from_touch`，点按即选中会让浮层闪现），见 `SYSTEMS.md` 同名条目的触屏说明。
+- Validation / 验证: 隔离存档的难度页专项检查中，当前支援等级 21、候选等级 37，鼠标和键盘预览均显示对应等级，且不改变全局出战支援；四语言边缘截图已核对。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+- Follow-up / 后续（2026-10-18，来源：code）：该浮层已由 `support_select_ui.gd` 自管理的 `_details_*` 迁到统一组件 `ui/hover_tooltip.gd` + `HoverTooltipBinding`，`ui/support_ui/support_details.gd/.tscn` 已删除；上述结论不变，落点改为绑定的 `hit_test`/`hover_root` 与宿主的 `_viewports` 跨层协调。
+
+### [UI] 隐藏的 PanelContainer 不排版子 Label，首次定高必须自己算
+- Evidence / 证据: `ui/hover_tooltip.gd:_layout`（:235-298，先设 `label.size.x = 内容宽 - INSET*2`，再用 `get_line_count()` 与 `Font.get_height()` + `line_spacing` 自行定高）、`ui/hover_tooltip.tscn`（宿主 `visible=false`）、`ui/support_ui/support_select_ui.gd:221`（文本来源）。
+- Notes / 说明: 宿主初始隐藏时容器不会 sort 子节点，Label 宽度停留在 1px；首次 `reset_size()` / `get_combined_minimum_size()` 会按 1px 宽换行（示例文本 120 行 → 只排出 24 行），把面板定成截断高度，且该缓存滞后一帧，连续调用 `reset_size()` 当帧无效。正确做法是先按目标宽度强制换行，再用 `get_line_count()`（总行数，需自行按可用高度截断；统一宿主的段数上限为 16）、`Font.get_height()` 与 `line_spacing` 算高：`lines × (行高 + line_spacing) - line_spacing + 上下内边距`（末行不加行距）。
+- Validation / 验证: 隔离存档首次悬停即得到 287px（修复前 612px 空盒），四语言截图与 67 项难度页回归通过；迁移到统一宿主后由 `_layout` 承担同一算法，本地专项回归补了 320×240 窄视口重测与超长文案截断断言（用例未入库）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [UI] Label 没有逐行宽度接口；浮层按内容收窄要用 Font.get_string_size 反推
+- Evidence / 证据: `ui/hover_tooltip.gd:_text_width`（按 `\n` 分段调 `Font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)`，再 `clampf(_measured_width + INSET*2, MIN_WIDTH, width)` 决定面板宽）；本地专项回归（未入库）的「短内容收窄面板」「窄视口重测」「超长截断」断言。
+- Notes / 说明: `Label` 只暴露 `get_line_count()`/`get_visible_line_count()`/`get_line_height()`；`get_line_width()` 属于 `TextEdit`，写到 Label 上是运行期 `Invalid call. Nonexistent function`（本次实测，导致 `_layout` 中断、11 项断言连带失败）。固定宽度（350）会让短提示变成大片空盒，改为按字体测量未换行文本宽度即可自适应：长段落测量值超上限被 clamp，换行后仍占满上限；短文本贴合内容。直接对 Label 设 `size` 能正常 shaping，不受「隐藏容器不排版」影响，但含换行的文本要先按 `\n` 分段，否则整串宽度无意义。
+- Validation / 验证: 截图专项 156 项通过；`tooltip-shared-keyboard` 面板由约 430px 收窄到约 187px，长文与支援详情四语言截图行距、分组正常。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Tooling] `--check-only` 不注册 autoload，会把 autoload 标识符误报为未定义
+- Evidence / 证据: `godot --headless --path . --check-only --script res://ui/hover_tooltip.gd` 报 `Compile Error: Identifier not found: LocaleFont`（`project.godot:25-39` 已注册该 autoload）；改为工程内 SceneTree 脚本在 `_initialize()` 里 `load()` 同一文件即通过，`tests/run_ui_ux_checks.py --level-focus-only` 也 46 项 0 失败。
+- Notes / 说明: `--check-only` 在 autoload 实例注册前编译目标脚本，凡直接引用 `GameEvents`/`SupportData`/`LocaleFont` 等单例的脚本都会被误判，不能据此把代码改回 `get_tree().root.get_node(...)`。批量语法校验应在工程内用 SceneTree 脚本 `load()`（此时 autoload 已就绪），或直接跑 UI 回归。本机缺 `addons/godot_ai`（本地插件状态）会让回归脚本以 1 退出，但 `UI_UX_RESULT ... failures=0` 仍可信。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+
+### [UI/Export] Tooltip 的 free() 在本机 Windows Release 模板中导致整脚本解析失败
+- Evidence / 证据: `ui/hover_tooltip.gd:39-43`（`mount()` 的失效父节点分支）；用户导出的 `E:/Enter The Nyangeon v0.5.1.4-test.exe` 及其启动日志报 `Parse Error: Function "free()" not found in base self.`（`:41`）。本地复现入口 `.godot/tooltip_export_debug/release_loop.py`，最小对照入口 `minimal_release.py`，完整游戏验证日志 `game-regression-runtime.log`。
+- Notes / 说明: 用户反馈 Windows EXE 内 Tooltip 完全不显示。实际 Release 启动在加载宿主脚本时即解析失败，尚未执行到该释放分支也会使所有绑定失效。独立最小工程排除了游戏资源与 Mod：`free()` 和 `self.free()` 均复现，改为 Node 的 `queue_free()` 后通过，失效父节点的未挂载宿主在帧末释放。源码运行及用编辑器引擎 `--main-pack` 挂载同一 EXE 都可通过，不能替代真正 Release 可执行文件的运行验证。本条结论限于本机 Godot 4.7 stable 官方模板的实测，未据此推断其它版本/平台。
+- Validation / 验证: 原始 EXE 复现 `script_loaded=false`；最小 `free()` / `self.free()` 对照均 `valid=false`，`queue_free()` 为 `valid=true`。修复后的完整游戏 Release 专项 `checks=6 failures=0`，覆盖宿主加载、16 个 Label 初始化、真实道具卡键盘与鼠标显示、实际本地化正负效果、失效父节点释放。最终交付包恢复原主菜单并移除临时验证入口。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-18
+
+- Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `CODEBASE_AUDIT.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。

@@ -72,7 +72,7 @@ func  _ammo_reload():
 			reload_sounds.play()
 			reload_anim.speed_scale = 1/ammo_reload_timer.wait_time
 			reload_anim.play("reload")
-			ExtensionHooks.notify(ExtensionHooks.on_player_reload, [self, "reload", reload_anim.speed_scale])
+			ExtensionHooks.notify_named("on_player_reload", [self, "reload", reload_anim.speed_scale])
 	
 		else:
 			if is_clip == true and now_bullet_ammo <= 0:
@@ -83,14 +83,14 @@ func  _ammo_reload():
 				reload_sounds.play()
 				reload_anim.speed_scale = 1/ammo_reload_timer.wait_time
 				reload_anim.play("reload")
-				ExtensionHooks.notify(ExtensionHooks.on_player_reload, [self, "reload", reload_anim.speed_scale])
+				ExtensionHooks.notify_named("on_player_reload", [self, "reload", reload_anim.speed_scale])
 			else:
 				in_ammo_reload = true
 				shoot_timer.stop()
 				ammo_reload_timer.start()
 				reload_anim.speed_scale = 1/ammo_reload_timer.wait_time
 				reload_anim.play("reload_2_start")
-				ExtensionHooks.notify(ExtensionHooks.on_player_reload, [self, "reload_2_start", reload_anim.speed_scale])
+				ExtensionHooks.notify_named("on_player_reload", [self, "reload_2_start", reload_anim.speed_scale])
 				await reload_anim.animation_finished
 				while now_bullet_ammo < stats.max_ammo:
 					ammo_reload_timer.start()
@@ -136,7 +136,7 @@ func _shoot() -> void:
 		now_shoot_flash.rotation = global_rotation
 		now_shoot_flash.active_state()
 		# 联机：每次开火广播枪口闪光（池复用时 child_entered_tree 不再触发）
-		ExtensionHooks.notify(ExtensionHooks.on_visual_activated, [now_shoot_flash])
+		ExtensionHooks.notify_named("on_visual_activated", [now_shoot_flash])
 	if random_sounds == true:
 		fire_sounds.pitch_scale = randf_range(0.8, 1.2)
 	fire_sounds.play()

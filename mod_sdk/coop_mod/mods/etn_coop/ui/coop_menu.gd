@@ -1,14 +1,22 @@
-﻿extends Control
+extends Control
 
 ## 联机菜单覆盖层（option 菜单式布局：左侧 option_button 页签 + 右侧内容面板）。
 ## 页签复用 `res://ui/option_button.tscn`；颜色统一为绿色。通过 CoopNet.instance 管理连接。
 
 const CoopNetScript := preload("res://mods/etn_coop/net/coop_net.gd")
 const MobileNoticeScene := preload("res://ui/mobile_notice.tscn")
+const ROW_FONT := preload("res://fonts/BoutiqueBitmap9x9_1.9.ttf")
 
-enum CoopPanelMode { LAN, RELAY, DEDICATED, OPTION }
+enum CoopPanelMode { LAN, RELAY, DEDICATED, OPTION, EXTENSION }
 
 const TAB_GREEN := Color(0.0, 0.837, 0.295)
+const TEXT_MUTED := Color(0.74902, 0.780392, 0.764706)
+const INFO_COLOR := Color(0.498039, 0.847059, 1.0)
+const WARN_COLOR := Color(1.0, 0.78, 0.12)
+const DANGER_COLOR := Color(0.95, 0.18, 0.12)
+const OK_COLOR := Color(0.2, 0.9, 0.35)
+const OFFLINE_COLOR := Color(0.45, 0.45, 0.45)
+const SCAN_DOT_INTERVAL := 0.38
 
 var on_coop: bool = false
 var _selected_mode: int = CoopPanelMode.LAN
@@ -19,8 +27,13 @@ var nav_index: int = 0
 var _player_id_notice: Node = null
 var _active_tab: Node = null
 var _room_list: VBoxContainer = null
+var _room_status_label: Label = null
+var _room_count_label: Label = null
 var _room_keys: Array = []
 var _browsing: bool = false
+var _scanning_active: bool = false
+var _scan_elapsed: float = 0.0
+var _scan_phase: int = 1
 # 覆盖层内所有可交互控件；新增按钮/输入/开关必须登记此处（_set_buttons_enabled 只恢复名单内的 mouse_filter）。
 var _interactive_controls: Array[Control] = []
 # 中继服务器列表：主面板按钮 + 子菜单（触摸可拖拽滚动）+ 二次确认
@@ -34,8 +47,16 @@ var _submenu_save_button: Button = null
 var _submenu_close_button: Button = null
 var _saved_confirm: ConfirmationDialog = null
 var _pending_delete_addr: String = ""
+var _extension_buttons: Array[Control] = []
+var _extension_pages: Dictionary = {}
+var _selected_extension: String = ""
+var _extension_mouse_filters: Dictionary = {}
+var _extension_focus_modes: Dictionary = {}
+var _extension_statuses: Dictionary = {}
+var _active_extension_status: String = ""
 
 @onready var _panel: PanelContainer = $Panel
+var _page_scroll: ScrollContainer = null
 @onready var _ip_input: LineEdit = %IpInput
 @onready var _port_input: LineEdit = %PortInput
 @onready var _public_ip_input: LineEdit = %PublicIpInput
@@ -73,7 +94,17 @@ var _pending_delete_addr: String = ""
 @onready var _banner: TextureRect = %Banner
 
 
+func _resolve_page_scroll() -> ScrollContainer:
+	if _page_scroll != null and is_instance_valid(_page_scroll):
+		return _page_scroll
+	_page_scroll = get_node_or_null("%PageScroll") as ScrollContainer
+	if _page_scroll == null:
+		_page_scroll = get_node_or_null("Panel/RootHBox/ContentRoot/PageScroll") as ScrollContainer
+	return _page_scroll
+
+
 func _ready() -> void:
+	_resolve_page_scroll()
 	_host_button.pressed.connect(_on_host_pressed)
 	_join_button.pressed.connect(_on_join_pressed)
 	_relay_create_button.pressed.connect(_on_relay_create_pressed)
@@ -99,6 +130,7 @@ func _ready() -> void:
 		coop.connection_status_changed.connect(_on_connection_status_changed)
 		coop.character_select_requested.connect(out_coop_selected)
 		coop.relay_room_created.connect(_on_relay_room_created)
+		coop.extensions.state_changed.connect(_on_extension_state_changed)
 
 	_apply_tab_color(lan)
 	_apply_tab_color(relay)
@@ -126,6 +158,8 @@ func _ready() -> void:
 	_setup_saved_confirm()
 	_build_server_list_button()
 	_build_server_submenu()
+	_build_extension_actions()
+	_build_extension_pages()
 	_build_interactive_controls()
 
 	visible = false
@@ -139,32 +173,51 @@ func _ready() -> void:
 # ---------------- LAN 房间列表（UDP 发现） ----------------
 
 func _build_room_list() -> void:
-	if _lan_panel == null:
+	_room_list = get_node_or_null("%RoomList") as VBoxContainer
+	_room_status_label = get_node_or_null("%RoomStatus") as Label
+	_room_count_label = get_node_or_null("%RoomCount") as Label
+	if _room_list == null:
 		return
-	_room_list = VBoxContainer.new()
-	_room_list.name = "RoomList"
-	_room_list.add_theme_constant_override("separation", 2)
-	_lan_panel.add_child(_room_list)
-	var join_row := _lan_panel.get_node_or_null("JoinRow")
-	if join_row != null:
-		_lan_panel.move_child(_room_list, join_row.get_index() + 1)
+	_room_list.add_theme_constant_override("separation", 4)
+	_refresh_room_status(0, false)
 
 
 func _process(_delta: float) -> void:
 	var coop = CoopNetScript.instance
-	var browsing: bool = visible and _selected_mode == CoopPanelMode.LAN \
+	# 隐藏时只补一次「停广播 + 清房间列表」，其余每帧刷新（房间列表/UPnP 提示）无意义。
+	if not visible:
+		if _browsing:
+			_browsing = false
+			if coop != null and is_instance_valid(coop):
+				coop.call("browse_lan_stop")
+			_clear_room_list()
+			_refresh_room_status(0, false)
+		return
+	var browsing: bool = _selected_mode == CoopPanelMode.LAN \
 			and (coop == null or not bool(coop.is_lan_game))
 	if browsing != _browsing:
 		_browsing = browsing
 		if coop != null and is_instance_valid(coop):
 			coop.call("browse_lan_start" if browsing else "browse_lan_stop")
-		if not browsing and _room_list != null:
-			for c in _room_list.get_children():
-				c.queue_free()
-			_room_keys = []
+		if not browsing:
+			_clear_room_list()
+			_refresh_room_status(0, false)
 	if _browsing and coop != null and is_instance_valid(coop):
 		_refresh_room_list(coop)
+	_tick_scan_dots(_delta)
 	_refresh_manual_ip_hint(coop)
+
+
+func _clear_room_list() -> void:
+	if _room_list == null:
+		return
+	for c in _room_list.get_children():
+		for child in c.get_children():
+			_interactive_controls.erase(child)
+		_room_list.remove_child(c)
+		_interactive_controls.erase(c)
+		c.queue_free()
+	_room_keys = []
 
 
 func _refresh_room_list(coop: Node) -> void:
@@ -175,22 +228,81 @@ func _refresh_room_list(coop: Node) -> void:
 	for r in rooms:
 		keys.append("%s:%d:%d" % [str(r.get("ip", "")), int(r.get("port", 0)), int(r.get("players", 0))])
 	if keys == _room_keys:
+		_refresh_room_status(rooms.size(), _browsing)
 		return
+	_clear_room_list()
 	_room_keys = keys
-	for c in _room_list.get_children():
-		c.queue_free()
-	if rooms.is_empty():
-		var lbl := Label.new()
-		lbl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-		lbl.text = tr("coop_lan_scanning")
-		_room_list.add_child(lbl)
-		return
 	for r in rooms:
+		var name := str(r.get("name", ""))
+		var players := int(r.get("players", 0))
+		var max_players := int(r.get("max", 0))
+		var ip := str(r.get("ip", ""))
+		var port := int(r.get("port", 0))
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 0)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_room_list.add_child(row)
 		var b := Button.new()
-		b.text = "%s  %d/%d" % [str(r.get("name", "")), int(r.get("players", 0)), int(r.get("max", 0))]
-		b.tooltip_text = "%s:%d" % [str(r.get("ip", "")), int(r.get("port", 0))]
-		b.pressed.connect(_on_room_pressed.bind(str(r.get("ip", "")), int(r.get("port", 0))))
-		_room_list.add_child(b)
+		b.text = "%s  %d/%d" % [name, players, max_players]
+		b.tooltip_text = "%s:%d" % [ip, port]
+		b.clip_text = true
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b.custom_minimum_size = Vector2(0, 24)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.mouse_filter = Control.MOUSE_FILTER_STOP if on_coop else Control.MOUSE_FILTER_IGNORE
+		b.pressed.connect(_on_room_pressed.bind(ip, port))
+		row.add_child(b)
+		_interactive_controls.append(b)
+		var addr := Label.new()
+		addr.text = "%s:%d" % [ip, port]
+		addr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		addr.add_theme_font_override("font", ROW_FONT)
+		addr.add_theme_font_size_override("font_size", 9)
+		addr.add_theme_color_override("font_color", INFO_COLOR)
+		addr.clip_text = true
+		row.add_child(addr)
+	_refresh_room_status(rooms.size(), _browsing)
+
+
+func _refresh_room_status(room_count: int, browsing: bool) -> void:
+	if _room_count_label != null:
+		_room_count_label.text = "(%d)" % room_count if room_count > 0 else ""
+	if _room_status_label == null:
+		return
+	if room_count > 0:
+		_scanning_active = false
+		_room_status_label.text = ""
+		_room_status_label.visible = false
+		return
+	var was_scanning := _scanning_active
+	_scanning_active = false
+	if browsing:
+		if not was_scanning:
+			_scan_elapsed = 0.0
+			_scan_phase = 1
+		_scanning_active = true
+		_room_status_label.add_theme_color_override("font_color", WARN_COLOR)
+		_room_status_label.text = _scanning_text()
+		_room_status_label.visible = true
+	else:
+		_room_status_label.add_theme_color_override("font_color", TEXT_MUTED)
+		_room_status_label.text = tr("coop_lan_no_rooms")
+		_room_status_label.visible = true
+
+
+func _scanning_text() -> String:
+	return tr("coop_lan_scanning_base") + ".".repeat(_scan_phase)
+
+
+func _tick_scan_dots(delta: float) -> void:
+	if not _scanning_active or _room_status_label == null:
+		return
+	_scan_elapsed += delta
+	if _scan_elapsed < SCAN_DOT_INTERVAL:
+		return
+	_scan_elapsed = fmod(_scan_elapsed, SCAN_DOT_INTERVAL)
+	_scan_phase = _scan_phase % 3 + 1
+	_room_status_label.text = _scanning_text()
 
 
 func _on_room_pressed(ip: String, port: int) -> void:
@@ -211,6 +323,7 @@ func _apply_tab_color(tab: Node) -> void:
 # 从而恢复悬停（根自带 mouse_entered/exited）与点击（根 gui_input + shoot）。
 func _setup_tab_input(tab: Node) -> void:
 	tab.mouse_filter = Control.MOUSE_FILTER_STOP
+	tab.focus_mode = Control.FOCUS_ALL
 	for child in tab.get_children():
 		if child is Control:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -221,8 +334,15 @@ func _setup_tab_input(tab: Node) -> void:
 				child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+func _tabs_vbox() -> Control:
+	var box := get_node_or_null("Node2D/option_button_box/VBoxContainer")
+	if box == null:
+		box = get_node_or_null("Node2D/VBoxContainer")
+	return box
+
+
 func _setup_tabs_container() -> void:
-	var box := get_node_or_null("Node2D/VBoxContainer")
+	var box := _tabs_vbox()
 	if box is Control:
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -259,17 +379,7 @@ func _on_page_anim_finished(anim_name: StringName) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not on_coop:
 		return
-	# 子菜单开启时，取消键只关子菜单（不关整个联机覆盖层）
-	if _server_submenu != null and _server_submenu.visible:
-		if _is_ui_cancel(event):
-			_close_server_submenu()
-			get_viewport().set_input_as_handled()
-			return
 	if not _is_gamepad_event(event):
-		return
-	if _is_ui_cancel(event):
-		out_coop_selected()
-		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("ui_down") or event.is_action_pressed("ui_right"):
 		_move_nav(1)
@@ -280,6 +390,48 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _is_ui_accept(event):
 		_activate_nav()
 		get_viewport().set_input_as_handled()
+
+
+func _handle_cancel_input(event: InputEvent) -> bool:
+	if not on_coop:
+		return false
+	if _saved_confirm != null and _saved_confirm.visible:
+		return false
+	if not _is_ui_cancel(event):
+		return false
+	if _server_submenu != null and _server_submenu.visible:
+		_close_server_submenu()
+	else:
+		out_coop_selected()
+	get_viewport().set_input_as_handled()
+	return true
+
+
+# 滚轮兜底：覆盖整个页面矩形，即使指针停在按钮/输入框/滑条上也让页面滚动。
+func _input(event: InputEvent) -> void:
+	if not on_coop:
+		return
+	if _handle_cancel_input(event):
+		return
+	if _server_submenu != null and _server_submenu.visible:
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed:
+		return
+	if mb.button_index != MOUSE_BUTTON_WHEEL_UP and mb.button_index != MOUSE_BUTTON_WHEEL_DOWN:
+		return
+	if _page_scroll == null or not is_instance_valid(_page_scroll):
+		_resolve_page_scroll()
+	if _page_scroll == null or not is_instance_valid(_page_scroll):
+		return
+	if not _page_scroll.get_global_rect().has_point(mb.position):
+		return
+	var step := int(48.0 * maxf(1.0, mb.factor))
+	var delta := -step if mb.button_index == MOUSE_BUTTON_WHEEL_UP else step
+	_page_scroll.scroll_vertical += delta
+	get_viewport().set_input_as_handled()
 
 
 func _is_ui_accept(event: InputEvent) -> bool:
@@ -295,7 +447,11 @@ func _is_gamepad_event(event: InputEvent) -> bool:
 
 
 func _get_nav_items() -> Array[Control]:
-	var items: Array[Control] = [lan, relay, option]
+	var items: Array[Control] = [lan, relay]
+	for entry in _extension_pages.values():
+		items.append(entry.tab)
+	items.append(option)
+	items.append_array(_extension_buttons)
 	# 玩家 ID 行常驻顶部（所有页签通用）
 	items.append(_player_id_input)
 	items.append(_player_id_confirm)
@@ -315,13 +471,24 @@ func _get_nav_items() -> Array[Control]:
 			for c in _coop_option.call("get_interactive_controls"):
 				if c is Control:
 					items.append(c)
-	return items
+	elif _selected_mode == CoopPanelMode.EXTENSION:
+		var page: Control = _extension_pages[_selected_extension].page
+		for control in page.get_interactive_controls():
+			if control is Control and control.focus_mode != Control.FOCUS_NONE:
+				items.append(control)
+	var visible_items: Array[Control] = []
+	for item in items:
+		if item.is_visible_in_tree() and not (item is BaseButton and item.disabled):
+			visible_items.append(item)
+	return visible_items
 
 
 func _move_nav(step: int) -> void:
 	var items: Array[Control] = _get_nav_items()
 	if items.is_empty():
 		return
+	# 页签切换后条目数可能变少，先夹取索引，避免 items[nav_index] 越界
+	nav_index = clampi(nav_index, 0, items.size() - 1)
 	_unfocus_nav(items[nav_index])
 	nav_index = posmod(nav_index + step, items.size())
 	_focus_nav(items[nav_index])
@@ -334,6 +501,8 @@ func _focus_nav(item: Control) -> void:
 		mouse_on_relay()
 	elif item == option:
 		mouse_on_option()
+	elif _extension_id_for_tab(item) != "":
+		item.call("mouse_entered_anim")
 	else:
 		item.grab_focus()
 		SoundManager.play_sfx("ButtonSounds2")
@@ -346,6 +515,8 @@ func _unfocus_nav(item: Control) -> void:
 		mouse_out_relay()
 	elif item == option:
 		mouse_out_option()
+	elif _extension_id_for_tab(item) != "":
+		item.call("mouse_exitedd_anim")
 
 
 func _activate_nav() -> void:
@@ -362,7 +533,8 @@ func _activate_nav() -> void:
 		nav_index = 1
 	elif item == option:
 		_set_selected_mode(CoopPanelMode.OPTION)
-		nav_index = 2
+	elif _extension_id_for_tab(item) != "":
+		_select_extension(_extension_id_for_tab(item))
 	elif item is LineEdit:
 		item.grab_focus()
 		DisplayServer.virtual_keyboard_show(item.text)
@@ -371,6 +543,7 @@ func _activate_nav() -> void:
 
 
 func on_coop_selected() -> void:
+	_resolve_page_scroll()
 	on_coop = true
 	visible = true
 	if get_viewport() != null:
@@ -380,6 +553,8 @@ func on_coop_selected() -> void:
 		_coop_option.call("refresh")
 	_play_in()
 	nav_index = 0
+	if _page_scroll != null:
+		_page_scroll.scroll_vertical = 0
 	if Game.control_mode == 2 and not _get_nav_items().is_empty():
 		_focus_nav(_get_nav_items()[nav_index])
 
@@ -388,6 +563,9 @@ func out_coop_selected() -> void:
 	SoundManager.play_sfx("UISounds2")
 	_close_server_submenu()
 	on_coop = false
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused != null and is_ancestor_of(focused):
+		get_viewport().gui_release_focus()
 	_set_buttons_enabled(false)
 	_play_out()
 
@@ -395,13 +573,26 @@ func out_coop_selected() -> void:
 # 集中登记覆盖层内所有可交互控件（新增按钮/输入/开关必须加到这里，否则会被下面
 # 的「后代统一 IGNORE」流程留在不可点击状态——UPnP 开关/端口框曾因此点不动）。
 func _build_interactive_controls() -> void:
+	_resolve_page_scroll()
 	_interactive_controls = [
 		_host_button, _join_button, _ip_input, _port_input,
 		_public_ip_input, _public_ip_clear,
 		_relay_server_input, _relay_room_input, _relay_create_button, _relay_join_button, _server_list_button,
 		option, _player_id_input, _player_id_confirm,
-		_addr_lan_toggle, _addr_public_toggle,
+		_addr_lan_toggle, _addr_public_toggle, _page_scroll,
 	]
+	if _page_scroll != null:
+		var vbar := _page_scroll.get_v_scroll_bar()
+		if vbar != null:
+			_interactive_controls.append(vbar)
+	_interactive_controls.append_array(_extension_buttons)
+	for entry in _extension_pages.values():
+		var controls: Array = [entry.tab]
+		controls.append_array(entry.page.get_interactive_controls())
+		for control in controls:
+			_interactive_controls.append(control)
+			_extension_mouse_filters[control] = control.mouse_filter
+			_extension_focus_modes[control] = control.focus_mode
 	# 可复用 coop 选项内容（滑条/开关/自检按钮）也登记进白名单
 	if _coop_option != null and is_instance_valid(_coop_option) and _coop_option.has_method("get_interactive_controls"):
 		for c in _coop_option.call("get_interactive_controls"):
@@ -409,13 +600,95 @@ func _build_interactive_controls() -> void:
 				_interactive_controls.append(c)
 
 
+func _build_extension_actions() -> void:
+	var coop = CoopNetScript.instance
+	if coop == null:
+		return
+	var actions: Array = coop.extensions.get_menu_actions()
+	if actions.is_empty():
+		return
+	var row := HBoxContainer.new()
+	row.name = "ExtensionActions"
+	var content := _panel.get_node("RootHBox/ContentRoot")
+	content.add_child(row)
+	content.move_child(row, content.get_node("StatusBox").get_index())
+	for action in actions:
+		var button: Button = action.create_button.call() if action.create_button.is_valid() else Button.new()
+		button.name = str(action.id)
+		button.text = str(action.title)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(action.activate)
+		row.add_child(button)
+		_extension_buttons.append(button)
+
+
+func _build_extension_pages() -> void:
+	var coop = CoopNetScript.instance
+	if coop == null:
+		return
+	var content := _panel.get_node("RootHBox/ContentRoot/PageScroll/PageContent")
+	var tabs := _tabs_vbox()
+	if tabs == null:
+		push_warning("[etn_coop] 找不到页签容器 Node2D/option_button_box/VBoxContainer")
+		return
+	for descriptor in coop.extensions.get_menu_pages():
+		var page = descriptor.create_page.call()
+		if not page is Control or page.get_parent() != null or not page.has_method("get_interactive_controls"):
+			push_warning("[etn_coop] 拓展页须返回未挂载且提供交互名单的 Control：%s" % descriptor.id)
+			if page is Node and page.get_parent() == null:
+				page.queue_free()
+			continue
+		page.visible = false
+		page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		content.add_child(page)
+		var tab := ModAPI.create_option_tab("coop_extension_" + str(descriptor.id), str(descriptor.title))
+		tab.get_node("Label").add_theme_font_size_override("font_size", 14)
+		tabs.add_child(tab)
+		tabs.move_child(tab, option.get_index())
+		tab.focus_mode = Control.FOCUS_ALL
+		_apply_tab_color(tab)
+		_setup_tab_input(tab)
+		_extension_pages[str(descriptor.id)] = {"tab": tab, "page": page, "title": str(descriptor.title)}
+		var provider: Object = descriptor.create_page.get_object()
+		var details: Dictionary = provider.diagnostics()
+		_on_extension_state_changed(str(descriptor.id), str(details.get("state", "idle")), "")
+
+
+func _extension_id_for_tab(tab: Control) -> String:
+	for id in _extension_pages:
+		if _extension_pages[id].tab == tab:
+			return id
+	return ""
+
+
+func _select_extension(id: String) -> void:
+	if not _extension_pages.has(id):
+		return
+	_selected_extension = id
+	_set_selected_mode(CoopPanelMode.EXTENSION, false)
+
+
 func _set_buttons_enabled(enabled: bool) -> void:
+	_resolve_page_scroll()
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for child in _panel.find_children("*", "Control", true, false):
 		child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for c in _interactive_controls:
 		if c != null and is_instance_valid(c):
 			c.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+			c.mouse_force_pass_scroll_events = true
+	# 拓展滚动页保留 PASS 冒泡；关闭菜单时同时撤销其键盘焦点。
+	for control in _extension_mouse_filters:
+		control.mouse_filter = _extension_mouse_filters[control] if enabled else Control.MOUSE_FILTER_IGNORE
+		control.focus_mode = _extension_focus_modes[control] if enabled else Control.FOCUS_NONE
+	# 滚条可能晚于 _build_interactive_controls() 才创建，启用时再动态恢复一次。
+	if _page_scroll != null and is_instance_valid(_page_scroll):
+		_page_scroll.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+		_page_scroll.mouse_force_pass_scroll_events = true
+		var vbar := _page_scroll.get_v_scroll_bar()
+		if vbar != null:
+			vbar.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
 
 
 func _play_in() -> void:
@@ -492,6 +765,8 @@ func _set_selected_mode(mode: int, play_sound: bool = true) -> void:
 	_relay_panel.visible = on_relay
 	_dedicated_panel.visible = mode == CoopPanelMode.DEDICATED
 	_option_panel.visible = mode == CoopPanelMode.OPTION
+	for id in _extension_pages:
+		_extension_pages[id].page.visible = mode == CoopPanelMode.EXTENSION and id == _selected_extension
 	match mode:
 		CoopPanelMode.LAN:
 			_mode_subtitle_label.text = "coop_mode_subtitle_lan"
@@ -507,7 +782,13 @@ func _set_selected_mode(mode: int, play_sound: bool = true) -> void:
 			_set_status(_lan_status_message, "OPTION")
 			if _coop_option != null and is_instance_valid(_coop_option) and _coop_option.has_method("refresh"):
 				_coop_option.call("refresh")
+		CoopPanelMode.EXTENSION:
+			_mode_subtitle_label.text = _extension_pages[_selected_extension].title
+			_refresh_extension_status()
 	_update_mode_visuals(mode)
+	_resolve_page_scroll()
+	if _page_scroll != null:
+		_page_scroll.scroll_vertical = 0
 
 
 func _update_mode_visuals(mode: int) -> void:
@@ -533,6 +814,8 @@ func _tab_for_mode(mode: int) -> Node:
 			return relay
 		CoopPanelMode.OPTION:
 			return option
+		CoopPanelMode.EXTENSION:
+			return _extension_pages[_selected_extension].tab
 	return null
 
 
@@ -542,6 +825,12 @@ func _deselect_tab(tab: Node) -> void:
 
 
 func _on_menu_button(button_id: String) -> void:
+	if not on_coop:
+		return
+	for id in _extension_pages:
+		if button_id == _extension_pages[id].tab.button_id:
+			_select_extension(id)
+			return
 	if button_id == "coop_lan":
 		if _selected_mode != CoopPanelMode.LAN:
 			SoundManager.play_sfx("ButtonSounds")
@@ -609,10 +898,10 @@ func _build_server_list_button() -> void:
 		return
 	_server_list_button = Button.new()
 	_server_list_button.name = "ServerListButton"
-	_server_list_button.custom_minimum_size = Vector2(150, 30)
+	_server_list_button.custom_minimum_size = Vector2(150, 26)
 	_server_list_button.text = "coop_server_list"
 	_server_list_button.pressed.connect(_open_server_submenu)
-	var saki_row := _relay_panel.get_node_or_null("SakiServerRow")
+	var saki_row := get_node_or_null("%SakiServerRow")
 	if saki_row != null:
 		saki_row.add_child(_server_list_button)
 	else:
@@ -644,14 +933,15 @@ func _build_server_submenu() -> void:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(360, 0)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.14, 0.14, 0.16, 1.0)
-	sb.border_color = Color(0.3, 0.3, 0.35, 1.0)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(6)
-	sb.content_margin_left = 12
-	sb.content_margin_top = 12
-	sb.content_margin_right = 12
-	sb.content_margin_bottom = 12
+	sb.bg_color = Color(0.101961, 0.101961, 0.101961, 1.0)
+	sb.border_color = Color(0.223529, 0.223529, 0.223529, 1.0)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(0)
+	sb.anti_aliasing = false
+	sb.content_margin_left = 6
+	sb.content_margin_top = 6
+	sb.content_margin_right = 6
+	sb.content_margin_bottom = 6
 	panel.add_theme_stylebox_override("panel", sb)
 	center.add_child(panel)
 
@@ -662,6 +952,9 @@ func _build_server_submenu() -> void:
 	var title := Label.new()
 	title.text = "coop_saved_servers"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", ROW_FONT)
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", Color(0.819608, 0.819608, 0.819608, 1))
 	vbox.add_child(title)
 
 	_server_submenu_scroll = ScrollContainer.new()
@@ -1106,8 +1399,52 @@ func _on_relay_join_gui_input(event: InputEvent) -> void:
 		_relay_join_button.accept_event()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready() and _selected_mode == CoopPanelMode.EXTENSION:
+		_refresh_extension_status.call_deferred()
+
+
+func _on_extension_state_changed(id: String, state: String, message: String) -> void:
+	var previous: Dictionary = _extension_statuses.get(id, {})
+	_extension_statuses[id] = {"state": state, "message": message,
+		"network": previous.get("network", "") if state == "ready" else ""}
+	if state in ["preparing", "ready"]:
+		_active_extension_status = id
+	elif _active_extension_status == id:
+		_active_extension_status = ""
+	if _selected_mode == CoopPanelMode.EXTENSION and _selected_extension == id:
+		_refresh_extension_status()
+
+
+func _refresh_extension_status() -> void:
+	var status: Dictionary = _extension_statuses.get(_selected_extension, {})
+	var message: String = str(status.get("message", ""))
+	match str(status.get("state", "idle")):
+		"preparing":
+			message = "coop_status_extension_preparing"
+		"ready":
+			message = str(status.get("network", ""))
+			if message.is_empty() or message == "offline":
+				message = "coop_status_extension_ready"
+		"failed":
+			if message.is_empty():
+				message = "coop_status_extension_failed"
+		_:
+			message = "offline"
+	_set_status(message, _extension_pages[_selected_extension].title)
+	if status.get("state") == "failed":
+		_status_dot.color = Color(0.95, 0.18, 0.12)
+	elif message in ["coop_status_extension_preparing", "coop_status_extension_ready"]:
+		_status_dot.color = Color(1.0, 0.78, 0.12)
+
+
 func _on_connection_status_changed(message: String) -> void:
-	if _selected_mode == CoopPanelMode.RELAY:
+	# 只有当前组网会话接收网络状态；失败/取消后的迟到通知不能覆盖已缓存的结果。
+	if not _active_extension_status.is_empty():
+		_extension_statuses[_active_extension_status]["network"] = message
+	if _selected_mode == CoopPanelMode.EXTENSION:
+		_refresh_extension_status()
+	elif _selected_mode == CoopPanelMode.RELAY:
 		_set_status(message, "RELAY")
 	elif _selected_mode == CoopPanelMode.DEDICATED:
 		return
@@ -1125,19 +1462,19 @@ func _on_connection_status_changed(message: String) -> void:
 
 
 func _set_status(message: String, prefix: String = "LAN") -> void:
+	var lower := message.to_lower()
+	var color := OFFLINE_COLOR
+	if lower.contains("failed") or lower.contains("disconnected") or lower.contains("not available"):
+		color = DANGER_COLOR
+	elif lower.contains("connected") or lower.contains("joined") or lower.contains("selected") or lower.contains("created"):
+		color = OK_COLOR
+	elif lower.contains("hosting") or lower.contains("joining") or lower.contains("waiting") or lower.contains("creating"):
+		color = WARN_COLOR
 	if _status_label != null:
 		_status_label.text = tr("coop_status_format") % [_localize_status_prefix(prefix), _localize_status_message(message)]
-	if _status_dot == null:
-		return
-	var lower := message.to_lower()
-	if lower.contains("failed") or lower.contains("disconnected") or lower.contains("not available"):
-		_status_dot.color = Color(0.95, 0.18, 0.12)
-	elif lower.contains("connected") or lower.contains("joined") or lower.contains("selected") or lower.contains("created"):
-		_status_dot.color = Color(0.2, 0.9, 0.35)
-	elif lower.contains("hosting") or lower.contains("joining") or lower.contains("waiting") or lower.contains("creating"):
-		_status_dot.color = Color(1.0, 0.78, 0.12)
-	else:
-		_status_dot.color = Color(0.45, 0.45, 0.45)
+		_status_label.add_theme_color_override("font_color", color)
+	if _status_dot != null:
+		_status_dot.color = color
 
 
 func _update_local_ip_label(host_message: String = "") -> void:

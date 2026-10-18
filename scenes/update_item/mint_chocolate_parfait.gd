@@ -2,16 +2,8 @@ extends EquipItem
 
 @onready var mint_chocolate_parfait_icon = preload("res://scenes/update_item/mint_chocolate_parfait_icon.tscn")
 
-var group: Array = []
-
 func _on_equip():
-	var sprite_2d = mint_chocolate_parfait_icon.instantiate()
-	group = get_tree().get_nodes_in_group("Follow")
-	for i in group:
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(sprite_2d)
-			sprite_2d.get_follow(i)
-			i.follow_use = true
+	attach_follow_icon(mint_chocolate_parfait_icon)
 
 func _setup():
 	# 改为命中瞬间信号（携带 live bullet；联机下 en_damage_taken 是权威延迟回传，那时子弹已回池）

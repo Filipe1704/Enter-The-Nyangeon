@@ -6,18 +6,18 @@ extends PanelContainer
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 @onready var label: Label = $VBoxContainer/Label
 @onready var texture_rect: TextureRect = $VBoxContainer/TextureRect
-@onready var text_show: Node2D = $Text
-@onready var item_text: Label = %ItemText
 
 var game_mode: String
 var on_selected: bool = false
 var on_touch: bool = false
-var show_text: bool = false
+var _tooltip: HoverTooltipBinding
 var _changing := false
 var _input_open := true
 var _change_sequence: int = 0
 
 func _ready() -> void:
+	_tooltip = HoverTooltipBinding.bind(self, _tooltip_content, func(): return _input_open, func(): on_touch = false)
+	GameEvents.player_card_touch.connect(touch_out)
 	mouse_entered.connect(_mouse_enter)
 	mouse_exited.connect(_mouse_exit)
 	gui_input.connect(gamemode_selected)
@@ -32,19 +32,11 @@ func _process(delta: float) -> void:
 			now_font -= 1
 			label.set("theme_override_font_sizes/font_size", now_font)
 
-func _physics_process(delta: float) -> void:
-	if show_text == true:
-		if on_touch == false and not has_focus():
-			text_show.global_position = get_global_mouse_position()
-		else:
-			text_show.global_position = self.global_position
-
 func get_gamemode_card():
 	gamemode_conflicting = gamemode_card.gamemode_conflicting
 	label.text = str(gamemode_card.game_mode_name) + "_id"
 	game_mode = gamemode_card.game_mode_id
 	texture_rect.texture = gamemode_card.game_mode_icon
-	item_text.text = str(gamemode_card.game_mode_name) + "_description"
 	if PlayerData.game_mode.has(game_mode):
 		on_selected = true
 		animation_player.play("full_anim")
@@ -54,6 +46,8 @@ func open_mouse():
 
 func set_interactive(enabled: bool) -> void:
 	_input_open = enabled
+	if not enabled:
+		_tooltip.dismiss()
 	focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
 	if enabled and not _changing:
 		open_mouse()
@@ -64,8 +58,6 @@ func close_mouse():
 	mouse_filter = 2
 
 func _mouse_enter() -> void:
-	show_text = true
-	text_show.visible = true
 	if _changing:
 		return
 	if on_selected == false:
@@ -78,8 +70,6 @@ func _mouse_enter() -> void:
 func _mouse_exit():
 	if has_focus():
 		return
-	show_text = false
-	text_show.visible = false
 	if _changing:
 		return
 	if on_selected == false:
@@ -87,11 +77,10 @@ func _mouse_exit():
 	else:
 		animation_player.play_backwards("full_select")
 
-func touch_out():
-	await get_tree().create_timer(0.05).timeout
-	
-	if on_selected == false and on_touch == true:
-		on_touch = false
+func touch_out() -> void:
+	var had_touch := on_touch
+	_tooltip.dismiss()
+	if not on_selected and had_touch:
 		animation_player.play_backwards("select_anim")
 
 func add_game_mode():
@@ -158,20 +147,17 @@ func gamemode_selected(event: InputEvent):
 		return
 	if _changing:
 		return
-	if event as InputEventScreenTouch and event.pressed:
+	if event is InputEventScreenTouch:
+		if not _tooltip.tapped(event):
+			return
 		if on_selected == false and on_touch == false:
 			GameEvents.emit_player_card_touch()
-			await get_tree().create_timer(0.1).timeout
-			if not _input_open or _changing:
-				return
 			on_touch = true
-			show_text = true
-			text_show.visible = true
+			_tooltip.preview("touch", event.index)
 			SoundManager.play_sfx("ButtonSounds2")
 			animation_player.play("select_anim")
 		elif on_selected == false and on_touch == true:
-			show_text = false
-			text_show.visible = false
+			_tooltip.dismiss()
 			add_game_mode()
 		elif on_selected == true:
 			erase_game_mode()
@@ -180,3 +166,8 @@ func gamemode_selected(event: InputEvent):
 		add_game_mode()
 	elif on_selected == true and event.is_action_pressed("shoot"):
 		erase_game_mode()
+
+func _tooltip_content() -> Array:
+	if gamemode_card == null:
+		return []
+	return [{"text": str(gamemode_card.game_mode_name) + "_id", "role": "title"}, {"text": str(gamemode_card.game_mode_name) + "_description"}]

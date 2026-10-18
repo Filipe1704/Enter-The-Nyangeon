@@ -32,7 +32,7 @@ func _on_pickup_complete(p):
 			p.health_component.take_damage(p.health_component.heal_data)
 		GameEvents.emit_player_taken_medkit(self.global_position)
 	# 联机：通知 mod 广播该医疗箱已被拾取（host 集中处理 ayane 额外生成）
-	ExtensionHooks.notify(ExtensionHooks.on_medkit_taken, [self])
+	ExtensionHooks.notify_named("on_medkit_taken", [self])
 	$AnimationPlayer.play("pick_anim")
 
 # 联机：远端确认该医疗箱已被他人拾取 → 只播消失演出，不结算

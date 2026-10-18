@@ -38,7 +38,7 @@ func game_over_true(_player_dead: bool):
 
 func bgm_loop_play():
 	if game_over == false:
-		SoundManager.play_bgm(bgm_loop[bgm_num])
+		SoundManager.play_bgm(bgm_loop[bgm_num], 0.0)
 
 func first_round():
 	SoundManager.game_end = false
@@ -49,7 +49,7 @@ func first_round():
 	
 	SoundManager.cut_finish.connect(bgm_loop_play)
 	bgm_num = randi_range(1, bgm_first_cut.size() - 1)
-	SoundManager.play_bgm_cut(bgm_first_cut[bgm_num])
+	SoundManager.play_bgm_cut(bgm_first_cut[bgm_num], 1.0)
 	BGM_timer.start()
 	
 	PlayerData.get_player()
@@ -68,8 +68,8 @@ func first_round():
 	PlayerData.update_player_ability()
 	
 	var start_local_round: bool = true
-	if ExtensionHooks.first_round_start_gate.is_valid():
-		start_local_round = bool(ExtensionHooks.first_round_start_gate.call())
+	if ExtensionHooks.is_hook_active("first_round_start_gate"):
+		start_local_round = ExtensionHooks.intercept_named("first_round_start_gate", [])
 	if start_local_round:
 		round_manager.first_round_start()
 	
@@ -143,7 +143,7 @@ func boss_bgm():
 	BGM_timer.stop()
 	await get_tree().create_timer(1).timeout
 	bgm_num = 0
-	SoundManager.play_bgm_cut(bgm_first_cut[bgm_num])
+	SoundManager.play_bgm_cut(bgm_first_cut[bgm_num], 1.0)
 
 func boss_bgm_stop():
 	SoundManager.bgm_fade_out()

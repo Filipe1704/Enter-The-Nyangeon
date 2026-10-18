@@ -128,14 +128,15 @@ func pick_upgrades():
 
 func refresh_weight_upgrade():
 	weight_manager.defense_bonus += 0.1
-	refresh_mult *= 1.1
+	# refresh_mult 表示额外增益，0 为中性；基准倍率始终保留 1。
+	refresh_mult = (1.0 + refresh_mult) * 1.1 - 1.0
 	pool_mult = max(0.2, pool_mult - 0.05)
 	pool_size = max(10, pool_size * pool_mult)
 	var round_local = now_round / round_max
 	weight_manager.rarity_weights = {
 		0: round_weight_curve_1.sample(round_local),
 		1: round_weight_curve_2.sample(round_local),
-		2: round_weight_curve_3.sample(round_local) * refresh_mult
+		2: round_weight_curve_3.sample(round_local) * (1.0 + refresh_mult)
 	}
 
 func add_upgrade_card():
@@ -290,7 +291,7 @@ func update_weight_manager_state():
 	player = PlayerRef.ensure(self, player)
 	if player != null:
 		weight_manager.update_player_state({
-			"health_percent": player.stats.hp / player.stats.max_hp,
+			"health_percent": float(player.stats.hp) / maxf(1.0, float(player.stats.max_hp)),
 			"current_upgrades": current_upgrades,
 			"round": PlayerData.now_round,
 			"difficulty": PlayerData.level_num

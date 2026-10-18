@@ -31,13 +31,15 @@
 ### 2.3 代码/scene 引用方式
 - **无** 自动翻译键系统；`script/auto_text.gd` / `auto_text_box.gd` 是**字体自动适配**工具（调用 `atr(text)`），不是翻译器。
 - 机制：① `Label`/`Button` 文本直接设原始键，由 Godot 自动翻译（如 `ui/game_option.tscn` `text="option_full_screen"`）；② 显式 `tr(key)`（如 `ui/ark_of_Shittim/talk_text.gd:8`, `ui/ability_shop_item_card.gd:186-217`）。
-- 卡片文本 key 由资源 `id` 派生：升级/道具卡 `<id>_name` / `_description` / `_forward` / `_negative`（`ui/ability_upgrade_card.gd:76-79`, `ui/test_item_card.gd:83-86`）；敌人测试卡 `<id>_name` / `<id>_description`（`ui/test_enemy_card.gd:34-35`，敌人 id 见 `resources/enemy/*.tres`）。
+- 卡片文本 key 由资源 `id` 派生：升级/道具卡 `<id>_name` / `_description` / `_forward` / `_negative`（`ui/ability_upgrade_card.gd:76-79`, `ui/test_item_card.gd:139`, `ui/upgrade_item_card.gd:18`）；敌人测试卡 `<id>_name` / `<id>_description`（`ui/test_enemy_card.gd:84`，敌人 id 见 `resources/enemy/*.tres`）。
 - 语言选择器：`ui/langue_button`（主菜单 / 暂停页共用）**数据驱动**——列表来自 `ModManager.get_languages()`（内置 4 种 + mod `ModAPI.register_language` 注册/覆盖），选中后 `TranslationServer.set_locale(...)` 并持久化 `Game.game_language`；启动时 `Game.gd:322` 应用，默认 `"zh_CN"`。mod 注册与字体映射见 `mod_sdk/README.md` §15。
 - 按语言换字体：`script/locale_font.gd` 按当前 locale 查 `_locale_fonts`（内置 `vi_VN` + mod `LocaleFont.register_locale_fonts`）：仅当文本是本地化键、或含注册 `glyph_ranges` 内且像素字缺失的字形时，才把「显示本地化文本」的控件换成替换字体；数字/符号/硬编码/CJK 保持像素字。
 
 ### 2.4 编辑规则（来自 `AGENTS.md`，务必遵守）
 - 编码 **UTF-8 with BOM**；行尾 **CRLF**；**新条目一律追加到文件末尾**；改后需在 Godot 中 reimport 重新生成 `.translation`；严禁重编码为 ANSI/GBK；每次修改后校验仍为合法 UTF-8。
-- ⚠️ 实测（2026-09-28）：`ETN_localization.csv`/`ETN_player_localization.csv`/`ETN_shop_localization.csv` 为纯 CRLF；`ETN_item_localization.csv` 仅在引号内的多行字段使用 LF（混合），`ETN_support_localization.csv` 有 2 处零散 LF。**行尾规则已定为 CRLF**（来源：user）；新增/编辑时逐文件保留既有行尾，避免整文件行尾转换。
+- 历史（2026-09-28）曾存在引号内 LF / 零散 LF，并建议保留旧行尾。**SUPERSEDED: 2026-10-13** 本轮修复 Git 属性漂移，`.gitattributes` 为 `ETN_*localization.csv` 单独声明 `text eol=crlf`，5 组源已规范 BOM/CRLF 并经 Godot 重新导入；当前以 `python tests/check_localization.py` 为格式防护。
+- 字段含 ASCII 双引号时也必须整体加引号，内部 `"` 写为 `""`；不能仅在字段含逗号时才转义。Python `csv.reader(strict=True)` 会接受某些裸引号，Godot importer 却会吞掉它们。当前检查器另做引号状态检查；本轮修正 5 处引号写法，解码后的 CSV 文案和条目顺序保持不变，2880 个翻译值经真实 importer 校验。
+
 
 ## 3. Resource `.tres` structure / 资源结构
 
@@ -87,25 +89,50 @@ layer N = bit `1<<(N-1)`：
 - 主菜单文字按钮：鼠标实际移动到按钮时转移键盘焦点，高亮只跟随焦点，Enter 确认同一项。键盘切换后静止鼠标不维持另一项高亮；离开按钮保留当前焦点，直到下一次有效导航或页面禁用。上下键按可见菜单顺序导航（包含 MOD 入口），首项上键及末项下键停留，菜单启用时统一覆盖共用场景遗留的固定邻居。
 - 主菜单选角页：`ui_up/ui_down` 切换社团（首尾循环），`ui_left/ui_right` 按显式邻居移动角色焦点（边界停留），`ui_accept` 确认角色，`pause` 返回。本体角色有已解锁形态时，Tab 进入形态按钮、Enter 切换后焦点返回角色卡。社团切换复用已有动作，因此键盘方向键与手柄十字键均可使用；按键重复事件不连续切换社团。
 - 角色卡的鼠标预览与键盘确认共用角色焦点：实际鼠标移动进入另一张卡才转移焦点；静止指针及零位移事件不抢回键盘选择。形态按钮焦点计入所属角色，稳定显示时只展开当前角色的说明。
-- 难度页默认聚焦 NORMAL；Tab / Shift+Tab 按「支援 → 难度 → 模式 → 返回」循环切换区域，并记住区域内的上次位置。支援主卡 Enter 展开，↑↓ 浏览、Enter 应用并收起；Esc 优先收起支援列表，再次按返回选角。难度 ↑↓ 选择、Enter 开始；模式 ←→ 选择、Enter / Space 开关，纵向方向键按网格列数移动，互斥关系沿用资源配置（闪击和无尽可同时开启）。返回按钮 Enter 返回选角并恢复角色焦点；确认难度后锁定辅助选项，Esc 仍可取消待启动计时。支援列表随焦点滚动，焦点用白色边框表示，与模式开启填色分开（`ui/level_select.gd:_input/_bind_focus_controls`）。
+- 难度页默认聚焦 NORMAL；Tab / Shift+Tab 按「支援 → 难度 → 模式 → 返回」循环切换区域，并记住区域内的上次位置。支援主卡 Enter 展开，↑↓ 浏览、Enter 应用并收起；Esc 优先收起支援列表，再次按返回选角。难度 ↑↓ 选择、Enter 开始；模式 ←→ 选择、Enter / Space 开关，纵向方向键按网格列数移动，互斥关系沿用资源配置（闪击和无尽可同时开启）。返回按钮 Enter 返回选角并恢复角色焦点；确认难度后锁定辅助选项，Esc 仍可取消待启动计时。支援列表随焦点滚动，焦点用白色边框表示，与模式开启填色分开（`ui/level_select.gd:_input/_bind_focus_controls`）。支援详情浮层在难度页与测试房启用（`ui/level_select.tscn:627`、`ui/character_test_menu.tscn:384` 的 `details_enabled`；支援商店不启用），复用统一悬浮提示（§5.1）：鼠标悬停 0.2 秒后出现并跟随指针（切换卡片不重新等待，靠近边缘翻到指针另一侧），键盘/手柄聚焦时在卡片旁立即显示，限制在视口内且不拦截鼠标；触屏不显示（关闭 `emulate_mouse_from_touch` 后点按即选中，浮层会闪现）。
+
+### 5.1 Hover tooltips / 悬浮提示浮层
+
+- 信息型悬停说明只有一套实现：宿主 `ui/hover_tooltip.tscn`（脚本 `ui/hover_tooltip.gd`）+ 目标绑定 `ui/hover_tooltip_binding.gd`（`class_name HoverTooltipBinding`）。卡片不再自建 `Node2D/Text` 提示树，旧式 `%ItemText*` 结构已全部删除。
+- 绑定统一走 `HoverTooltipBinding.bind(control, provider, available, on_preview_closed?)`。`provider` 返回段落数组，每段 `{text, role?, translated?}`；`role` 取 `title`/`section`/`body`/`positive`/`negative`/`muted`（缺省 `body`），`available` 留空表示总是可用。业务操作仍归卡片，浮层只读。
+- 宿主按「最近的 CanvasLayer」复用（`_hover_tooltip_host` 弱引用 meta），同层多个目标共用一个宿主；全视口只允许一个可见浮层，跨 CanvasLayer 由 `ui/hover_tooltip.gd:27` 的 `_viewports` 静态弱引用协调，最后 `_display` 的宿主胜出并清掉其它层。
+- 交互：鼠标悬停 0.2 s 后显示；已显示时换目标不再等待；位置用 `InputEventMouseMotion.position` 缓存并当帧更新。键盘/手柄焦点经 `focus_entered` 立即显示，锚在目标右侧。触屏分两种语义：可确认的卡片（测试房角色/道具/敌人、商店卡）首点预览、二次点按执行、拖动即收起，`bind()` 的 `on_preview_closed` 回调回写卡片确认态；单次操作的卡片（模式卡、局内升级卡）点按只预览，不进入确认态。商店卡没有焦点，摇杆/键盘导航由 `preview_from_navigation()` 直接预览，切页签时 `ability_shop.gd:_clear_preview()` 统一收起。宿主 `process_mode=3`，暂停期间仍可显示。
+- 视觉：0.6 倍像素字，`title` 20 / `section` 与正文 18；行距按层级收紧——`title` 3、其余 4，同层段间距 4（同级内容连成一块），`title` 后 10、`section` 前额外 8（`SECTION_LEADING`）后 4；内边距 12；面板宽按最长行自适应（下限 140、上限 350），短提示不留空盒；标题用暖金 `#FFEFC2`，`section` 用暗金 `#C9A86A`（弱于标题、强于白正文），正文白、正/负效果沿用卡片绿 `#B0ED47` / 红 `#E4384C`、未解锁用 `muted` 灰；底板为 `ui.png` 的 1px 白框 + α=0.8235 黑填充，再垫 α=0.72 的黑色 `Back`，合成约 95% 不透明（垫层直接设 0.95 会变 99%）；黑描边 2、阴影偏移 1（不透明黑底上不糊字）；`ui.png` 像素边框 expand 5；`top_level` + `z_index=4095`，缩放按 `get_canvas_transform().get_scale()` 反算，不继承业务卡片的动画缩放。
+- 文案默认传本地化键，交给 Label 自动翻译（`LocaleFont` 据此识别本地化文本）；已 `tr()` 过的段落传 `translated: true`。首段惯例用 `role: "title"` 显示名称：测试房角色卡为「`player_card.name` + PS0 说明」（名称循 HUD 口径直接用 `player_card.name`，可能是翻译键），测试房支援卡为「`support_name` + PS + EX」（池内未必拥有，不显示存档等级）；小节标题（`PS`、`EX 费用`）用 `section`。超长内容按可用像素高度截断并补省略号，段数上限 16，不缩字号。测量前先 `LocaleFont.apply_control(label)`（`script/locale_font.gd:99`），否则切换语言后首帧尺寸错误。被动百分比统一走 `SupportData.percent_text()`（整数百分比，与支援商店一致）。
+- 不扩展到：设置页导航页签（用户要求保持无 tooltip，长标题直接裁切）、MOD 管理页（已改为右侧常驻详情）。
 
 ## 6. Rendering & misc / 渲染与杂项
 
 - `default_texture_filter=3`, `viewport/hdr_2d=true`, shader cache disabled（`project.godot:236-243`）。
 - 全局 UI 主题 `res://fonts/theme.tres`，`default_font_antialiasing=0`。
+- GAME 设置项标签统一右对齐，列宽 126、控件间距 8；分组标题左对齐并在高 18 的 Header 内垂直居中。滑条数值槽统一为 96×22、右对齐并启用 `clip_text`，防止长文本撑宽 HBox；新增翻译须检查最长数值文案。见 `ui/game_option.tscn` 的 Header、行 Label 和数值 Label。
+- 分辨率按钮及 PopupMenu 共用 `BoutiqueBitmap9x9_1.9.ttf`、字号 12（两种控件的字体主题项分别配置）；按钮 normal / hover / hover_mirrored / pressed 样式的左内边距统一为 6。见 `ui/game_option.tscn` 的 `Theme_cpfog` 及 StyleBoxTexture。
+- 设置页滚动条样式集中在 `ui/pixel_scrollbar_theme.tres`，由 `ui/option.tscn` 的导航 ScrollContainer 和右侧 `menu_box` 分别挂载，并向内容页继承；仅定义 HScrollBar / VScrollBar，避免改变其他界面的全局样式。轨道和焦点外框使用 StyleBoxEmpty 不绘制；竖向轨道上下内边距统一为 0，左右各 4（维持宽 8），横向轨道独立保留四侧各 4，不再由页面脚本局部覆盖；滑块使用无圆角、无描边、关闭抗锯齿的 StyleBoxFlat，宽 8，普通 / 悬停 / 按下使用灰度 0.58 / 0.70 / 0.80，不使用金色；保持原滚动策略和输入逻辑。
+- GAME 页右侧滚动条从黄色顶栏下沿（设计坐标 y=20）延伸至页面底边（y=360）；`ui/game_option.tscn` 的 `Scroll/Content/TopSpacing` 高 14，加上 VBox 间距 6，使首张卡片仍从 y=40 开始。滑块上下端贴齐由共享滚动条主题统一控制，页面脚本不再复制或覆盖轨道样式。
+- 设置左侧页签统一用 `ModAPI.create_option_tab(button_id, title, auto_translate=true)` 创建，返回未挂载的本体 `ui/option_button.tscn` 实例；加入扩展点提供的 `button_box`，并让 `button_id` 对应页面 `option_id`。文字样式集中在共享场景，标题为根节点 `text` 属性；长标题按原版直接裁切，不设置 tooltip，也不靠文字最小宽度撑开导航。悬停/选中动画沿用原版：只改子节点 `ColorRect` 的 position/size 与 `offset_transform_position`（纯视觉偏移），不改按钮自身 position/size，不影响容器排版。未使用的 `on_out` 动画及 `RESET`/`selected` 中的 `position`/`rotation` 轨道不再保留。禁止在此入口复制一套字体/描边或附加 mod 独立主题。右侧内容页样式不受此约定限制。见 `script/mod_api.gd:13`、`script/option_button.gd`、`ui/option_button.tscn`、`mod_sdk/README.md` §12.1。
 - 按语言切换字体：`vi_VN` 时**只把显示本地化文本的文字控件**换成 Roboto（数字/符号/硬编码英文/CJK 保持像素字），由 autoload `LocaleFont`（`script/locale_font.gd`）运行时按节点替换（`ARCHITECTURE.md` §1.10）。原因：像素字（`BoutiqueBitmap*`）只含 `đ/ă` 等少量越南语字形，缺 `ơ ư ộ ế…`，只能整段替换而非 fallback。判定＝文本是翻译键（`TranslationServer.translate(text) != text`）或含像素字缺失的越南语字形。
 - 文件日志开启：`user://logs/ETN_debug.log`（最多 20 份）。
 - 设计分辨率 640×360，`stretch/mode="canvas_items"`。
-- **2D 物理插值**：`project.godot [physics] common/physics_interpolation=true`（高刷显示器下玩家/相机不再跳帧）。约定：① 由 `_process` 每帧驱动的节点（`gamecamera.tscn`/`camera_2d.tscn` 的 Camera2D、`player.gd` 的 `halo`）设 `physics_interpolation_mode = OFF`，避免二次插值；② 池化节点在 `active_state()`/`idle_state()` 顶部（位置由调用方先设好）调用 `reset_physics_interpolation()`，coop 远程镜像同理由代理自插值 → 关插值；③ 传送点（`map_bounds.gd`、发射器初始定位、coop 出生点）在设位后 `reset_physics_interpolation()`；④ 在 `_physics_process` 内移动的节点无需 reset。
-- **帧率上限设置**：`Game.max_fps_index`（滑条档位 → `Game.FPS_CHOICES = [0,60,75,90,120,144]`，0=无限制）持久化到 `config.ini [game] max_fps_index`；**全平台默认 60**；UI 在 `ui/game_option.tscn` Graphics 页 `RowMaxFps`（位于伤害数字频率上方）。
+- **2D 物理插值（设置项，默认关）**：`Game.physics_interp`（默认 `false`）→ 运行期 `get_tree().physics_interpolation`，持久化到 `config.ini [game] physics_interp`；UI 在 `ui/game_option.tscn` DISPLAY 卡片 `RowAdvanced` 内的 `PhysicsInterp`（移动端整行隐藏）。`project.godot [physics] common/physics_interpolation` 保持 `false`，仅作引擎启动默认（高刷显示器下开启可让玩家/相机不再跳帧，但迁移期仍可能有个别视觉错位，故默认关）。约定（开启时适用）：① 由 `_process` 每帧驱动的节点（`gamecamera.tscn`/`camera_2d.tscn` 的 Camera2D、`player.gd` 的 `halo`、`crosshair.gd` 准星、`player/momoi/momoi_ex_range.gd`、`manager/interact_prompt.gd`、`player_support/serina/serina_as.gd` 的 `aura`、`update_item/life_jacket.gd` 的 `Node2D2`）设 `physics_interpolation_mode = OFF`，避免二次插值；② 池化节点在 `active_state()`/`idle_state()` 顶部（位置由调用方先设好）调用 `reset_physics_interpolation()`，coop 远程镜像同理由代理自插值 → 关插值；③ 传送点（`map_bounds.gd`、发射器初始定位、coop 出生点）在设位后 `reset_physics_interpolation()`；④ 在 `_physics_process` 内移动的节点无需 reset。
+- **帧率上限设置**：`Game.max_fps_index`（滑条档位 → `Game.FPS_CHOICES = [0,60,75,90,120,144]`，0=无限制）持久化到 `config.ini [game] max_fps_index`；**全平台默认 60**；UI 在 `ui/game_option.tscn` DISPLAY 卡片 `RowMaxFps`（位于反馈频率滑条上方）。
 
 ### 6.1 Android launcher icons / Android 启动器图标
 
 - `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
 - `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
 - 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
-- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成，随源资源提交。
+- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成。SUPERSEDED: 2026-10-14 用户要求忽略所有 `.import`，不再随源资源提交；`.gitignore` 的本地改动也不提交。新文件用 `.git/info/exclude` 忽略，已跟踪文件用本地 `skip-worktree` 跳过，保留磁盘内容与既有跟踪关系。
 - 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
+
+### 6.1 Android launcher icons / Android 启动器图标
+
+- `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
+- `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
+- 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
+- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成。SUPERSEDED: 2026-10-14 用户要求忽略所有 `.import`，不再随源资源提交；`.gitignore` 的本地改动也不提交。新文件用 `.git/info/exclude` 忽略，已跟踪文件用本地 `skip-worktree` 跳过，保留磁盘内容与既有跟踪关系。
+- 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
+
+- **本体导出镜像边界（2026-10-14，AUD-BUILD-001 已修）**：Windows/Android/Linux/iOS 四预设统一排除 `mods/*`，开发镜像不随本体分发。`run_export_boundary_checks.py` 实际导出并读取 PCK 目录，再挂新版独立脚本验证 marker；本体目录应无 mods/**。Git 忽略不是导出排除。修改预设后若编辑器仍持有旧配置，需重新打开项目再从编辑器导出，避免旧内存配置回写。
 
 ## 7. Shaders / 着色器（`shaders/`）
 
@@ -130,7 +157,7 @@ layer N = bit `1<<(N-1)`：
 - 改动结构性内容后同步更新 `docs/`（见 `AGENTS.md` 知识库维护约定）。
 - **不提交** `project.godot` 中 godot_ai 插件相关改动（`_mcp_game_helper` autoload 的增删/移位）——属本地开发工具状态（见 `AGENTS.md`「本地文件与在制品」）。
 - `mod_sdk/mobile_hotfix/` 为**未拍板在制品**：不提交、不并入；待用户「结案」后移除。
-- **Git 分工**：提交（`git add`/`git commit`）由 AI 负责；**`git push` 一律由用户执行**（AI 不自动推送，提交后提示用户）。
+- **Git 分工**：提交由 AI 负责但**每次须先经用户确认**（先展示 `git status`/`git diff` 与拟定信息）；**`git push` 一律由用户执行**（AI 不自动推送）。
 
 ## 10. Mod package / Mod 包约定
 
@@ -151,6 +178,9 @@ layer N = bit `1<<(N-1)`：
 - **角色 player_card 一致性**：角色有两处 `PlayerCard` —— 选人 UI 卡（`mod_society_card` 注入注册表 card）与**战斗场景根**（`script/player.gd:12`，被 `PlayerData.get_player_base_ability()`/HUD/结算/PS 商店读取）。以 `defs/characters/<id>.tres` 注册表为真源，战斗场景根应指向**同一份** `.tres`。注册校验用 `PackedScene.get_state()` peek 根节点导出属性（**不实例化**）：缺 `scene_path` → **跳过**；根 `player_card` 空/`id` 不一致、`ps_card` 空 → **告警**；进战斗后 `ModManager` 按所选 `scene_path` **对齐** `"Player"` 组全部玩家的 `player.player_card`（索引含 branches）。`ps_card` 无法对齐，mod 必须自备。可选字段 `PlayerCard.card_scene` 指定自带选人卡。
 - **社团卡**：可选，`defs/societies/*.tscn`（或 manifest `societies`）；场景根**必须继承 `ui/mod_society_base.gd`**，设 `group_id`（带 `<modid>_` 前缀、唯一）+ `members`（`Array[String]` 角色 id），场景需含 `AnimationPlayer`。**按 mod 认领**：有自带社团 → 其角色进自带卡；无 → 进内置通用「MOD」社团卡（`ui/mod_society_card`，只收未认领且未锁定的角色）。**通用卡自动续卡**：未认领已解锁角色 >4 时，`menu_screen._setup_societies()` / `coop_select._build_societies()` 按 `MOD_PAGE_SIZE = 4` 各建一张、注入 `members` 切片（标签 `MOD`/`MOD 2`/…）；`ui/mod_society_card.gd` 现继承 `mod_society_base.gd`，可见性/填充全继承（仅加 `set_page()`）。社团显隐改由 `is_character_locked`（任一成员可显示即显示），不再靠 `PlayerData.group`。角色选择卡同样「自带 `card_scene` 优先，否则通用 `ui/mod_player_card.tscn`」。
 - **导出/真机验证**：清单见 `docs/MOD_TESTING.md`。
+
+> **官方联机拓展接口**：独立提供者声明 `dependencies: ["etn_coop"]`，使用通用接口 v1；资源留在自身命名空间，不复制官方 `CoopNet` 或替换官方资源。stop 必须幂等并撤销旧准备任务。官方通用接入属于本批提交，附属实现另行处理。契约见 `docs/COOP_EXTENSION_API.md`（2026-10-14）。
+
 
 ## 11. 范围 buff / 光环（`BuffAura`）
 

@@ -7,6 +7,7 @@ signal cards_changed
 @export var null_card: SupportCard
 @export var test_d: Dictionary
 @export var test_menu: bool = false
+@export var details_enabled: bool = false
 
 @onready var support_box: VBoxContainer = %support_box
 @onready var ui_anim: AnimationPlayer = $ui_anim
@@ -22,6 +23,7 @@ var list_open := false
 var _keyboard_enabled := false
 var _input_open := true
 var _opening_sequence: int = 0
+var _main_tooltip: HoverTooltipBinding
 
 func _ready() -> void:
 	main_card.mouse_entered.connect(mouse_in)
@@ -30,6 +32,9 @@ func _ready() -> void:
 	margin_container.mouse_exited.connect(card_out_select)
 	GameEvents.support_card_select.connect(get_support_card)
 	GameEvents.level_select_in.connect(check_data)
+	if details_enabled:
+		_main_tooltip = HoverTooltipBinding.bind(main_card, func(): return _support_content(now_support), func(): return _input_open)
+		_main_tooltip.hit_test = func(pointer: Vector2): return not (list_open and margin_container.visible and (margin_container.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, margin_container.size)).has_point(pointer))
 	if test_menu:
 		check_data()
 
@@ -43,6 +48,8 @@ func set_interactive(enabled: bool) -> void:
 	main_card.focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
 	main_card.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
 	if not enabled:
+		if _main_tooltip != null:
+			_main_tooltip.dismiss()
 		close_list(false)
 
 func open_list(focus_items: bool = false) -> void:
@@ -174,6 +181,9 @@ func add_cards():
 	if !SupportData.support_data.is_empty() and test_menu == false:
 		var group = SupportData.support_data.values()
 		for i in group.size():
+			# 停用/卸载 Mod 只隐藏不可用支援，已保存等级与 ID 继续保留。
+			if not group[i].get("resource") is SupportCard:
+				continue
 			var ins = support_card.instantiate()
 			ins.shop_card = group[i]["resource"]
 			support_box.add_child(ins)
@@ -188,6 +198,13 @@ func add_cards():
 	for card in support_box.get_children():
 		if not card.is_queued_for_deletion():
 			card.focus_mode = Control.FOCUS_ALL if _keyboard_enabled else Control.FOCUS_NONE
+	if details_enabled:
+		for card in support_box.get_children():
+			if card.is_queued_for_deletion():
+				continue
+			var binding := HoverTooltipBinding.bind(card, func(): return _support_content(card.shop_card), func(): return _input_open and list_open)
+			# 已选候选可能忽略鼠标：以本组件为悬停根，指针落在候选矩形内即命中（矩形由 visible_rect 裁剪）。
+			binding.hover_root = self
 	cards_changed.emit()
 	
 
@@ -200,3 +217,27 @@ func _on_main_card_gui_input(event: InputEvent) -> void:
 		main_card.accept_event()
 		if not event.is_echo():
 			open_list(true)
+
+func _support_content(card: SupportCard) -> Array:
+	if card == null or card.support_id == "null":
+		return []
+	if test_menu:
+		# 测试房浏览的是支援池，未必已拥有；不显示存档等级，避免「LV 0」误导。
+		return [
+			{"text": card.support_name, "role": "title"},
+			{"text": "PS", "role": "section"},
+			{"text": card.support_id + "_ps"},
+			{"text": tr("support_ex_cost") % card.ex_cost, "role": "section", "translated": true},
+			{"text": card.support_id + "_ex"},
+		]
+	# 仅采样存档等级；get_card() 会更改全局当前支援，预览不可调用。
+	var level: int = int(SupportData.support_data.get(card.support_id, {}).get("LV", 0))
+	var value := card.pa_value.sample(level / 100.0) if level > 0 and card.pa_value != null else 0.0
+	return [
+		{"text": "%s · LV %d" % [tr(card.support_name), level], "role": "title", "translated": true},
+		{"text": "%s +%s%%" % [tr(card.pa_ability), SupportData.percent_text(value)], "translated": true},
+		{"text": "PS", "role": "section"},
+		{"text": card.support_id + "_ps"},
+		{"text": tr("support_ex_cost") % card.ex_cost, "role": "section", "translated": true},
+		{"text": card.support_id + "_ex"},
+	]

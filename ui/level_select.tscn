@@ -624,6 +624,7 @@ position = Vector2(117, 52)
 [node name="support_ui" parent="Node2D2" instance=ExtResource("9_pnmhr")]
 visible = false
 position = Vector2(-190, 52)
+details_enabled = true
 
 [node name="return" parent="Node2D2" instance=ExtResource("10_3m0td")]
 offset_left = 72.0

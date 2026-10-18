@@ -49,8 +49,7 @@ func _ready():
 	ModManager.ensure_unlocked()
 	_setup_societies()
 	GameEvents.check_data.connect(_sync_societies)
-	if ExtensionHooks.populate_menu_buttons.is_valid():
-		ExtensionHooks.populate_menu_buttons.call(menu_button_box)
+	ExtensionHooks.notify_named("populate_menu_buttons", [menu_button_box])
 
 
 # 只实例化「已解锁」的社团（本体注册表 + mod 社团 + MOD 通用卡）。

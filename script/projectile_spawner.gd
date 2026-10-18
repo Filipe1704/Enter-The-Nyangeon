@@ -80,8 +80,8 @@ static func spawn_core(
 		elif post.is_valid():
 			post.call(node)
 
-	if notify and ExtensionHooks.on_projectile_spawned.is_valid():
-		ExtensionHooks.on_projectile_spawned.call(node, owner, source_faction)
+	if notify:
+		ExtensionHooks.notify_named("on_projectile_spawned", [node, owner, source_faction])
 	return node
 
 
@@ -93,8 +93,8 @@ static func mark_remote(node: Node) -> void:
 
 # 特例站点（取池/新建逻辑无法走 spawn_core，如 self.duplicate()）手动触发本地生成通知。
 static func notify_local(node: Node, owner: Node, source_faction: int) -> void:
-	if node != null and ExtensionHooks.on_projectile_spawned.is_valid():
-		ExtensionHooks.on_projectile_spawned.call(node, owner, source_faction)
+	if node != null:
+		ExtensionHooks.notify_named("on_projectile_spawned", [node, owner, source_faction])
 
 
 static func _activate(node: Node) -> void:

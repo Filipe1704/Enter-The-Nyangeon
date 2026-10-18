@@ -24,6 +24,8 @@ const DEFAULT_SHOP_CHARACTER_COST := 6
 const WEAPON_TYPE_ICON_DIR := "res://ui/weapon"
 # 内置武器类型短名（图标 = res://ui/weapon/<code>_icon.png；mod 可 register_weapon_type 追加/覆盖）。
 const BUILTIN_WEAPON_TYPES: Array[String] = ["AR", "FT", "GL", "HG", "MG", "MT", "RG", "RL", "SG", "SMG", "SR"]
+# 覆盖包（replace_files=true）挂载前的目录审计工具。
+const PckDirectoryScript := preload("res://script/pck_directory.gd")
 
 # kind -> 期望的 class_name（用于类型校验）
 const KIND_CLASS := {
@@ -78,6 +80,8 @@ var _mod_translations: Dictionary = {}
 var _languages: Array = []
 # 武器类型注册表：code -> { "name": String, "icon_path": String }（内置 seed + mod 注册/覆盖）
 var _weapon_types: Dictionary = {}
+# mod id 校验正则（惰性编译一次，避免每次调用新建 RegEx）
+var _id_re: RegEx = null
 
 
 func _ready() -> void:
@@ -92,6 +96,7 @@ func _ready() -> void:
 	_scan_content()
 	_apply_patches()
 	_inject_supports()
+	Game.load_playerdata()
 	_run_entry_scripts.call_deferred()
 	_index_characters()
 	GameEvents.player_card_id.connect(_on_player_card_id)
@@ -194,6 +199,8 @@ func _mod_dirs() -> Array:
 
 
 func _scan_installed() -> void:
+	# 启用状态只读一次盘（原先每个 mod 目录都会重读并解析 mods_state.json）
+	var state := _read_state()
 	# user:// 优先：同 id 时先扫到的保留
 	for root in _mod_dirs():
 		var dir := DirAccess.open(root)
@@ -203,12 +210,12 @@ func _scan_installed() -> void:
 		var name := dir.get_next()
 		while name != "":
 			if dir.current_is_dir() and not name.begins_with("."):
-				_try_load_mod(root.path_join(name), name)
+				_try_load_mod(root.path_join(name), name, state)
 			name = dir.get_next()
 		dir.list_dir_end()
 
 
-func _try_load_mod(mod_dir: String, dir_name: String) -> void:
+func _try_load_mod(mod_dir: String, dir_name: String, state: Dictionary) -> void:
 	var manifest_path := mod_dir.path_join("mod.json")
 	if not FileAccess.file_exists(manifest_path):
 		return
@@ -224,7 +231,6 @@ func _try_load_mod(mod_dir: String, dir_name: String) -> void:
 	if _mods.has(id):
 		push_warning("[ModManager] mod id 重复，跳过 %s（%s）" % [id, mod_dir])
 		return
-	var state := _read_state()
 	_mods[id] = {
 		"id": id,
 		"dir": mod_dir,
@@ -236,22 +242,42 @@ func _try_load_mod(mod_dir: String, dir_name: String) -> void:
 
 
 func _valid_mod_id(id: String) -> bool:
-	var re := RegEx.new()
-	re.compile("^[a-z0-9_]+$")
-	return re.search(id) != null
+	if _id_re == null:
+		_id_re = RegEx.new()
+		_id_re.compile("^[a-z0-9_]+$")
+	return _id_re.search(id) != null
 
 
 # ---------------- 挂载 ----------------
 
 func _mount_enabled() -> void:
 	_resolved_order = _resolve_order()
-	for id in _resolved_order:
+	for id in _resolved_order.duplicate():
+		if not _resolved_order.has(id):
+			continue    # 可能已被 _disable_dependents 摘除
 		var rec: Dictionary = _mods[id]
 		var err := _mount_one(rec)
 		if err != "":
 			rec["error"] = err
 			rec["mounted"] = false
 			push_warning("[ModManager] 挂载失败 %s：%s" % [id, err])
+			_disable_dependents(id, err)
+
+
+# 某 mod 未生效（挂载失败）时，递归摘除依赖它的 mod：否则依赖方会以为自己可用而空引用。
+# 同样只写运行期字段，不动 enabled。
+func _disable_dependents(failed_id: String, reason: String) -> void:
+	for id in _resolved_order.duplicate():
+		if id == failed_id:
+			continue
+		var deps: Array = _mods[id].manifest.get("dependencies", [])
+		if not deps.has(failed_id):
+			continue
+		_mods[id]["mounted"] = false
+		_mods[id]["error"] = "依赖未生效：%s（%s）" % [failed_id, reason]
+		_resolved_order.erase(id)
+		push_warning("[ModManager] %s 停用：依赖未生效 %s" % [id, failed_id])
+		_disable_dependents(id, _mods[id]["error"])
 
 
 # 依赖缺失/环/冲突 → 停用；返回按 (load_order, id) 稳定拓扑排序后的 id 列表。
@@ -313,6 +339,15 @@ func _resolve_order() -> Array:
 				conflict_adj[other].append(id)
 	var kept: Array = []
 	for id in ordered:
+		# ordered 是拓扑序，依赖必须已实际被接纳；冲突剔除也沿依赖链传播。
+		var missing := ""
+		for dep in _mods[id].manifest.get("dependencies", []):
+			if not kept.has(dep):
+				missing = str(dep)
+				break
+		if not missing.is_empty():
+			_fail_mod(id, "依赖未生效：%s" % missing)
+			continue
 		var conflict := false
 		if conflict_adj.has(id):
 			for other in conflict_adj[id]:
@@ -350,8 +385,10 @@ func _enabled_ids() -> Array:
 	return out
 
 
+# 停用只写运行期字段（error/mounted），**不改 enabled**：
+# enabled 表示「用户是否启用」并被 _save_state 持久化，改写它会把「本次因缺依赖/环/冲突停用」
+# 变成永久禁用（依赖补齐后也不会自动恢复）。见 docs/LEARNINGS.md 同名条目。
 func _fail_mod(id: String, msg: String) -> void:
-	_mods[id]["enabled"] = false
 	_mods[id]["mounted"] = false
 	_mods[id]["error"] = msg
 	push_warning("[ModManager] %s 停用：%s" % [id, msg])
@@ -379,16 +416,24 @@ func _apply_patches() -> void:
 
 func _collect_patch_files(rec: Dictionary) -> Array:
 	var out: Array = []
+	# 同名补丁只应用一次：loose（mod 目录）优先，pck 内的同名文件跳过，
+	# 否则开发期两处并存时同一补丁会执行两次。
+	var seen: Dictionary = {}
 	var loose: String = rec.dir.path_join("patches")
 	var d := DirAccess.open(loose)
 	if d != null:
 		for f in d.get_files():
 			if f.ends_with(".json"):
+				seen[f] = true
 				out.append(loose.path_join(f))
 	var resdir := "res://mods/%s/patches" % rec.id
 	for f in ResourceLoader.list_directory(resdir):
-		if not f.ends_with("/") and f.ends_with(".json"):
-			out.append(resdir.path_join(f))
+		if f.ends_with("/") or not f.ends_with(".json"):
+			continue
+		if seen.has(f.get_file()):
+			continue
+		seen[f.get_file()] = true
+		out.append(resdir.path_join(f))
 	return out
 
 
@@ -513,12 +558,56 @@ func _mount_one(rec: Dictionary) -> String:
 	if gv != "" and is_instance_valid(Game) and not _version_gte(Game.version_number, gv):
 		push_warning("[ModManager] %s 要求本体 >= %s，本体=%s" % [rec.id, gv, Game.version_number])
 	var replace_files := bool(manifest.get("replace_files", false))
+	if replace_files:
+		var audit := _audit_replace(pck_path, str(rec.id), manifest)
+		if audit.get("blocked", false):
+			# pck 含未在 manifest.replace_paths 声明的本体文件（多为打包时连带的本体依赖）：
+			# 降级为不覆盖——mod 自身内容照常加载，本体文件零覆盖，避免旧快照打回本体。
+			replace_files = false
+			push_error("[ModManager] %s 覆盖包含未声明本体文件，已降级为不覆盖：%s" % [rec.id, audit.get("undeclared", [])])
+		elif audit.has("declared"):
+			push_warning("[ModManager] %s replace_files 已声明覆盖：%s" % [rec.id, audit["declared"]])
 	if not ProjectSettings.load_resource_pack(pck_path, replace_files):
 		return "load_resource_pack 失败（引擎版本/文件损坏）"
-	if replace_files:
-		push_warning("[ModManager] %s 使用 replace_files 覆盖本体文件" % rec.id)
 	rec["mounted"] = true
 	return ""
+
+
+# replace_files 挂载前审计：核对 pck 目录表实际覆盖的本体文件是否都在 manifest.replace_paths 声明内。
+# 无法校验（非 v4 / 目录加密 / 损坏）时返回空字典，调用方按原样挂载（不误拦）。
+func _audit_replace(pck_path: String, mod_id: String, manifest: Dictionary) -> Dictionary:
+	var paths = PckDirectoryScript.new().list_paths(pck_path)
+	if paths == null:
+		push_warning("[ModManager] %s 无法校验覆盖包目录，跳过守卫" % mod_id)
+		return {}
+	var own := "mods/%s/" % mod_id
+	var decl: Array = []
+	for rp in manifest.get("replace_paths", []):
+		var s := str(rp)
+		if s.begins_with("res://"):
+			s = s.substr("res://".length())
+		if s != "":
+			decl.append(s)
+	var declared: Array = []
+	var undeclared: Array = []
+	for p in paths:
+		var ps := String(p)
+		if ps.begins_with(own):
+			continue
+		if _covered(ps, decl):
+			declared.append(ps)
+		else:
+			undeclared.append(ps)
+	return {"blocked": not undeclared.is_empty(), "declared": declared, "undeclared": undeclared}
+
+
+# 声明路径是否覆盖该 pck 路径：精确命中，或以 `<decl>.` 开头
+# （覆盖编译产物 .gdc/.remap 与贴图 .import 等边车，避免把已声明覆盖误判为未声明）。
+func _covered(p: String, decl: Array) -> bool:
+	for d in decl:
+		if p == d or p.begins_with(d + "."):
+			return true
+	return false
 
 
 # 版本段解析：去掉前导 v、丢弃 `-` 及其后后缀（-test 等）、按 `.` 取整、去尾零。
@@ -958,6 +1047,8 @@ func _run_entry_scripts() -> void:
 		if node is Node:
 			node.name = "ModEntry_" + id
 			add_child(node)
+		else:
+			push_warning("[ModManager] entry 非 Node 脚本，已跳过：%s（%s）" % [entry, id])
 
 
 # ---------------- 对外 API ----------------
@@ -1242,20 +1333,53 @@ func list_mods() -> Array:
 	var ids: Array = _mods.keys()
 	ids.sort_custom(_cmp_order)
 	var out: Array = []
+	var current_version := str(Game.version_number) if is_instance_valid(Game) else ""
 	for id in ids:
 		var rec: Dictionary = _mods[id]
+		var manifest: Dictionary = rec.manifest
+		var required_version := str(manifest.get("game_version", ""))
+		var version_ok := required_version == "" or current_version == "" or _version_gte(current_version, required_version)
 		out.append({
 			"id": id,
-			"name": str(rec.manifest.get("name", id)),
-			"version": str(rec.manifest.get("version", "")),
-			"author": str(rec.manifest.get("author", "")),
-			"description": str(rec.manifest.get("description", "")),
+			"name": str(manifest.get("name", id)),
+			"version": str(manifest.get("version", "")),
+			"author": str(manifest.get("author", "")),
+			"description": str(manifest.get("description", "")),
 			"enabled": rec.enabled,
 			"mounted": rec.mounted,
 			"error": rec.error,
 			"dir": rec.dir,
 			"icon": _mod_icon_path(rec),
+			"game_version": required_version,
+			"game_version_ok": version_ok,
+			"dependencies": _manifest_array(manifest, "dependencies"),
+			"overrides": _manifest_array(manifest, "overrides"),
+			"replace_paths": _manifest_array(manifest, "replace_paths"),
+			"adds": _content_counts(id),
 		})
+	return out
+
+
+func _manifest_array(manifest: Dictionary, key: String) -> Array:
+	var value = manifest.get(key, [])
+	return value.duplicate() if value is Array else []
+
+
+func _content_counts(mod_id: String) -> Dictionary:
+	var out: Dictionary = {}
+	for kind in _registry:
+		var count := 0
+		for id in _registry[kind]:
+			if str(_registry[kind][id].get("mod", "")) == mod_id:
+				count += 1
+		if count > 0:
+			out[kind] = count
+	var societies := 0
+	for s in _societies:
+		if str(s.get("mod", "")) == mod_id:
+			societies += 1
+	if societies > 0:
+		out["societies"] = societies
 	return out
 
 
@@ -1308,86 +1432,7 @@ func uninstall(id: String) -> Dictionary:
 # ---------------- zip 导入 ----------------
 
 func import_zip(zip_path: String) -> Dictionary:
-	var zr := ZIPReader.new()
-	if zr.open(zip_path) != OK:
-		return {"ok": false, "error": "无法打开 zip"}
-	var files := zr.get_files()
-	if files.size() > IMPORT_MAX_FILES:
-		zr.close()
-		return {"ok": false, "error": "条目过多（>%d）" % IMPORT_MAX_FILES}
-	var manifest_text := ""
-	for f in files:
-		if _bad_entry(f):
-			zr.close()
-			return {"ok": false, "error": "路径不安全：" + f}
-		if f == "mod.json":
-			manifest_text = zr.read_file(f).get_string_from_utf8()
-	if manifest_text == "":
-		zr.close()
-		return {"ok": false, "error": "缺少 mod.json"}
-	var manifest = JSON.parse_string(manifest_text)
-	if not (manifest is Dictionary):
-		zr.close()
-		return {"ok": false, "error": "mod.json 解析失败"}
-	var id: String = str(manifest.get("id", ""))
-	if id == "" or not _valid_mod_id(id):
-		zr.close()
-		return {"ok": false, "error": "非法 mod id"}
-	# pck 必须存在（缺 pck 的包无法挂载，提前拦截并给出明确提示）
-	var pck_name: String = str(manifest.get("pck", id + ".pck"))
-	if not files.has(pck_name):
-		zr.close()
-		return {"ok": false, "error": "缺少 pck：%s" % pck_name}
-	var dest := MODS_DIR.path_join(id)
-	# 重装：先清空旧目录，避免残留文件
-	_clear_dir(dest)
-	DirAccess.make_dir_recursive_absolute(dest)
-	var total := 0
-	for f in files:
-		var out_path := dest.path_join(f)
-		var parent := out_path.get_base_dir()
-		DirAccess.make_dir_recursive_absolute(parent)
-		var data := zr.read_file(f)
-		total += data.size()
-		if total > IMPORT_MAX_BYTES:
-			zr.close()
-			_clear_dir(dest)
-			return {"ok": false, "error": "解压体积超限（>%d MB）" % IMPORT_MAX_MB}
-		var wf := FileAccess.open(out_path, FileAccess.WRITE)
-		if wf:
-			wf.store_buffer(data)
-			wf.close()
-	zr.close()
-	return {"ok": true, "id": id}
-
-
-# 递归清空目录内容（保留目录本身）；用于 zip 重装。
-func _clear_dir(path: String) -> void:
-	var d := DirAccess.open(path)
-	if d == null:
-		return
-	d.list_dir_begin()
-	var fname := d.get_next()
-	while fname != "":
-		if fname != "." and fname != "..":
-			var full := path.path_join(fname)
-			if d.current_is_dir():
-				_clear_dir(full)
-				DirAccess.remove_absolute(full)
-			else:
-				DirAccess.remove_absolute(full)
-		fname = d.get_next()
-	d.list_dir_end()
-
-
-func _bad_entry(f: String) -> bool:
-	if f.begins_with("/") or f.begins_with("\\"):
-		return true
-	if f.contains(".."):
-		return true
-	if f.length() > 1 and f[1] == ":":
-		return true
-	return false
+	return preload("res://script/mod_installer.gd").new().install(zip_path, MODS_DIR, IMPORT_MAX_FILES, IMPORT_MAX_BYTES)
 
 
 # ---------------- 卸载 / 待删 ----------------
@@ -1397,8 +1442,6 @@ func _delete_mod_dirs(id: String) -> bool:
 	var all_ok := true
 	for root in _mod_dirs():
 		var p := str(root).path_join(id)
-		if not DirAccess.dir_exists_absolute(p):
-			continue
 		if not _delete_dir_recursive(p):
 			all_ok = false
 	return all_ok
@@ -1409,24 +1452,23 @@ func _delete_dir_recursive(path: String) -> bool:
 	if not _path_under_mod_roots(path):
 		push_warning("[ModManager] 拒绝删除非 mod 目录：%s" % path)
 		return false
+	# 根目录及嵌套链接都只移除链接；不可进入 junction 的真实目标。
+	var parent := DirAccess.open(path.get_base_dir())
+	if parent != null and parent.is_link(path.get_file()):
+		return DirAccess.remove_absolute(path) == OK
 	if not DirAccess.dir_exists_absolute(path):
 		return true
 	var d := DirAccess.open(path)
 	if d == null:
 		return false
-	d.list_dir_begin()
-	var fname := d.get_next()
-	while fname != "":
-		if fname != "." and fname != "..":
-			var full := path.path_join(fname)
-			if d.current_is_dir():
-				_delete_dir_recursive(full)
-			else:
-				DirAccess.remove_absolute(full)
-		fname = d.get_next()
-	d.list_dir_end()
-	DirAccess.remove_absolute(path)
-	return not DirAccess.dir_exists_absolute(path)
+	d.include_hidden = true
+	for fname in d.get_files():
+		if DirAccess.remove_absolute(path.path_join(fname)) != OK:
+			return false
+	for fname in d.get_directories():
+		if not _delete_dir_recursive(path.path_join(fname)):
+			return false
+	return DirAccess.remove_absolute(path) == OK
 
 
 # 路径是否位于某个 mod 根之下（根本身返回 false，避免误删整根）。

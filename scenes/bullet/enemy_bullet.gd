@@ -74,7 +74,7 @@ func _set_shape_disabled_guarded(value: bool, gen: int) -> void:
 func idle_state():
 	reset_physics_interpolation()
 	if is_idle == 0:
-		ExtensionHooks.notify(ExtensionHooks.on_projectile_despawned, [self])
+		ExtensionHooks.notify_named("on_projectile_despawned", [self])
 	is_idle = 1
 	if GameEvents.global_time_count.is_connected(_on_bullet_kill_timer_timeout):
 		GameEvents.global_time_count.disconnect(_on_bullet_kill_timer_timeout)

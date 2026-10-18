@@ -1,14 +1,14 @@
 [gd_scene format=3 uid="uid://fw7vqomk7irr"]
 
-[ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="1_gaaxb"]
-[ext_resource type="Script" uid="uid://b18otgy83q75q" path="res://script/game_option.gd" id="1_rlbay"]
-[ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="2_rlbay"]
-[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="3_1qnnq"]
-[ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="4_458px"]
-[ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="5_eirbp"]
-[ext_resource type="PackedScene" path="res://ui/damage_freq_slider.tscn" id="6_dns6n"]
-[ext_resource type="PackedScene" uid="uid://tbfd3m2k42hn" path="res://ui/volume_slider.tscn" id="7_v1ycl"]
-[ext_resource type="PackedScene" uid="uid://c0wckt17iueow" path="res://ui/mobile_notice.tscn" id="8_mnotice"]
+[ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="1_scroll"]
+[ext_resource type="Script" uid="uid://b18otgy83q75q" path="res://script/game_option.gd" id="2_script"]
+[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="4_font9"]
+[ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="5_autotext"]
+[ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="6_ui"]
+[ext_resource type="PackedScene" path="res://ui/damage_freq_slider.tscn" id="7_slider"]
+[ext_resource type="PackedScene" uid="uid://tbfd3m2k42hn" path="res://ui/volume_slider.tscn" id="8_volume"]
+[ext_resource type="PackedScene" uid="uid://c0wckt17iueow" path="res://ui/mobile_notice.tscn" id="9_mobile"]
+[ext_resource type="PackedScene" path="res://ui/option_toggle.tscn" id="10_toggle"]
 
 [sub_resource type="Animation" id="Animation_26t6y"]
 length = 0.001
@@ -120,189 +120,65 @@ _data = {
 &"option_in": SubResource("Animation_j1eo2")
 }
 
-[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_xst25"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.101961, 0.101961, 0.101961, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.223529, 0.223529, 0.223529, 1)
 
-[sub_resource type="Theme" id="Theme_ye3ks"]
-PanelContainer/styles/panel = SubResource("StyleBoxEmpty_xst25")
+[sub_resource type="Theme" id="Theme_section"]
+Label/colors/font_color = Color(0.819608, 0.819608, 0.819608, 1)
+Label/font_sizes/font_size = 13
+Label/fonts/font = ExtResource("4_font9")
 
-[sub_resource type="Animation" id="Animation_3esns"]
-length = 0.001
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("Node2D/ColorRect/ColorRect:position")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [Vector2(-8, 8)]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("Node2D/ColorRect/ColorRect:rotation")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [0.785398]
-}
-
-[sub_resource type="Animation" id="Animation_xcyta"]
-resource_name = "full_on"
-length = 0.1
-step = 0.01
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("Node2D/ColorRect/ColorRect:position")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [Vector2(-8, 8), Vector2(0, 0)]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("Node2D/ColorRect/ColorRect:rotation")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0, 0.1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [0.785398, 0.785398]
-}
-
-[sub_resource type="Animation" id="Animation_ug15q"]
-resource_name = "full_out"
-length = 0.1
-step = 0.01
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("Node2D/ColorRect/ColorRect:position")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [Vector2(0, 0), Vector2(-8, 8)]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("Node2D/ColorRect/ColorRect:rotation")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0, 0.1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [0.785398, 0.785398]
-}
-
-[sub_resource type="Animation" id="Animation_8q15g"]
-resource_name = "selected"
-length = 0.1
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("Node2D/ColorRect/ColorRect:position")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [Vector2(0, 0), Vector2(7, -7)]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("Node2D/ColorRect/ColorRect:rotation")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [0.785398]
-}
-
-[sub_resource type="Animation" id="Animation_ml6bf"]
-resource_name = "selected_out"
-length = 0.1
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("Node2D/ColorRect/ColorRect:position")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [Vector2(7, -7), Vector2(0, 0)]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("Node2D/ColorRect/ColorRect:rotation")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [0.785398]
-}
-
-[sub_resource type="AnimationLibrary" id="AnimationLibrary_tb017"]
-_data = {
-&"RESET": SubResource("Animation_3esns"),
-&"full_on": SubResource("Animation_xcyta"),
-&"full_out": SubResource("Animation_ug15q"),
-&"selected": SubResource("Animation_8q15g"),
-&"selected_out": SubResource("Animation_ml6bf")
-}
+[sub_resource type="Theme" id="Theme_row"]
+Label/colors/font_outline_color = Color(0, 0, 0, 1)
+Label/colors/font_shadow_color = Color(0, 0, 0, 1)
+Label/constants/outline_size = 4
+Label/constants/shadow_offset_x = 0
+Label/constants/shadow_offset_y = 3
+Label/constants/shadow_outline_size = 2
+Label/font_sizes/font_size = 15
+Label/fonts/font = ExtResource("4_font9")
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_aol56"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_gqnms"]
-texture = ExtResource("5_eirbp")
+content_margin_left = 6.0
+texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_petiq"]
-texture = ExtResource("5_eirbp")
+content_margin_left = 6.0
+texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_b4fip"]
-texture = ExtResource("5_eirbp")
+content_margin_left = 6.0
+texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_wryvx"]
-texture = ExtResource("5_eirbp")
+content_margin_left = 6.0
+texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="Theme" id="Theme_cpfog"]
-OptionButton/font_sizes/font_size = 10
-OptionButton/fonts/font = ExtResource("3_1qnnq")
+OptionButton/font_sizes/font_size = 12
+OptionButton/fonts/font = ExtResource("4_font9")
 OptionButton/styles/focus = SubResource("StyleBoxEmpty_aol56")
 OptionButton/styles/hover = SubResource("StyleBoxTexture_gqnms")
 OptionButton/styles/hover_mirrored = SubResource("StyleBoxTexture_petiq")
 OptionButton/styles/normal = SubResource("StyleBoxTexture_b4fip")
 OptionButton/styles/pressed = SubResource("StyleBoxTexture_wryvx")
-PopupMenu/font_sizes/font_size = 10
-PopupMenu/fonts/font = ExtResource("2_rlbay")
+PopupMenu/font_sizes/font_size = 12
+PopupMenu/fonts/font = ExtResource("4_font9")
 
 [node name="Game" type="Control" unique_id=1798086965]
 modulate = Color(1, 1, 1, 0)
@@ -311,153 +187,138 @@ anchors_preset = 0
 offset_right = 588.0
 offset_bottom = 360.0
 scale = Vector2(1e-05, 1)
-script = ExtResource("1_rlbay")
+script = ExtResource("2_script")
 option_id = "option_game"
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1946541577]
 libraries/ = SubResource("AnimationLibrary_y35uc")
 
-[node name="Scroll" type="ScrollContainer" parent="." unique_id=796350807]
+[node name="Scroll" type="ScrollContainer" parent="." unique_id=757246043]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 90.0
-offset_top = 20.0
-offset_right = 4.0
+offset_left = 134.0
+offset_top = 40.0
+offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
 follow_focus = true
 horizontal_scroll_mode = 0
-script = ExtResource("1_gaaxb")
+script = ExtResource("1_scroll")
 
-[node name="Content" type="VBoxContainer" parent="Scroll" unique_id=1755129325]
-custom_minimum_size = Vector2(0, 360)
+[node name="Content" type="VBoxContainer" parent="Scroll" unique_id=381176177]
 layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 16
-
-[node name="Graphics" type="VBoxContainer" parent="Scroll/Content" unique_id=801397706]
-layout_mode = 2
+size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Scroll/Content/Graphics" unique_id=403064406]
+[node name="DisplayCard" type="PanelContainer" parent="Scroll/Content" unique_id=512402992]
 layout_mode = 2
-theme_override_constants/separation = -4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 
-[node name="Header" type="Label" parent="Scroll/Content/Graphics/VBoxContainer" unique_id=1310007844]
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/DisplayCard" unique_id=1337557727]
 layout_mode = 2
-offset_transform_enabled = true
-offset_transform_position = Vector2(50, 0)
-theme_override_fonts/font = ExtResource("2_rlbay")
-theme_override_font_sizes/font_size = 16
-text = "GRAPHICS"
+mouse_filter = 2
+theme_override_constants/separation = 5
 
-[node name="Divider" type="ColorRect" parent="Scroll/Content/Graphics/VBoxContainer" unique_id=878654788]
+[node name="Header" type="Label" parent="Scroll/Content/DisplayCard/VBox" unique_id=227263829]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+theme = SubResource("Theme_section")
+text = "option_group_display"
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Scroll/Content/DisplayCard/VBox" unique_id=939504806]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
 
-[node name="RowFullScreen" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=741873347]
+[node name="RowDisplay" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox" unique_id=1192857131]
+unique_name_in_owner = true
 layout_mode = 2
-offset_transform_enabled = true
 mouse_filter = 2
 theme_override_constants/separation = 20
 
-[node name="FieldA" type="HBoxContainer" parent="Scroll/Content/Graphics/RowFullScreen" unique_id=1645000566]
+[node name="CellA" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox/RowDisplay" unique_id=261167548]
+custom_minimum_size = Vector2(152, 22)
 layout_mode = 2
-size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowFullScreen/FieldA" unique_id=1875833896]
-custom_minimum_size = Vector2(170, 22)
+[node name="FullScreenLabel" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellA" unique_id=681977311]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(126, 22)
+clip_contents = true
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellA/FullScreenLabel" unique_id=1775901893]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_row")
 text = "option_full_screen"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 125.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="FullScreen" type="PanelContainer" parent="Scroll/Content/Graphics/RowFullScreen/FieldA" unique_id=1445335143]
+[node name="FullScreen" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellA" unique_id=1705961590 instance=ExtResource("10_toggle")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 size_flags_vertical = 4
-theme = SubResource("Theme_ye3ks")
+focus_mode = 2
+track_color = Color(0.164706, 0.164706, 0.164706, 1)
 
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowFullScreen/FieldA/FullScreen" unique_id=41925761]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.0784314, 0.0784314, 0.0784314, 1)
-
-[node name="Node2D" type="Node2D" parent="Scroll/Content/Graphics/RowFullScreen/FieldA/FullScreen" unique_id=885291734]
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowFullScreen/FieldA/FullScreen/Node2D" unique_id=1548269464]
-clip_children = 1
-offset_left = 2.0
-offset_top = 2.0
-offset_right = 16.0
-offset_bottom = 16.0
-mouse_filter = 2
-color = Color(0.815686, 0.701961, 0.0235294, 1)
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowFullScreen/FieldA/FullScreen/Node2D/ColorRect" unique_id=951379318]
-layout_mode = 0
-offset_left = -8.0
-offset_top = 8.0
-offset_right = 12.0
-offset_bottom = 28.0
-rotation = 0.785398
-mouse_filter = 2
-color = Color(0.815686, 0.701961, 0.0235294, 1)
-
-[node name="AnimationPlayer" type="AnimationPlayer" parent="Scroll/Content/Graphics/RowFullScreen/FieldA/FullScreen" unique_id=752793997]
-libraries/ = SubResource("AnimationLibrary_tb017")
-
-[node name="FieldB" type="HBoxContainer" parent="Scroll/Content/Graphics/RowFullScreen" unique_id=999108765]
+[node name="CellB" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox/RowDisplay" unique_id=800855034]
+custom_minimum_size = Vector2(262, 22)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowFullScreen/FieldB" unique_id=1232120660]
-custom_minimum_size = Vector2(120, 22)
+[node name="ResolutionLabel" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellB" unique_id=1968532719]
+custom_minimum_size = Vector2(126, 22)
+clip_contents = true
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellB/ResolutionLabel" unique_id=473900915]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_row")
 text = "option_resolution"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 140.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="ResolutionSlot" type="Control" parent="Scroll/Content/Graphics/RowFullScreen/FieldB" unique_id=49042890]
-custom_minimum_size = Vector2(136, 20)
+[node name="ResolutionSlot" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellB" unique_id=2003211530]
+custom_minimum_size = Vector2(128, 20)
 layout_mode = 2
 size_flags_vertical = 4
 
-[node name="Resolutions" type="OptionButton" parent="Scroll/Content/Graphics/RowFullScreen/FieldB/ResolutionSlot" unique_id=1313846107]
+[node name="Resolutions" type="OptionButton" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellB/ResolutionSlot" unique_id=1666737266]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -466,9 +327,8 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_cpfog")
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 10
-alignment = 2
+theme_override_fonts/font = ExtResource("4_font9")
+theme_override_font_sizes/font_size = 12
 selected = 0
 item_count = 3
 popup/item_0/text = "1280 x 720"
@@ -478,7 +338,7 @@ popup/item_1/id = 1
 popup/item_2/text = "1920 x 1080"
 popup/item_2/id = 2
 
-[node name="ResolutionsTouchBlock" type="Control" parent="Scroll/Content/Graphics/RowFullScreen/FieldB/ResolutionSlot" unique_id=725453594]
+[node name="ResolutionsTouchBlock" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowDisplay/CellB/ResolutionSlot" unique_id=293020581]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -487,528 +347,475 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="RowShake" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=976490661]
+[node name="RowMaxFps" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox" unique_id=1841006311]
 layout_mode = 2
-offset_transform_enabled = true
-mouse_filter = 2
-theme_override_constants/separation = 0
-
-[node name="FieldA" type="HBoxContainer" parent="Scroll/Content/Graphics/RowShake" unique_id=767659999]
-layout_mode = 2
-size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowShake/FieldA" unique_id=1462532442]
-custom_minimum_size = Vector2(170, 22)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "option_screen_shake"
-horizontal_alignment = 2
-script = ExtResource("4_458px")
-base_font_size = 15
-base_size_y = 22.0
-base_size_x = 125.0
-min_font_size = 7
-
-[node name="Shake" type="PanelContainer" parent="Scroll/Content/Graphics/RowShake/FieldA" unique_id=1990677004]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(18, 18)
-layout_mode = 2
-size_flags_vertical = 4
-theme = SubResource("Theme_ye3ks")
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowShake/FieldA/Shake" unique_id=23749274]
+[node name="MaxFpsLabel" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowMaxFps" unique_id=44263006]
+custom_minimum_size = Vector2(126, 22)
+clip_contents = true
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.0784314, 0.0784314, 0.0784314, 1)
 
-[node name="Node2D" type="Node2D" parent="Scroll/Content/Graphics/RowShake/FieldA/Shake" unique_id=1361304295]
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowShake/FieldA/Shake/Node2D" unique_id=1401221105]
-clip_children = 1
-offset_left = 2.0
-offset_top = 2.0
-offset_right = 16.0
-offset_bottom = 16.0
-mouse_filter = 2
-color = Color(0.815686, 0.701961, 0.0235294, 1)
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowShake/FieldA/Shake/Node2D/ColorRect" unique_id=1198719235]
-layout_mode = 0
-offset_left = -8.0
-offset_top = 8.0
-offset_right = 12.0
-offset_bottom = 28.0
-rotation = 0.785398
-mouse_filter = 2
-color = Color(0.815686, 0.701961, 0.0235294, 1)
-
-[node name="AnimationPlayer" type="AnimationPlayer" parent="Scroll/Content/Graphics/RowShake/FieldA/Shake" unique_id=1693740535]
-libraries/ = SubResource("AnimationLibrary_tb017")
-
-[node name="FieldB" type="HBoxContainer" parent="Scroll/Content/Graphics/RowShake" unique_id=346551410]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_override_constants/separation = 8
-
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowShake/FieldB" unique_id=507405494]
-custom_minimum_size = Vector2(120, 22)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "option_v_sync"
-horizontal_alignment = 2
-script = ExtResource("4_458px")
-base_font_size = 15
-base_size_y = 22.0
-base_size_x = 120.0
-min_font_size = 7
-
-[node name="VSync" type="PanelContainer" parent="Scroll/Content/Graphics/RowShake/FieldB" unique_id=834693108]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(18, 18)
-layout_mode = 2
-size_flags_vertical = 4
-theme = SubResource("Theme_ye3ks")
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync" unique_id=669674166]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.0784314, 0.0784314, 0.0784314, 1)
-
-[node name="Node2D" type="Node2D" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync" unique_id=1276311434]
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync/Node2D" unique_id=574612296]
-clip_children = 1
-offset_left = 2.0
-offset_top = 2.0
-offset_right = 16.0
-offset_bottom = 16.0
-mouse_filter = 2
-color = Color(0.815686, 0.701961, 0.0235294, 1)
-
-[node name="ColorRect" type="ColorRect" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync/Node2D/ColorRect" unique_id=2145255973]
-layout_mode = 0
-offset_left = -8.0
-offset_top = 8.0
-offset_right = 12.0
-offset_bottom = 28.0
-rotation = 0.785398
-mouse_filter = 2
-color = Color(0.815686, 0.701961, 0.0235294, 1)
-
-[node name="AnimationPlayer" type="AnimationPlayer" parent="Scroll/Content/Graphics/RowShake/FieldB/VSync" unique_id=202520950]
-libraries/ = SubResource("AnimationLibrary_tb017")
-
-[node name="RowMaxFps" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1810000001]
-layout_mode = 2
-offset_transform_enabled = true
-mouse_filter = 2
-theme_override_constants/separation = 8
-
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000002]
-custom_minimum_size = Vector2(170, 22)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
+[node name="Label" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowMaxFps/MaxFpsLabel" unique_id=1686657429]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_row")
 text = "option_max_fps"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 125.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="MaxFps" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000003 instance=ExtResource("6_dns6n")]
+[node name="MaxFps" parent="Scroll/Content/DisplayCard/VBox/RowMaxFps" unique_id=261409833 instance=ExtResource("7_slider")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+custom_minimum_size = Vector2(132, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 max_value = 5.0
 
-[node name="MaxFpsValue" type="Label" parent="Scroll/Content/Graphics/RowMaxFps" unique_id=1810000004]
+[node name="MaxFpsValue" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowMaxFps" unique_id=1734203234]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 20)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
+theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 text = "Unlimited"
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
-[node name="RowDamageFreq" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=202279312]
+[node name="RowAdvanced" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox" unique_id=155027502]
+unique_name_in_owner = true
 layout_mode = 2
-offset_transform_enabled = true
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="CellA" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced" unique_id=480552915]
+custom_minimum_size = Vector2(152, 22)
+layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowDamageFreq" unique_id=1391193713]
-custom_minimum_size = Vector2(170, 22)
+[node name="VSyncLabel" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellA" unique_id=48930280]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(126, 22)
+clip_contents = true
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "option_damage_freq"
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellA/VSyncLabel" unique_id=1316368292]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_row")
+text = "option_v_sync"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 125.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="DamageFreq" parent="Scroll/Content/Graphics/RowDamageFreq" unique_id=194191420 instance=ExtResource("6_dns6n")]
+[node name="VSync" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellA" unique_id=1087600226 instance=ExtResource("10_toggle")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 2
+track_color = Color(0.164706, 0.164706, 0.164706, 1)
+
+[node name="CellB" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced" unique_id=1763982202]
+custom_minimum_size = Vector2(262, 22)
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
-
-[node name="DamageFreqValue" type="Label" parent="Scroll/Content/Graphics/RowDamageFreq" unique_id=1194924116]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 20)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 12
-text = "100%"
-horizontal_alignment = 2
-
-[node name="RowEffectFreq" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=1288140774]
-layout_mode = 2
-offset_transform_enabled = true
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowEffectFreq" unique_id=128038304]
-custom_minimum_size = Vector2(170, 22)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "option_effect_freq"
-horizontal_alignment = 2
-script = ExtResource("4_458px")
-base_font_size = 15
-base_size_y = 22.0
-base_size_x = 125.0
-min_font_size = 7
-
-[node name="EffectFreq" parent="Scroll/Content/Graphics/RowEffectFreq" unique_id=860500583 instance=ExtResource("6_dns6n")]
+[node name="PhysicsInterpLabel" type="Control" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellB" unique_id=2129290698]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+custom_minimum_size = Vector2(126, 22)
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
-
-[node name="EffectFreqValue" type="Label" parent="Scroll/Content/Graphics/RowEffectFreq" unique_id=1069579731]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 20)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 12
-text = "100%"
-horizontal_alignment = 2
-
-[node name="RowHitFlashFreq" type="HBoxContainer" parent="Scroll/Content/Graphics" unique_id=668009088]
-layout_mode = 2
-offset_transform_enabled = true
 mouse_filter = 2
-theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Graphics/RowHitFlashFreq" unique_id=385900840]
-custom_minimum_size = Vector2(170, 22)
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "option_hit_flash_freq"
+[node name="Label" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellB/PhysicsInterpLabel" unique_id=426413029]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_row")
+text = "option_physics_interp"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 125.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="HitFlashFreq" parent="Scroll/Content/Graphics/RowHitFlashFreq" unique_id=110924564 instance=ExtResource("6_dns6n")]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 16)
+[node name="PhysicsToggleSlot" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellB" unique_id=1062963123]
+custom_minimum_size = Vector2(128, 22)
 layout_mode = 2
-size_flags_horizontal = 3
 size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 0
 
-[node name="HitFlashFreqValue" type="Label" parent="Scroll/Content/Graphics/RowHitFlashFreq" unique_id=1420210391]
+[node name="PhysicsInterp" parent="Scroll/Content/DisplayCard/VBox/RowAdvanced/CellB/PhysicsToggleSlot" unique_id=1402955114 instance=ExtResource("10_toggle")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 20)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 12
-text = "100%"
-horizontal_alignment = 2
+size_flags_vertical = 4
+focus_mode = 2
+track_color = Color(0.164706, 0.164706, 0.164706, 1)
 
-[node name="Sounds" type="VBoxContainer" parent="Scroll/Content" unique_id=1880424996]
+[node name="FeedbackCard" type="PanelContainer" parent="Scroll/Content" unique_id=2024512700]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Scroll/Content/Sounds" unique_id=2939196]
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/FeedbackCard" unique_id=67398224]
 layout_mode = 2
-theme_override_constants/separation = -4
+mouse_filter = 2
+theme_override_constants/separation = 5
 
-[node name="Header" type="Label" parent="Scroll/Content/Sounds/VBoxContainer" unique_id=1011572232]
+[node name="Header" type="Label" parent="Scroll/Content/FeedbackCard/VBox" unique_id=1235994508]
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
-offset_transform_enabled = true
-offset_transform_position = Vector2(50, 0)
-theme_override_fonts/font = ExtResource("2_rlbay")
-theme_override_font_sizes/font_size = 16
-text = "SOUNDS"
+theme = SubResource("Theme_section")
+text = "option_group_feedback"
+vertical_alignment = 1
 
-[node name="Divider" type="ColorRect" parent="Scroll/Content/Sounds/VBoxContainer" unique_id=939508477]
+[node name="Divider" type="ColorRect" parent="Scroll/Content/FeedbackCard/VBox" unique_id=823109196]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
 
-[node name="RowMaster" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=946426670]
+[node name="RowShake" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=1968803562]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Sounds/RowMaster" unique_id=212808904]
-custom_minimum_size = Vector2(170, 22)
+[node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowShake" unique_id=1953598209]
+custom_minimum_size = Vector2(126, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
-text = "sounds_master_volume"
+theme = SubResource("Theme_row")
+text = "option_screen_shake"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 140.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="Master" parent="Scroll/Content/Sounds/RowMaster" unique_id=1099490521 instance=ExtResource("7_v1ycl")]
+[node name="Shake" parent="Scroll/Content/FeedbackCard/VBox/RowShake" unique_id=864697903 instance=ExtResource("10_toggle")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 16)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 2
+track_color = Color(0.164706, 0.164706, 0.164706, 1)
+
+[node name="RowDamageFreq" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=458078918]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowDamageFreq" unique_id=256490099]
+custom_minimum_size = Vector2(126, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+text = "option_damage_freq"
+horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 126.0
+min_font_size = 7
+
+[node name="DamageFreq" parent="Scroll/Content/FeedbackCard/VBox/RowDamageFreq" unique_id=612854341 instance=ExtResource("7_slider")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="DamageFreqValue" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowDamageFreq" unique_id=1726880748]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+theme_override_font_sizes/font_size = 12
+text = "100%"
+horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
+
+[node name="RowEffectFreq" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=1317537397]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowEffectFreq" unique_id=67347248]
+custom_minimum_size = Vector2(126, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+text = "option_effect_freq"
+horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 126.0
+min_font_size = 7
+
+[node name="EffectFreq" parent="Scroll/Content/FeedbackCard/VBox/RowEffectFreq" unique_id=146982245 instance=ExtResource("7_slider")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="EffectFreqValue" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowEffectFreq" unique_id=176397255]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+theme_override_font_sizes/font_size = 12
+text = "100%"
+horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
+
+[node name="RowHitFlashFreq" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=194926604]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowHitFlashFreq" unique_id=2126962023]
+custom_minimum_size = Vector2(126, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+text = "option_hit_flash_freq"
+horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 126.0
+min_font_size = 7
+
+[node name="HitFlashFreq" parent="Scroll/Content/FeedbackCard/VBox/RowHitFlashFreq" unique_id=434389839 instance=ExtResource("7_slider")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="HitFlashFreqValue" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowHitFlashFreq" unique_id=582698661]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+theme_override_font_sizes/font_size = 12
+text = "100%"
+horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
+
+[node name="AudioCard" type="PanelContainer" parent="Scroll/Content" unique_id=1398412543]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/AudioCard" unique_id=170600733]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 5
+
+[node name="Header" type="Label" parent="Scroll/Content/AudioCard/VBox" unique_id=544925195]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+theme = SubResource("Theme_section")
+text = "option_group_audio"
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Scroll/Content/AudioCard/VBox" unique_id=484028620]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.223529, 0.223529, 0.223529, 1)
+
+[node name="RowMaster" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=1313412632]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowMaster" unique_id=1853155479]
+custom_minimum_size = Vector2(126, 22)
+layout_mode = 2
+theme = SubResource("Theme_row")
+text = "sounds_master_volume"
+horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
+base_font_size = 15
+base_size_y = 22.0
+base_size_x = 126.0
+min_font_size = 7
+
+[node name="Master" parent="Scroll/Content/AudioCard/VBox/RowMaster" unique_id=1657947287 instance=ExtResource("8_volume")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowMaster" unique_id=1183085382]
-custom_minimum_size = Vector2(48, 22)
+[node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowMaster" unique_id=830262730]
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
+theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
-[node name="RowSFX" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=1457527729]
+[node name="RowSFX" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=1112286395]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Sounds/RowSFX" unique_id=668462243]
-custom_minimum_size = Vector2(170, 22)
+[node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowSFX" unique_id=120729756]
+custom_minimum_size = Vector2(126, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
+theme = SubResource("Theme_row")
 text = "sounds_sfx"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 140.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="SFX" parent="Scroll/Content/Sounds/RowSFX" unique_id=40557369 instance=ExtResource("7_v1ycl")]
+[node name="SFX" parent="Scroll/Content/AudioCard/VBox/RowSFX" unique_id=1788027571 instance=ExtResource("8_volume")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 16)
+custom_minimum_size = Vector2(132, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 bus = &"SFX"
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowSFX" unique_id=1584193751]
-custom_minimum_size = Vector2(48, 22)
+[node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowSFX" unique_id=549969658]
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
+theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
-[node name="RowBGM" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=256167151]
+[node name="RowBGM" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=676677125]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Sounds/RowBGM" unique_id=1535531936]
-custom_minimum_size = Vector2(170, 22)
+[node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowBGM" unique_id=2014794358]
+custom_minimum_size = Vector2(126, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
+theme = SubResource("Theme_row")
 text = "sounds_bgm"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 140.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="BGM" parent="Scroll/Content/Sounds/RowBGM" unique_id=1943202418 instance=ExtResource("7_v1ycl")]
+[node name="BGM" parent="Scroll/Content/AudioCard/VBox/RowBGM" unique_id=827590504 instance=ExtResource("8_volume")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 16)
+custom_minimum_size = Vector2(132, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 bus = &"BGM"
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowBGM" unique_id=791131219]
-custom_minimum_size = Vector2(48, 22)
+[node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowBGM" unique_id=1166783101]
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
+theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
-[node name="RowVOICE" type="HBoxContainer" parent="Scroll/Content/Sounds" unique_id=1428377212]
+[node name="RowVOICE" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=104030964]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="Scroll/Content/Sounds/RowVOICE" unique_id=1555615284]
-custom_minimum_size = Vector2(170, 22)
+[node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowVOICE" unique_id=1703067831]
+custom_minimum_size = Vector2(126, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
-theme_override_font_sizes/font_size = 15
+theme = SubResource("Theme_row")
 text = "sounds_voice"
 horizontal_alignment = 2
-script = ExtResource("4_458px")
+vertical_alignment = 1
+clip_text = true
+script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
-base_size_x = 140.0
+base_size_x = 126.0
 min_font_size = 7
 
-[node name="VOICE" parent="Scroll/Content/Sounds/RowVOICE" unique_id=570101494 instance=ExtResource("7_v1ycl")]
+[node name="VOICE" parent="Scroll/Content/AudioCard/VBox/RowVOICE" unique_id=1690953731 instance=ExtResource("8_volume")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 16)
+custom_minimum_size = Vector2(132, 16)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 bus = &"VOICE"
 value_label_path = NodePath("../Value")
 
-[node name="Value" type="Label" parent="Scroll/Content/Sounds/RowVOICE" unique_id=419456301]
-custom_minimum_size = Vector2(48, 22)
+[node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowVOICE" unique_id=1641198880]
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("3_1qnnq")
+theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
-[node name="MobileNotice" parent="." unique_id=1003255570 instance=ExtResource("8_mnotice")]
+[node name="MobileNotice" parent="." unique_id=1993449589 instance=ExtResource("9_mobile")]
 unique_name_in_owner = true
 layout_mode = 0

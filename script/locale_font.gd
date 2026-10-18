@@ -95,6 +95,10 @@ func apply() -> void:
 		return
 	_apply_tree(get_tree().root, _current_locale())
 
+## 动态提示在计算换行前同步应用字体；无需扫描整棵场景树。
+func apply_control(control: Control) -> void:
+	_apply_node(control, _current_locale())
+
 func _apply_tree(node: Node, locale: String) -> void:
 	_apply_node(node, locale)
 	for child in node.get_children():

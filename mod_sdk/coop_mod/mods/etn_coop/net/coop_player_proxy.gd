@@ -21,6 +21,8 @@ var is_local_player: bool = false
 var target_position: Vector2
 var target_velocity: Vector2
 var target_look_position: Vector2
+# 与位置同延迟、逐帧插值的瞄准点；镜像表现（枪/身体/道具）一律用它，避免只在快照到达时跳变
+var render_look_position: Vector2
 var target_sprite_y: float = DEFAULT_SPRITE_Y
 var target_state: int = 0
 var target_character_state: int = 0
@@ -71,8 +73,9 @@ func setup(p_peer_id: int, p_is_local: bool) -> void:
 	is_local_player = p_is_local
 	target_position = player.global_position
 	target_look_position = player.global_position + Vector2.RIGHT
+	render_look_position = target_look_position
 	_buffer.clear()
-	_buffer.push(Time.get_ticks_msec(), target_position, Vector2.ZERO)
+	_buffer.push(Time.get_ticks_msec(), target_position, Vector2.ZERO, target_look_position)
 	player.set_meta("peer_id", peer_id)
 	player.set_meta("is_local_player", is_local_player)
 	if player_stats != null:
@@ -130,7 +133,7 @@ func apply_state(
 	target_state = state
 	target_character_state = character_state
 	target_heading = heading
-	_buffer.push(Time.get_ticks_msec(), position, velocity)
+	_buffer.push(Time.get_ticks_msec(), position, velocity, look_position)
 	if is_local_player or player_stats == null:
 		return
 	player.set_meta("net_hp", hp)
@@ -164,6 +167,7 @@ func _physics_process(delta: float) -> void:
 	if _buffer.sample(render_msec):
 		var p: Vector2 = _buffer.sample_pos
 		vel = _buffer.sample_vel
+		render_look_position = _buffer.sample_look
 		if player.global_position.distance_squared_to(p) > HARD_CORRECT_DISTANCE_SQUARED:
 			player.global_position = p
 			_buffer.clear()
@@ -182,28 +186,30 @@ func _physics_process(delta: float) -> void:
 			CoopNetScript.instance.net_extrap_frames += 1
 	if player_body != null:
 		player_body.velocity = vel
+	if player.get("crosshair_pos") is Vector2:
+		player.crosshair_pos = render_look_position
 	if player.has_method("set_player_lookat"):
-		player.set_player_lookat(target_look_position)
+		player.set_player_lookat(render_look_position)
 	_apply_weapon_look()
 	_apply_visual_state(delta)
 
 
 func _apply_weapon_look() -> void:
-	if target_look_position.is_equal_approx(player.global_position):
+	if render_look_position.is_equal_approx(player.global_position):
 		return
 	if player_gun != null:
 		if is_mortar:
 			_apply_mortar_look(player_gun)
 		else:
-			player_gun.look_at(target_look_position)
+			player_gun.look_at(render_look_position)
 	if player_kick != null and player_kick.get("can_r") != false:
-		player_kick.look_at(target_look_position)
+		player_kick.look_at(render_look_position)
 	if second_gun != null:
-		second_gun.look_at(target_look_position)
+		second_gun.look_at(render_look_position)
 
 
 func _apply_mortar_look(gun_node: Node2D) -> void:
-	var r: float = player.get_angle_to(target_look_position)
+	var r: float = player.get_angle_to(render_look_position)
 	if r <= 0 and r > - PI / 2:
 		gun_node.rotation = r * 0.2 - PI * 0.4
 	elif r <= - PI / 2:
@@ -220,8 +226,8 @@ func _apply_visual_state(delta: float) -> void:
 		player_sprite.position.y = lerpf(player_sprite.position.y, target_sprite_y, 0.45)
 		_play_remote_animation(player_sprite, target_state)
 		# 身体瞄准旋转（本体 player.gd:233/256-259 会做，镜像 player_stop=true 不会跑，补上）
-		if target_look_position != Vector2.ZERO and not target_look_position.is_equal_approx(player.global_position):
-			player_sprite.look_at(target_look_position)
+		if not render_look_position.is_equal_approx(player.global_position):
+			player_sprite.look_at(render_look_position)
 			if player_sprite.rotation_degrees > 5:
 				player_sprite.rotation_degrees = 5
 			elif player_sprite.rotation_degrees < -10:

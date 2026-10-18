@@ -31,7 +31,7 @@ func _is_friendly_fire(damage_data: HealthChangeData) -> bool:
 
 func take_damage(damage_data: HealthChangeData):
 	# 联机：远端镜像的伤害由 mod 接管（友方近战转发拥有者 / 其它丢弃），避免镜像本地结算误伤本机玩家
-	if ExtensionHooks.intercept(ExtensionHooks.summoned_damage_interceptor, [owner, damage_data]):
+	if ExtensionHooks.intercept_named("summoned_damage_interceptor", [owner, damage_data]):
 		return
 	if is_invincible:
 		return

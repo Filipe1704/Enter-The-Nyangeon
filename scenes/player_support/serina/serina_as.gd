@@ -18,6 +18,8 @@ extends SupportAS
 var player: Node
 
 func _on_ready() -> void:
+	# aura 位置由 _process 每帧跟随玩家写入，属"逐帧驱动视觉"，须关物理插值。
+	aura.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	skill_timer.timeout.connect(skill_end)
 	heal_timer.timeout.connect(heal_tick)
 	set_process(false)

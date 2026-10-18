@@ -64,7 +64,7 @@ func _estat(entry: Dictionary, key: String, fallback: Variant = 0) -> Variant:
 
 # 客机镜像不结算 DOT（避免本地重复；权威结算在 host）；对齐联机版
 func _is_remote_mirror() -> bool:
-	if not ExtensionHooks.is_lan_session.is_valid() or not bool(ExtensionHooks.is_lan_session.call()):
+	if not ExtensionHooks.intercept_named("is_lan_session", []):
 		return false
 	if multiplayer.is_server():
 		return false

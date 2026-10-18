@@ -98,6 +98,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if multiplayer.multiplayer_peer == null:
 		return
+	if not coop._net_connected() or (not multiplayer.is_server() and not coop._hello_acked):
+		return
 	if summoned == null or not is_instance_valid(summoned):
 		return
 	if is_local_owner:

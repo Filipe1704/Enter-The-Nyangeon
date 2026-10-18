@@ -2,14 +2,12 @@ extends PanelContainer
 
 @onready var sprite_2d: Sprite2D = $ColorRect/Sprite2D
 @onready var button: Button = $Button
-@onready var ps_text: Label = %PSText
-@onready var text_show: Node2D = $Text
 
 var player_card: PlayerCard
 var player_id: String
 var player_path: String
 var on_touch: bool = false
-var text_is_show: bool = false
+var _tooltip: HoverTooltipBinding
 
 var touch_index: int = -1
 var touch_start_pos: Vector2 = Vector2.ZERO
@@ -20,20 +18,14 @@ func _ready() -> void:
 	GameEvents.test_room_button_close.connect(close_button)
 	GameEvents.test_room_reset.connect(open_button)
 	GameEvents.player_card_touch.connect(touch_out)
-	mouse_entered.connect(show_text)
-	mouse_exited.connect(hide_text)
-
-func _physics_process(delta: float) -> void:
-	if text_is_show == true:
-		if on_touch == false:
-			text_show.global_position = get_global_mouse_position()
-		else:
-			text_show.global_position = self.global_position
+	mouse_entered.connect(func(): SoundManager.play_sfx("ButtonSounds2"))
+	_tooltip = HoverTooltipBinding.bind(self, _tooltip_content, func(): return button.mouse_filter != Control.MOUSE_FILTER_IGNORE and not button.disabled, func(): on_touch = false)
 
 func open_button():
 	button.mouse_filter = 1
 
 func close_button():
+	_tooltip.dismiss()
 	button.mouse_filter = 2
 	touch_index = -1
 
@@ -41,11 +33,9 @@ func load_player_card():
 	if player_card != null:
 		sprite_2d.texture = LazyTexture.load_uncached(player_card.sprite_path)
 		player_id = player_card.id
-		ps_text.text = _ps_text(0)
 		player_path = player_card.scene_path
 		if player_path == "":
 			player_path = "res://scenes/player/" + player_id + "/" + player_id + ".tscn"
-
 
 # 本地化缺失时回退到角色描述，避免显示原始键（如 xxx_ps_0）
 func _ps_text(idx: int) -> String:
@@ -55,32 +45,17 @@ func _ps_text(idx: int) -> String:
 	var t := tr(key)
 	return t if t != key else str(player_card.description)
 
-func touch_out():
-	if on_touch == true:
-		on_touch = false
-		text_show.visible = false
-		text_is_show = false
+func touch_out() -> void:
+	_tooltip.dismiss()
 
-func _preview_text():
-	# 先广播隐藏其它卡的文本，再置自身状态，避免被自身的 touch_out 清掉
+func _preview_text(index: int = -1) -> void:
 	GameEvents.emit_player_card_touch()
 	on_touch = true
-	text_show.visible = true
-	text_is_show = true
-
-func show_text():
-	SoundManager.play_sfx("ButtonSounds2")
-	text_show.visible = true
-	text_is_show = true
-
-func hide_text():
-	text_show.visible = false
-	text_is_show = false
+	_tooltip.preview("touch", index)
 
 func _on_button_pressed() -> void:
 	on_touch = false
-	text_show.visible = false
-	text_is_show = false
+	_tooltip.dismiss()
 	if _selection_locked:
 		return
 	_selection_locked = true
@@ -90,7 +65,7 @@ func _on_button_pressed() -> void:
 	GameEvents.emit_teset_room_now_player(player_path)
 	Transition.play_left_start()
 	await Transition.left_end_start
-	if not ExtensionHooks.intercept(ExtensionHooks.local_player_change_gate, [player_path, Vector2.ZERO]):
+	if not ExtensionHooks.intercept_named("local_player_change_gate", [player_path, Vector2.ZERO]):
 		var player = get_tree().get_first_node_in_group("Player")
 		if player != null:
 			player.queue_free()
@@ -117,12 +92,21 @@ func _on_button_gui_input(event: InputEvent) -> void:
 			var moved: float = event.position.distance_to(touch_start_pos)
 			touch_index = -1
 			# 位移超过阈值视为滚动拖动：不预览、不选中
-			if moved > TAP_MAX_DISTANCE:
+			if event.canceled or _tooltip.touch_was_dragged(event.index) or moved > TAP_MAX_DISTANCE:
 				return
 			if on_touch == false:
-				_preview_text()
+				_preview_text(event.index)
 			else:
 				_on_button_pressed()
 	elif event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			_on_button_pressed()
+
+func _tooltip_content() -> Array:
+	if player_card == null:
+		return []
+	# 名称按 HUD 口径直接用 player_card.name（可能是翻译键，交给 Label 自动翻译）。
+	return [
+		{"text": player_card.name, "role": "title"},
+		{"text": _ps_text(0), "translated": true},
+	]

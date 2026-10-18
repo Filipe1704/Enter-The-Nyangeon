@@ -1,6 +1,26 @@
 # ETN Coop Mod（骨架）
 
-> 当前版本 **0.1.8**（以 `mods/etn_coop/mod.json` 为准）；最低支持本体 **v0.5.1.2-test 及以上**（版本比较忽略 `-test` 等后缀）。自 0.1.8 起 `mod.json` 设 `replace_files:true`，随 mod 覆盖分发两个本体脚本（`ui/round_timer.gd`、`scenes/item/pyroxenes.gd`）——因本体暂不单独发版。
+> 当前发布版本 **0.1.10**（以 `mods/etn_coop/mod.json` 为准），协议 **v4**；最低本体版本声明恢复为 **v0.5.1.2-test**。运行时仍要求本体具备 `enemy_damage_calculating` 前置伤害接口，本体与 Mod 需配套更新；当前不整文件覆盖本体脚本。
+
+## 伤害修复与兼容（2026-10-14，原标 0.1.12）
+
+- SUPERSEDED: 2026-10-14 用户要求回滚发布版本号，本体恢复为 `v0.5.1.3`，联机 Mod 恢复为 `0.1.10`；以下修复保留，尚未提交上游的协议变更统一为 v4（原计划 v5）。同日再改定：本体发布版本升为 `v0.5.1.4`（导出文件名同步 0.5.1.4），联机 Mod 仍 `0.1.10`。
+
+- 伤害先在归属端按命中时构筑/目标快照计算 `resolved_damage`，再由房主检查目标存活、阵营及无敌状态并扣血；房主不重复乘承伤或自身被动，结算后 proc 仍只回传归属端。独立部件和自管理子弹走同一契约。
+- 本体新增 `enemy_damage_calculating` 前置阶段，角色/藏品增伤改挂该阶段。临时追加的 modifier 和组件倍率按命中消费，不累积到穿透弹下一目标；真实伤害跳过数值修饰并清理暂存倍率。
+- 旧本体没有前置接口时 entry 给出警告并停止注入。当前协议 v4 不兼容上游旧协议 v3，所有玩家需重新构建/更新官方 Mod；不要仅更新 ZIP 而保留旧本体。发布版本标记回滚不改变这些接口要求。
+- 中继在最终 client_ready 前补齐最新成员公告，解决多个客机同时加入的身份缺口；未知 sender 拒收边界保持。
+- 外推改为衰减速度的积分，120ms 后保持末端位置及零速度；无回退。
+- `run_damage_contract_checks.py` 验证真实角色/藏品与 wire roundtrip，`run_coop_recovery_checks.py --cases damage` 验证实际双进程扣血、部件、生命周期与 proc 去重。旧 PCK 会使新伤害场景明确失败。
+
+## 0.1.11 修复与兼容（2026-10-13）
+
+- 协议升级为 **v4**，新增身份恢复广播与金币倍率同步；联机双方必须使用兼容的新版，旧 PCK 需重新构建并更新。
+- 选人开始后拒绝新加入、允许已有 token 重连；恢复所有端的玩家/召唤物归属、支援、名字、道具和倒地状态，并迁移各阶段就绪表。
+- 已继续的玩家重连后重报升级就绪；取消开房/开战/换场和延迟关闭使用会话代次与原 peer 校验。
+- 共享金币按拾取者倍率结算；房主使用原始币值与已同步的有限倍率，忽略总额虚报并去重。倍率沿用客机属性自报模型。
+- 中继限制单帧为 `16 MiB + 4` 字节（与 CoopRelayPeer 包契约一致），限制接收缓冲并覆盖 HTTP、未入房、残帧及写入等待期限；全部 WebSocket 连接纳入心跳清理。
+- 专项回归：`python tests/run_coop_recovery_checks.py`；中继输入预算：`python -m unittest discover -s tests -p test_relay_limits.py`。均只使用隔离用户目录或本机回环地址。
 
 联机以 **mod 形式注入**，本体零改动（仅通过 `ExtensionHooks` 挂接）。当前进度：**传输层 + 玩家/敌人/召唤物同步 + 敌人伤害权威 + 子弹与爆炸/特效广播 + 金币共享 + 倒地救援/团队流程 + 场景切换广播 + 主菜单 COOP 按钮（置于 QUIT 之上）+ 联机覆盖层（option 菜单式布局，页签复用 `option_button.tscn` 绿色高亮，4 语）+ 开房后自动进准备房（测试房作为准备房）+ 开始球/选人/就绪/房主难度流程 + 玩家 ID 常驻顶部 + LAN 全员选定握手 + 出生点居中 + 测试场菜单 get_player 修复 + 玩家 ID 输入/持久化 + 头顶名牌同步 + 房间聊天室（右侧小窗，回车/手机按钮 + 升级页按钮）**。
 
@@ -90,6 +110,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - 玩家同步：各端在 `first_round_add` 时交换 roster，互相生成对方角色（移出 `Player` 组、加入 `RemotePlayer`），挂 `CoopPlayerProxy`（禁用输入/相机/UI/碰撞/信号、按快照插值位置/朝向/动画/血量）；本机以 ~20Hz 上报状态，经服务端转发。
 - 敌人同步（服务端权威）：host 在 `on_enemy_spawned` 登记 net_id 并广播；client 生成镜像（挂 `CoopEnemyProxy`，禁物理、按快照插值位置/速度/血量）；host 以 ~8Hz 发快照；死亡经 `is_dead` → despawn 广播；client 镜像不本地判死。
 - 敌人伤害权威：client 的子弹命中经 `enemy_damage_interceptor` 转交 host（序列化 DamageData 字段），host 结算并快照回传；client 不本地结算（镜像血量只来自快照）。
+- **菜刀伤害数字一致（2026-10-15）**：沿用既有 `resolved_damage` 计算，主机从结算回调取得命中伤害用于飘字，记分仍按有效扣血计算，避免菜刀斩杀在两端显示为 `99999` 与剩余生命值。`python tests/run_coop_item_visual_checks.py --damage` 验证 LAN/Relay 同次命中的数字、斩杀、沙袋回血与记分。
 - 子弹广播：任意端的本地弹道经 `on_projectile_spawned` 按帧批量广播（scene/位置/朝向/缩放/速度/kill_time）；其它端用 `CoopVisualSync` 生成**纯视觉弹**（从本体池移除、清零碰撞、禁伤害、自带 kill_time 回池）；`on_projectile_despawned` 广播**提前终止**（撞墙/命中）让对方立即消失，`ended` 集合防迟到复活。
 - 爆炸/特效广播：`on_projectile_spawned` 中**无 velocity** 的作用域走特效通道（scene/位置/朝向/缩放/所属组 + **白名单属性** `explosion_range/damage_mult/range_mult/scale_mult/is_crit/color/modulate/bullet_scale`），对方生成不池化、超时释放的纯视觉特效（禁伤害）。
 - 敌人→玩家伤害：client 的**敌方视觉弹**对本地玩家开放"伤害洞"（置 `enemy_bullet` 层 + monitorable、合成 enemy DamageData），玩家 HurtBox 正常结算；镜像敌人物理/AI 停用，不会二次开火。
@@ -106,10 +127,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - 受伤类道具清弹（救生圈 `lifebuoy`）：本体 `lifebuoy.gd` 触发时经新增 `ExtensionHooks.on_enemy_bullet_clear(pos, radius)` 通知 mod；mod 本机即时按半径清 `group EnemyBullet`（普通弹 `bullet_clear`、导弹 `enemy_missile_1` 无 `bullet_clear` → `idle_state`），非 host 再 `rpc_id(1, "_server_enemy_bullet_clear", pos, radius)` 请求 host 权威清理——host 清真子弹经既有 `on_projectile_despawned`(`net_visual_id`) 广播 `_despawn_visual_bullet`，各端一致消失。带 `source_faction==ENEMY_SIDE` 过滤 + `_rate_allow_tokens` + 归属校验（`player_by_peer_id` 距触发点 ≤400）；**不清**激光/狙击/爆炸 AoE（三者不在 `EnemyBullet` 组）。本体侧另修 `lifebuoy.tscn` 的 `Area2D.collision_mask` `65536`→`128`（恢复单机清普通弹）。
 - 场景切换广播：host 调 `change_scene` 时广播 `_remote_change_scene(path, roster)`，client 跟随并用各自选择的角色场景实例化（`_server_player_selected` 上报选择）。
 - 主菜单 COOP 按钮 + 覆盖层：经 `ExtensionHooks.populate_menu_buttons` 注入 `res://ui/menu_button.tscn`（`button_id="coop"`，**扫描 `game_quit` 索引后 `move_child` 置于 QUIT 之上**）；点击发 `GameEvents.menu_button("coop")` → entry 打开 `ui/coop_menu.tscn` 覆盖层（挂菜单 `CanvasLayer` 下）。
-  - 覆盖层为 **option 菜单式布局**：左侧 `LAN` / `RELAY` 页签**实例化本体 `res://ui/option_button.tscn`**，放在 `Node2D` 下的 `VBoxContainer` 中（自上而下 `LAN`→`RELAY`，宽 97 对齐本体 option 按钮；`button_id="coop_lan"/"coop_relay"`，高亮条改为绿色 `Color(0.0, 0.837, 0.295)`；受容器管理，覆盖层可见时才排序）。因 `option_button` 根为 `MOUSE_FILTER_IGNORE` 且未选中时高亮 `ColorRect` 宽度为 0，运行时把页签根设为 `STOP`、其子节点与 `VBoxContainer` 设为 `IGNORE`，让整块页签成为唯一命中目标（否则未选中页签无悬停/点击）；右侧 `Panel` 内容顶部常驻「玩家 ID」行（`Label` + `LineEdit %PlayerIdInput` + `Button %PlayerIdConfirm`，所有页签可见），下方含 Host/Join + 本机 IP、Relay 服务器/房间号/创建/加入 + `Saki 服务器` 快捷填充、底部状态点 + 状态文案。
-  - 顶部为滚动横幅（`coop_icon.png` + `res://shaders/scrolling_bkgd.gdshader`，绿色 tint）；进场/退场照搬联机版：整页 `coop_in`/`coop_out`（`anchor_left/right` 左右擦除）+ 内容面板 `panel_option_in/out`（滑入 (146,48) 并回弹）。
+  - 覆盖层为 **option 菜单式布局**：左侧 `LAN` / `RELAY` / `OPTION` 页签**实例化本体 `res://ui/option_button.tscn`**，放在 `Node2D` 下的 `VBoxContainer` 中（宽 118；页签文字用共享 `option_button.text`，不再额外挂 `lan_label`/`relay_label`/`option_label`；`button_id="coop_lan"/"coop_relay"/"coop_option"`，高亮条改为绿色 `Color(0.0, 0.837, 0.295)`；受容器管理，覆盖层可见时才排序）。因 `option_button` 根为 `MOUSE_FILTER_IGNORE` 且未选中时高亮 `ColorRect` 宽度为 0，运行时把页签根设为 `STOP`、其子节点与 `VBoxContainer` 设为 `IGNORE`，让整块页签成为唯一命中目标（否则未选中页签无悬停/点击）；右侧 `Panel` 内容顶部常驻「玩家 ID」行（`Label` + `LineEdit %PlayerIdInput` + `Button %PlayerIdConfirm`，所有页签可见），下方含 Host/Join + 本机 IP、Relay 服务器/房间号/创建/加入、底部状态点 + 状态文案。
+  - 顶部为滚动横幅（`coop_icon.png` + `res://shaders/scrolling_bkgd.gdshader`，绿色 tint）；进场/退场照搬联机版：整页 `coop_in`/`coop_out`（`anchor_left/right` 左右擦除）+ 内容面板 `panel_option_in/out`（滑入 (146,32) 并回弹）。
   - 页签点击由 `option_button` 自身播放 `selected` 并发 `GameEvents.menu_button("coop_lan"/"coop_relay")`，覆盖层据此切模式；取消选中用 `play_backwards("on_select")` 而非 `on_out`——因为 `option_button` 的 `on_out`/`RESET` 把 `.:position` 写死为 (24,40)，会破坏容器排版（`on_select` 只动 `offset_transform_position`，不碰 `position`）。
   - 适配点：`NetworkManager.*` → `CoopNet.instance.*`；联机版的 `Game.is_ui_cancel/is_ui_accept/is_gamepad_event` 在本 mod 内本地实现；本体 `return.tscn` 的 `pause_press` 行为被改写为「关闭覆盖层」；覆盖层关闭时 `visible=false`（开启时根 Control `mouse_filter=STOP` 整屏拦截）。
+  - **2026-10-18 卡片化**：右侧改为标题 + `PageScroll`（Player ID 卡片 + 当前页）+ 固定状态栏；LAN 页 `LanSplit` 左 272（Connection / Share address 卡片）、右 190（LAN rooms 常驻列表，点击房间直接加入），Relay / OPTION 使用卡片与紧凑字号（分区 12 / 行 13 / LAN 分栏行 12 / 按钮与输入 11 / 说明 IP 9）。`PageScroll`、竖向滚动条和动态房间按钮都必须登记进 `_build_interactive_controls()`；`coop_option` 自带 `coop_theme.tres`，本体 option 的 COOP 页同步获得卡片与像素控件样式。仅保留状态色（扫描琥珀/连接绿/失败红/离线灰）、IP 青和扫描点动画；分区标题与 COOP 题头恢复灰/白 regular，数值白 regular。扫描状态每 `0.38s` 循环 `1→2→3` 个点。ESC 通过 `_input` 的 `_handle_cancel_input()` 关闭覆盖层；服务器子菜单打开时先只关子菜单，删除确认框打开时交给弹窗处理。
   - 联机流程入口：开房成功（LAN `host_game` / Relay `relay_room_created`）后 `CoopNet` 自动 `enter_lobby()` 进入准备房（测试房），不再有 `Start`/`Test Room` 按钮。选人→就绪→房主难度→进关卡见下文「准备房流程」。
   - 本地化：`i18n/coop_i18n.gd` 运行时构建 **zh_CN/en/pt/vi_VN** 四语 `coop_*` 翻译并 `TranslationServer.add_translation`，无需改本体 CSV。
 - 对齐联机版的生成/流程（**纯 mod 侧，不改本体**）：
@@ -295,7 +317,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 
 ### #1 敌人命中预测（客机）
 - **`net/coop_enemy_proxy.gd`（重写）**：维护 `auth_hp` 与 `pending_damage` 列表；`note_predicted_damage(amount)` 即时下调镜像显示血量并返回预测值；`apply_snapshot` 用 host 快照校正/确认 pending；若镜像被预测死亡而快照仍 `hp>0`，`_revive_local_mirror()` 复活（清 `predicted_dead`、`active_state`）。仍按快照速度驱动位置与 `graphics.scale.x` 朝向。
-- **`net/coop_net.gd`**：`_get_predicted_enemy_damage`（叠 `global_hurt_damage`）、`_predict_enemy_death`；`_intercept_enemy_damage` / `_gate_projectile_self_hit` 在命中瞬间 `_replay_hit_feedback`（闪白+飘字）+ `_predict_enemy_death`，随后才转发 host。
+- **`net/coop_net.gd`**：`_get_predicted_enemy_damage`（当前未使用）、`_predict_enemy_death`；`_intercept_enemy_damage` / `_gate_projectile_self_hit` 在命中瞬间 `_replay_hit_feedback`（闪白+飘字）+ `_predict_enemy_death`，随后才转发 host。
 - **回声去重**：`_remote_hit_feedback(net_id, actual, cfg, attacker, predicted)`；`_server_enemy_hit` 发 `predicted=true`（攻击者已本地预测，跳过）、`_on_server_enemy_damage_taken` 发 `predicted=false`（DOT/自然伤害仍回放）。
 
 ### #6 远程表现（纯视觉）
@@ -320,6 +342,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 ### 视觉清单（`net/coop_item_visuals.gd`）
 - **A 常驻图标**：follow 15 / hat 8 / rail 6 / muzzle 4（id→`<id>_icon.tscn`），挂到**镜像子树内**的对应标记（follow 因镜像 Follow 已移出全局组，按字段查找）。实例化后 `_sanitize_groups` 把图标内嵌挂点移出全局组。
 - **内部视觉 7**：`cathedral_candle/energy_supplement/ginseng_doll/kitchen_knife/spiked_shell/life_jacket/little_kei`，`set_script(null)` + 递归剥玩法（Area2D/CollisionShape2D/Timer/Label），`net/coop_visual_driver.gd` 做最小位置驱动。
+- **动态显示同步（2026-10-14）**：菜刀随远端瞄准旋转，世界原点也是合法目标；小小凯伊同步绕行/范围/朝向，救生衣、人形参、特制营养剂同步触发动画和护盾状态。视觉副本使用独立材质/动画库并过滤玩法轨道。
+- **菜刀转向平滑（2026-10-15）**：瞄准点与玩家位置共用快照插值时间，镜像准星、身体和武器统一使用采样目标，避免菜刀只在收包时跳动。无需增加发包频率或修改协议；回归在 60 FPS 连续扫动准星，检查远端刀刃的停帧比例、角度步长及对准误差。
+- **外观唯一性与重建**：按 peer + item_id 复用外观；动态快照可补建缺失副本，镜像重建后恢复缓存。现有房主迁移路径同时迁移道具缓存。
+- **兼容与道具回归**：协议 v4，双方需配套更新，Mod 发布版本仍为 `0.1.10`。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 检查 LAN/Relay 双端道具显示及重复外观。
 - **持久身体**：`utaha_turret`（已由召唤同步覆盖）；`shiroko_drone`/`robotic_vacuum_cleaner` 经 `_hook_visual_roots` 检测后接入召唤通道（`PERSISTENT_BODY_SCENES` + `_register_persistent_body`），仅视觉镜像 + 变换同步。
 - **B 生成型**：`_hook_visual_roots` 扩到 `EquipLayer/FloorLayer`；`player_bullet_launcher` 跳过。
 
@@ -403,7 +429,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 ## 敌人部件（body_part）：hp / 闪白 / 碎裂 / 预测同步
 - **背景**：部件（`EnemyPart`）此前**完全没同步**——部件镜像没有 `net_id` meta，伤害拦截直接放行，客机打部件只在本地镜像掉血，host 真实部件也各算各的。
 - **识别**：镜像部件打 `coop_owner_net_id`/`coop_part_index` meta；`_net_entity_of` 优先返回部件节点。
-- **客机命中（与根同款即时预测）**：`_handle_part_hit` → `_get_predicted_enemy_damage` + `_replay_hit_feedback`（闪白；部件无飘字节点故无飘字）+ 乐观扣血/预测碎裂 → `rpc_id(1,"_server_enemy_part_hit",...)`。
+- **客机命中（与根同款即时预测）**：`_handle_part_hit` → `_replay_hit_feedback`（闪白；部件无飘字节点故无飘字）+ 乐观扣血/预测碎裂 → `rpc_id(1,"_server_enemy_part_hit",...)`。（原述的 `_get_predicted_enemy_damage` 当前未使用。）
 - **host 权威**：`_server_enemy_part_hit` 用 `take_damage(data,true,false)`（不抑制 → host 原生闪白/受击音 + `damage_taken`）；`_connect_enemy_parts` 连部件 `damage_taken` → 广播 `_remote_enemy_part_hp(net_id,idx,hp,true)`（host 自身打 + 客机转发的单一广播点）。
 - **镜像应用**：写 `predicted_hp`、撤销/触发 `predicted_dead`；`hp<=0` → `stats.hp=0` + `idle_state`（碎裂）；否则写 hp + 限流 `_hurt_flash`；`active_state()` 会重置满血，须在其后再写 hp。
 - **晚加入**：`_enemy_part_hps` 随 `_spawn_enemy_remote(...,part_hps)` 一次性下发（`register_enemy_spawn` / `_send_existing_enemies_to_peer`）。

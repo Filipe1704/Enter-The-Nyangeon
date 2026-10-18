@@ -2,12 +2,15 @@ extends Node
 
 signal game_mode_changed
 
-const SAVE_PATH := "user://PlayerData.res"
-const SAVE_PATH_TMP := "user://PlayerData_new.res"
-const SAVE_PATH_BAK := "user://PlayerData.res.bak"
+const SAVE_STORE := preload("res://script/scene_data_store.gd")
+const SAVE_PATH := SAVE_STORE.PRIMARY
+const SAVE_PATH_TMP := SAVE_STORE.TEMP
+const SAVE_PATH_BAK := SAVE_STORE.BACKUP
 const CONFIG_PATH := "user://config.ini"
+var _save_store = SAVE_STORE.new()
+var _loading_playerdata := false
 
-var version_number: String = "v0.5.1.3"
+var version_number: String = "v0.5.1.4"
 
 var size_x: float = 0
 var size_y: float = 0
@@ -33,6 +36,10 @@ var effect_freq: int = 4
 # 受击闪白频率上限（设置项）：0=关 / 1=×4间隔 / 2=×3 / 3=×2 / 4=×1(最高,默认)。独立于 effect_freq。
 var hit_flash_freq: int = 4
 
+# 2D 物理插值（设置项，默认关）：高刷屏下让物理体在物理 tick 间平滑、消除 judder；
+# 迁移期部分视觉仍有错位风险，故默认关，运行期经 SceneTree.physics_interpolation 生效。
+var physics_interp: bool = false
+
 var control_mode: int = 0
 
 var game_language: String
@@ -50,7 +57,9 @@ func _ready():
 	# 帧率上限由设置项（max_fps_index）决定：全平台默认 60（索引 1），0=无限制；
 	# 启用 2D 物理插值后高刷下不再需要强制对齐物理 60Hz。
 	apply_max_fps()
-	load_playerdata()
+	# 2D 物理插值由设置项（physics_interp）决定，全平台默认关；运行期覆写 SceneTree 属性。
+	apply_physics_interp()
+	# ModManager 挂载/注册支援后同步读档，避免旧 Resource 存档在挂载前加载失败。
 	reset_control_mode()
 	GameEvents.round_start.connect(reset_control_mode)
 
@@ -65,6 +74,12 @@ func apply_max_fps():
 	var idx: int = clampi(max_fps_index, 0, FPS_CHOICES.size() - 1)
 	max_fps_index = idx
 	Engine.max_fps = FPS_CHOICES[idx]
+
+# 运行期应用 2D 物理插值开关（默认关）。SceneTree 属性可在运行期安全切换。
+func apply_physics_interp():
+	var tree := get_tree()
+	if tree != null:
+		tree.physics_interpolation = physics_interp
 
 func pause_press():
 	var event = InputEventAction.new()
@@ -198,6 +213,8 @@ func load_all_records_as_json(file_path: String) -> Array:
 	#return files
 
 func save_playerdata():
+	if _loading_playerdata:
+		return false
 	var playerdata = SceneData.new()
 	playerdata.save_version = SceneData.SAVE_VERSION
 	playerdata.player_pyroxenes = PlayerData.player_pyroxenes
@@ -206,44 +223,24 @@ func save_playerdata():
 	playerdata.clothes_group = PlayerData.clothes_group
 	playerdata.now_clothes = PlayerData.now_clothes
 	playerdata.game_mode = PlayerData.game_mode
-	playerdata.support_savedata = SupportData.support_data
-	playerdata.game_support = SupportData.game_support
-	_write_scene_data(playerdata)
+	playerdata.support_savedata = SceneData.support_progress(SupportData.support_data)
+	playerdata.game_support_id = SupportData.selected_support_id
+	return _write_scene_data(playerdata)
 
 func _write_scene_data(playerdata: SceneData) -> bool:
-	# 原子写：先写临时文件，成功后再「备份旧档 → 替换」，避免写坏唯一存档。
-	var err := ResourceSaver.save(playerdata, SAVE_PATH_TMP)
-	if err != OK:
-		push_error("save_playerdata: 写入临时存档失败 (error %d)" % err)
-		return false
-	var dir := DirAccess.open("user://")
-	if dir == null:
-		push_error("save_playerdata: 无法打开 user:// 目录")
-		return false
-	if FileAccess.file_exists(SAVE_PATH):
-		if FileAccess.file_exists(SAVE_PATH_BAK):
-			dir.remove(SAVE_PATH_BAK)
-		err = dir.rename(SAVE_PATH, SAVE_PATH_BAK)
-		if err != OK:
-			push_error("save_playerdata: 备份旧存档失败 (error %d)" % err)
-			return false
-	err = dir.rename(SAVE_PATH_TMP, SAVE_PATH)
-	if err != OK:
-		push_error("save_playerdata: 替换存档失败 (error %d)" % err)
-		return false
-	return true
+	return _save_store.save_data(playerdata)
 
 func load_playerdata():
-	var playerdata = ResourceLoader.load(SAVE_PATH) as SceneData
+	var playerdata = _save_store.load_data()
 	if playerdata == null:
 		return
+	_loading_playerdata = true
+	var needs_save: bool = _save_store.recovered or playerdata.save_version < SceneData.SAVE_VERSION
 	if playerdata.save_version < SceneData.SAVE_VERSION:
 		_migrate_scene_data(playerdata)
 	
 	PlayerData.game_mode = playerdata.game_mode
-	SupportData.game_support = playerdata.game_support
-	if SupportData.game_support == null:
-		SupportData.game_support = SupportData.null_support
+	SupportData.restore_progress(playerdata.support_savedata, playerdata.game_support_id)
 	# 迁移清理：已下线的 "hujiu" 模式；放在 pyroxenes 赋值（触发存档）之前，避免残留被写回。
 	if PlayerData.game_mode.has("hujiu"):
 		PlayerData.game_mode.remove_at(PlayerData.game_mode.find("hujiu"))
@@ -256,14 +253,28 @@ func load_playerdata():
 		PlayerData.clothes_group = playerdata.clothes_group
 	if !playerdata.now_clothes.is_empty():
 		PlayerData.now_clothes = playerdata.now_clothes
-	if !playerdata.support_savedata.is_empty():
-		SupportData.support_data = playerdata.support_savedata
 	# 放最后：setter 会触发即时存档，此时其余字段应已恢复完毕。
 	PlayerData.player_pyroxenes = playerdata.player_pyroxenes
+	_loading_playerdata = false
+	if needs_save:
+		save_playerdata()
 
 func _migrate_scene_data(playerdata: SceneData):
+	if playerdata.save_version < 3:
+		var selected := "null"
+		if playerdata.game_support != null:
+			selected = playerdata.game_support.support_id
+			# 缺失资源占位保留对象身份，从已购字典的 key 取真实 ID，不能猜文件名。
+			for id in playerdata.support_savedata:
+				var entry = playerdata.support_savedata[id]
+				if entry is Dictionary and entry.get("resource") == playerdata.game_support:
+					selected = str(id)
+					break
+		playerdata.game_support_id = selected if not selected.is_empty() else "null"
+		playerdata.support_savedata = SceneData.support_progress(playerdata.support_savedata)
+		playerdata.game_support = null
 	# 旧档升级入口。旧格式（save_version 缺省为 0）的顶层字段一直是有效真源，
-	# 原 game_version 快照只是冗余副本，无需读取；此处仅打版本号，字段按正常路径读。
+	# 原 game_version 快照只是冗余副本，无需读取；支援字段已在上方转为 v3 纯数据。
 	# 未来结构变更时按 playerdata.save_version 逐级追加迁移逻辑。
 	playerdata.save_version = SceneData.SAVE_VERSION
 
@@ -275,6 +286,7 @@ func save_config():
 	config.set_value("game", "resolution", resolution)
 	config.set_value("game", "vsync_mode", vsync_mode)
 	config.set_value("game", "max_fps_index", max_fps_index)
+	config.set_value("game", "physics_interp", physics_interp)
 	config.set_value("game", "game_language", game_language)
 	config.set_value("game", "damage_text_freq", damage_text_freq)
 	config.set_value("game", "effect_freq", effect_freq)
@@ -303,6 +315,7 @@ func load_config():
 	resolution = config.get_value("game", "resolution", 0)
 	vsync_mode = config.get_value("game", "vsync_mode", true)
 	max_fps_index = int(config.get_value("game", "max_fps_index", 1))
+	physics_interp = bool(config.get_value("game", "physics_interp", false))
 	game_language = config.get_value("game", "game_language", "zh_CN")
 	damage_text_freq = config.get_value("game", "damage_text_freq", 4)
 	effect_freq = config.get_value("game", "effect_freq", 4)
