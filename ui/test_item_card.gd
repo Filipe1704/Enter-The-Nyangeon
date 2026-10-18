@@ -1,17 +1,12 @@
 extends PanelContainer
 
 @onready var texture_rect = $TextureRect
-@onready var item_text_2 = %ItemText2
-@onready var item_text_3 = %ItemText3
-@onready var item_text_4: Label = %ItemText4
-@onready var item_text = %ItemText
-@onready var text_show = $Text
 @onready var button: Button = $Button
 
 var upgrade_manager: Node
 var up_c: AbilityUpgrade
-var text_is_show: bool = false
 var on_touch: bool = false
+var _tooltip: HoverTooltipBinding
 var num: int = 0
 
 var touch_index: int = -1
@@ -27,8 +22,8 @@ func _ready():
 	GameEvents.get_player.connect(_reset)
 	GameEvents.test_room_button_close.connect(close_button)
 	GameEvents.test_room_reset.connect(open_button)
-	mouse_entered.connect(show_text)
-	mouse_exited.connect(hide_text)
+	mouse_entered.connect(func(): SoundManager.play_sfx("ButtonSounds2"))
+	_tooltip = HoverTooltipBinding.bind(self, _tooltip_content, func(): return button.mouse_filter != Control.MOUSE_FILTER_IGNORE and not button.disabled, func(): on_touch = false)
 	visibility_changed.connect(func():
 		if not is_visible_in_tree():
 			_clear_mouse_press()
@@ -62,39 +57,20 @@ func open_button():
 	button.mouse_filter = Control.MOUSE_FILTER_PASS
 
 func close_button():
+	_tooltip.dismiss()
 	_clear_mouse_press()
 	button.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-func _physics_process(_delta: float) -> void:
-	if text_is_show == true:
-		if on_touch == false:
-			text_show.global_position = get_global_mouse_position()
-		else:
-			text_show.global_position = self.global_position
 
 func _reset():
 	num = up_c.order_num
 
-func touch_out():
-	if on_touch == true:
-		on_touch = false
-		text_show.visible = false
+func touch_out() -> void:
+	_tooltip.dismiss()
 
-func _preview_text():
-	# 先广播隐藏其它卡的文本，再置自身状态，避免被自身的 touch_out 清掉
+func _preview_text(index: int = -1) -> void:
 	GameEvents.emit_player_card_touch()
 	on_touch = true
-	text_show.visible = true
-	text_is_show = true
-
-func show_text():
-	SoundManager.play_sfx("ButtonSounds2")
-	text_show.visible = true
-	text_is_show = true
-
-func hide_text():
-	text_show.visible = false
-	text_is_show = false
+	_tooltip.preview("touch", index)
 
 func get_card(upgrade_card: AbilityUpgrade):
 	up_c = upgrade_card
@@ -107,10 +83,6 @@ func get_card(upgrade_card: AbilityUpgrade):
 	sb.border_color = sb.bg_color.from_hsv(sb.bg_color.h, 0.9, 0.9).lightened(0.35)
 	add_theme_stylebox_override("panel", sb)
 	texture_rect.texture = up_c.icon
-	item_text_4.text = up_c.id + "_name"
-	item_text.text = up_c.id + "_description"
-	item_text_2.text = up_c.id + "_forward"
-	item_text_3.text = up_c.id + "_negative"
 	num = up_c.order_num
 
 func add_card():
@@ -118,8 +90,7 @@ func add_card():
 
 func _on_button_pressed():
 	on_touch = false
-	text_show.visible = false
-	text_is_show = false
+	_tooltip.dismiss()
 	if num == 0:
 		SoundManager.play_sfx("ButtonSounds2")
 	else:
@@ -145,10 +116,10 @@ func _on_button_gui_input(event: InputEvent) -> void:
 			var moved: float = event.position.distance_to(touch_start_position)
 			touch_index = -1
 			# 位移超过阈值视为滚动拖动：不预览、不生效
-			if moved > TAP_MAX_DISTANCE:
+			if event.canceled or _tooltip.touch_was_dragged(event.index) or moved > TAP_MAX_DISTANCE:
 				return
 			if on_touch == false:
-				_preview_text()
+				_preview_text(event.index)
 			else:
 				_on_button_pressed()
 	elif event is InputEventMouseButton:
@@ -164,3 +135,13 @@ func _on_button_gui_input(event: InputEvent) -> void:
 			_clear_mouse_press()
 			if activate:
 				_on_button_pressed()
+
+func _tooltip_content() -> Array:
+	if up_c == null:
+		return []
+	return [
+		{"text": up_c.id + "_name", "role": "title"},
+		{"text": up_c.id + "_description"},
+		{"text": up_c.id + "_forward", "role": "positive"},
+		{"text": up_c.id + "_negative", "role": "negative"},
+	]

@@ -2698,3 +2698,41 @@
 - Notes / 说明: ① 取消键统一在 `_input()` 消费，早于 GUI/`_unhandled_input`，避免主菜单/暂停页同时响应 ESC。② 顺序：已打开的删除确认框先让弹窗处理；服务器子菜单先只关子菜单；否则 `out_coop_selected()`。③ `ui_cancel`/`pause` 都走 `_is_ui_cancel`，键盘 ESC 与手柄 B 一致；`set_input_as_handled()` 防止重复关闭。④ 旧 `_file_dialog` 守卫是误加（本场景没有该变量），已移除；确认框是 `_saved_confirm`。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-18
+
+### [UI] 支援列表展开后主卡背景覆盖候选区域，悬停命中须先查候选
+- Evidence / 证据: `ui/support_ui/support_select_ui.tscn:55-62`（`select_anim` 的 `main_card:size` 轨道将高度从 140 扩到 260；:67-79 是 `MarginContainer` 轨道）、`ui/support_ui/support_select_ui.gd:37`（主卡绑定的 `hit_test` 排除列表矩形，候选优先命中）、`:207`（候选绑定设 `hover_root`，允许按容器实际悬停命中）、本地 `tests/test_ui_ux_regressions.gd:_check_support_details`。
+- Notes / 说明: 主卡与候选列表互为兄弟节点，但展开后的主卡背景矩形包含列表区域；不能先用 `main_card.get_global_rect().has_point()` 决定详情，否则鼠标指向候选也会显示当前支援。应先检查裁剪后的列表区域与候选矩形，再回退主卡。已选候选可能忽略鼠标事件，需结合实际 GUI 悬停所属区域和几何位置读取；边缘截图测试定位到立绘区时也不能使用动画后的主卡底边。浮层贴边只做 clamp 会让它在列表区域纵向钉住（下界 = 视口底 - 浮层高），必须越界时翻到指针另一侧；已显示后换卡不应重新等待悬停延迟。跟随定位要用 `InputEventMouseMotion.position` 缓存（现为 `ui/hover_tooltip.gd:115` 的 `shared.pointer`，锚点见 `:232`），不要用 `get_mouse_position()`：窗口拉伸或测试注入合成事件时它与 GUI hover 不同步、可能滞后一帧，浮层会显得“鼠标动完才动”；缓存后可在 `_input` 里当帧 `place_at`。触屏不显示详情（工程关闭 `emulate_mouse_from_touch`，点按即选中会让浮层闪现），见 `SYSTEMS.md` 同名条目的触屏说明。
+- Validation / 验证: 隔离存档的难度页专项检查中，当前支援等级 21、候选等级 37，鼠标和键盘预览均显示对应等级，且不改变全局出战支援；四语言边缘截图已核对。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+- Follow-up / 后续（2026-10-18，来源：code）：该浮层已由 `support_select_ui.gd` 自管理的 `_details_*` 迁到统一组件 `ui/hover_tooltip.gd` + `HoverTooltipBinding`，`ui/support_ui/support_details.gd/.tscn` 已删除；上述结论不变，落点改为绑定的 `hit_test`/`hover_root` 与宿主的 `_viewports` 跨层协调。
+
+### [UI] 隐藏的 PanelContainer 不排版子 Label，首次定高必须自己算
+- Evidence / 证据: `ui/hover_tooltip.gd:_layout`（:235-298，先设 `label.size.x = 内容宽 - INSET*2`，再用 `get_line_count()` 与 `Font.get_height()` + `line_spacing` 自行定高）、`ui/hover_tooltip.tscn`（宿主 `visible=false`）、`ui/support_ui/support_select_ui.gd:221`（文本来源）。
+- Notes / 说明: 宿主初始隐藏时容器不会 sort 子节点，Label 宽度停留在 1px；首次 `reset_size()` / `get_combined_minimum_size()` 会按 1px 宽换行（示例文本 120 行 → 只排出 24 行），把面板定成截断高度，且该缓存滞后一帧，连续调用 `reset_size()` 当帧无效。正确做法是先按目标宽度强制换行，再用 `get_line_count()`（总行数，需自行按可用高度截断；统一宿主的段数上限为 16）、`Font.get_height()` 与 `line_spacing` 算高：`lines × (行高 + line_spacing) - line_spacing + 上下内边距`（末行不加行距）。
+- Validation / 验证: 隔离存档首次悬停即得到 287px（修复前 612px 空盒），四语言截图与 67 项难度页回归通过；迁移到统一宿主后由 `_layout` 承担同一算法，本地专项回归补了 320×240 窄视口重测与超长文案截断断言（用例未入库）。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [UI] Label 没有逐行宽度接口；浮层按内容收窄要用 Font.get_string_size 反推
+- Evidence / 证据: `ui/hover_tooltip.gd:_text_width`（按 `\n` 分段调 `Font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)`，再 `clampf(_measured_width + INSET*2, MIN_WIDTH, width)` 决定面板宽）；本地专项回归（未入库）的「短内容收窄面板」「窄视口重测」「超长截断」断言。
+- Notes / 说明: `Label` 只暴露 `get_line_count()`/`get_visible_line_count()`/`get_line_height()`；`get_line_width()` 属于 `TextEdit`，写到 Label 上是运行期 `Invalid call. Nonexistent function`（本次实测，导致 `_layout` 中断、11 项断言连带失败）。固定宽度（350）会让短提示变成大片空盒，改为按字体测量未换行文本宽度即可自适应：长段落测量值超上限被 clamp，换行后仍占满上限；短文本贴合内容。直接对 Label 设 `size` 能正常 shaping，不受「隐藏容器不排版」影响，但含换行的文本要先按 `\n` 分段，否则整串宽度无意义。
+- Validation / 验证: 截图专项 156 项通过；`tooltip-shared-keyboard` 面板由约 430px 收窄到约 187px，长文与支援详情四语言截图行距、分组正常。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+### [Tooling] `--check-only` 不注册 autoload，会把 autoload 标识符误报为未定义
+- Evidence / 证据: `godot --headless --path . --check-only --script res://ui/hover_tooltip.gd` 报 `Compile Error: Identifier not found: LocaleFont`（`project.godot:25-39` 已注册该 autoload）；改为工程内 SceneTree 脚本在 `_initialize()` 里 `load()` 同一文件即通过，`tests/run_ui_ux_checks.py --level-focus-only` 也 46 项 0 失败。
+- Notes / 说明: `--check-only` 在 autoload 实例注册前编译目标脚本，凡直接引用 `GameEvents`/`SupportData`/`LocaleFont` 等单例的脚本都会被误判，不能据此把代码改回 `get_tree().root.get_node(...)`。批量语法校验应在工程内用 SceneTree 脚本 `load()`（此时 autoload 已就绪），或直接跑 UI 回归。本机缺 `addons/godot_ai`（本地插件状态）会让回归脚本以 1 退出，但 `UI_UX_RESULT ... failures=0` 仍可信。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+
+
+### [UI/Export] Tooltip 的 free() 在本机 Windows Release 模板中导致整脚本解析失败
+- Evidence / 证据: `ui/hover_tooltip.gd:39-43`（`mount()` 的失效父节点分支）；用户导出的 `E:/Enter The Nyangeon v0.5.1.4-test.exe` 及其启动日志报 `Parse Error: Function "free()" not found in base self.`（`:41`）。本地复现入口 `.godot/tooltip_export_debug/release_loop.py`，最小对照入口 `minimal_release.py`，完整游戏验证日志 `game-regression-runtime.log`。
+- Notes / 说明: 用户反馈 Windows EXE 内 Tooltip 完全不显示。实际 Release 启动在加载宿主脚本时即解析失败，尚未执行到该释放分支也会使所有绑定失效。独立最小工程排除了游戏资源与 Mod：`free()` 和 `self.free()` 均复现，改为 Node 的 `queue_free()` 后通过，失效父节点的未挂载宿主在帧末释放。源码运行及用编辑器引擎 `--main-pack` 挂载同一 EXE 都可通过，不能替代真正 Release 可执行文件的运行验证。本条结论限于本机 Godot 4.7 stable 官方模板的实测，未据此推断其它版本/平台。
+- Validation / 验证: 原始 EXE 复现 `script_loaded=false`；最小 `free()` / `self.free()` 对照均 `valid=false`，`queue_free()` 为 `valid=true`。修复后的完整游戏 Release 专项 `checks=6 failures=0`，覆盖宿主加载、16 个 Label 初始化、真实道具卡键盘与鼠标显示、实际本地化正负效果、失效父节点释放。最终交付包恢复原主菜单并移除临时验证入口。
+- Source / 来源: user | code | test
+- Date / 日期: 2026-10-18
+
+- Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `CODEBASE_AUDIT.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。

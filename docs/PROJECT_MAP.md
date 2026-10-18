@@ -37,6 +37,7 @@
 | `docs/` | **本知识库**（本项目新增）。 |
 
 - **设置布局（2026-10-16）**：`ui/option.tscn` 保持通用菜单与扩展页容器职责，左栏采用顶部标题 / 像素 × 关闭按钮、独立纵向滚动页签和底部 Esc 提示；共享页签沿用像素字体、原版行高/间距与 `on_select`/`selected` 金色反馈，长标题按原版裁切、不提供 tooltip，溢出显示滚动条。首次自动显示 GAME，再次打开恢复当前页焦点。主菜单和暂停页共用；设置专项入口为 `python tests/run_ui_ux_checks.py --godot <Godot路径> --settings-only`，可追加 `--screenshots` / `--installed-mods`；长标题及再次打开回归见 `_check_settings_navigation_states` 和 `_check_settings`。
+- **统一悬浮提示（2026-10-18）**：`ui/hover_tooltip.tscn` / `hover_tooltip.gd`（每 CanvasLayer 复用一个宿主，全视口唯一的可见浮层）+ `ui/hover_tooltip_binding.gd`（`class_name HoverTooltipBinding`，目标绑定）。已迁移：`upgrade_item_card`、`gamemode_card`、`gamemode_type`、`test_item_card`、`test_enemy_card`、`test_character_card`、`ability_shop_item_card`、`ability_shop_ps_card` 及难度页支援主卡/候选、测试房支援池；卡片原有的 `Node2D/Text` 提示树与 `support_details` 专用浮层均已删除。约定见 `CONVENTIONS.md` §5.1，宿主为何不是 autoload 见 `ARCHITECTURE.md` §6。
 
 - **存档/安装边界（2026-10-13）**：`script/scene_data_store.gd` 管主档/备份读取与文件替换，`Game.gd` 管元进度赋值；`script/mod_installer.gd` 管 ZIP 暂存/验证/目录交换，`ModManager` 保留公开入口与挂载/注册职责。两者均为 RefCounted helper，不增加 autoload。
 - **独立回归（2026-10-13）**：`tests/run_persistence_checks.py`、`run_mod_install_checks.py`、`run_coop_recovery_checks.py` 与既有 UI / 联机拓展入口使用隔离 user://；`test_relay_limits.py` 为回环服务测试；`check_localization.py` 为源格式防护，`godot_check_output.py` 统一原生错误分类。

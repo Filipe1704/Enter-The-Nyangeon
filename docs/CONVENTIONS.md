@@ -31,7 +31,7 @@
 ### 2.3 代码/scene 引用方式
 - **无** 自动翻译键系统；`script/auto_text.gd` / `auto_text_box.gd` 是**字体自动适配**工具（调用 `atr(text)`），不是翻译器。
 - 机制：① `Label`/`Button` 文本直接设原始键，由 Godot 自动翻译（如 `ui/game_option.tscn` `text="option_full_screen"`）；② 显式 `tr(key)`（如 `ui/ark_of_Shittim/talk_text.gd:8`, `ui/ability_shop_item_card.gd:186-217`）。
-- 卡片文本 key 由资源 `id` 派生：升级/道具卡 `<id>_name` / `_description` / `_forward` / `_negative`（`ui/ability_upgrade_card.gd:76-79`, `ui/test_item_card.gd:83-86`）；敌人测试卡 `<id>_name` / `<id>_description`（`ui/test_enemy_card.gd:34-35`，敌人 id 见 `resources/enemy/*.tres`）。
+- 卡片文本 key 由资源 `id` 派生：升级/道具卡 `<id>_name` / `_description` / `_forward` / `_negative`（`ui/ability_upgrade_card.gd:76-79`, `ui/test_item_card.gd:139`, `ui/upgrade_item_card.gd:18`）；敌人测试卡 `<id>_name` / `<id>_description`（`ui/test_enemy_card.gd:84`，敌人 id 见 `resources/enemy/*.tres`）。
 - 语言选择器：`ui/langue_button`（主菜单 / 暂停页共用）**数据驱动**——列表来自 `ModManager.get_languages()`（内置 4 种 + mod `ModAPI.register_language` 注册/覆盖），选中后 `TranslationServer.set_locale(...)` 并持久化 `Game.game_language`；启动时 `Game.gd:322` 应用，默认 `"zh_CN"`。mod 注册与字体映射见 `mod_sdk/README.md` §15。
 - 按语言换字体：`script/locale_font.gd` 按当前 locale 查 `_locale_fonts`（内置 `vi_VN` + mod `LocaleFont.register_locale_fonts`）：仅当文本是本地化键、或含注册 `glyph_ranges` 内且像素字缺失的字形时，才把「显示本地化文本」的控件换成替换字体；数字/符号/硬编码/CJK 保持像素字。
 
@@ -89,7 +89,17 @@ layer N = bit `1<<(N-1)`：
 - 主菜单文字按钮：鼠标实际移动到按钮时转移键盘焦点，高亮只跟随焦点，Enter 确认同一项。键盘切换后静止鼠标不维持另一项高亮；离开按钮保留当前焦点，直到下一次有效导航或页面禁用。上下键按可见菜单顺序导航（包含 MOD 入口），首项上键及末项下键停留，菜单启用时统一覆盖共用场景遗留的固定邻居。
 - 主菜单选角页：`ui_up/ui_down` 切换社团（首尾循环），`ui_left/ui_right` 按显式邻居移动角色焦点（边界停留），`ui_accept` 确认角色，`pause` 返回。本体角色有已解锁形态时，Tab 进入形态按钮、Enter 切换后焦点返回角色卡。社团切换复用已有动作，因此键盘方向键与手柄十字键均可使用；按键重复事件不连续切换社团。
 - 角色卡的鼠标预览与键盘确认共用角色焦点：实际鼠标移动进入另一张卡才转移焦点；静止指针及零位移事件不抢回键盘选择。形态按钮焦点计入所属角色，稳定显示时只展开当前角色的说明。
-- 难度页默认聚焦 NORMAL；Tab / Shift+Tab 按「支援 → 难度 → 模式 → 返回」循环切换区域，并记住区域内的上次位置。支援主卡 Enter 展开，↑↓ 浏览、Enter 应用并收起；Esc 优先收起支援列表，再次按返回选角。难度 ↑↓ 选择、Enter 开始；模式 ←→ 选择、Enter / Space 开关，纵向方向键按网格列数移动，互斥关系沿用资源配置（闪击和无尽可同时开启）。返回按钮 Enter 返回选角并恢复角色焦点；确认难度后锁定辅助选项，Esc 仍可取消待启动计时。支援列表随焦点滚动，焦点用白色边框表示，与模式开启填色分开（`ui/level_select.gd:_input/_bind_focus_controls`）。
+- 难度页默认聚焦 NORMAL；Tab / Shift+Tab 按「支援 → 难度 → 模式 → 返回」循环切换区域，并记住区域内的上次位置。支援主卡 Enter 展开，↑↓ 浏览、Enter 应用并收起；Esc 优先收起支援列表，再次按返回选角。难度 ↑↓ 选择、Enter 开始；模式 ←→ 选择、Enter / Space 开关，纵向方向键按网格列数移动，互斥关系沿用资源配置（闪击和无尽可同时开启）。返回按钮 Enter 返回选角并恢复角色焦点；确认难度后锁定辅助选项，Esc 仍可取消待启动计时。支援列表随焦点滚动，焦点用白色边框表示，与模式开启填色分开（`ui/level_select.gd:_input/_bind_focus_controls`）。支援详情浮层在难度页与测试房启用（`ui/level_select.tscn:627`、`ui/character_test_menu.tscn:384` 的 `details_enabled`；支援商店不启用），复用统一悬浮提示（§5.1）：鼠标悬停 0.2 秒后出现并跟随指针（切换卡片不重新等待，靠近边缘翻到指针另一侧），键盘/手柄聚焦时在卡片旁立即显示，限制在视口内且不拦截鼠标；触屏不显示（关闭 `emulate_mouse_from_touch` 后点按即选中，浮层会闪现）。
+
+### 5.1 Hover tooltips / 悬浮提示浮层
+
+- 信息型悬停说明只有一套实现：宿主 `ui/hover_tooltip.tscn`（脚本 `ui/hover_tooltip.gd`）+ 目标绑定 `ui/hover_tooltip_binding.gd`（`class_name HoverTooltipBinding`）。卡片不再自建 `Node2D/Text` 提示树，旧式 `%ItemText*` 结构已全部删除。
+- 绑定统一走 `HoverTooltipBinding.bind(control, provider, available, on_preview_closed?)`。`provider` 返回段落数组，每段 `{text, role?, translated?}`；`role` 取 `title`/`section`/`body`/`positive`/`negative`/`muted`（缺省 `body`），`available` 留空表示总是可用。业务操作仍归卡片，浮层只读。
+- 宿主按「最近的 CanvasLayer」复用（`_hover_tooltip_host` 弱引用 meta），同层多个目标共用一个宿主；全视口只允许一个可见浮层，跨 CanvasLayer 由 `ui/hover_tooltip.gd:27` 的 `_viewports` 静态弱引用协调，最后 `_display` 的宿主胜出并清掉其它层。
+- 交互：鼠标悬停 0.2 s 后显示；已显示时换目标不再等待；位置用 `InputEventMouseMotion.position` 缓存并当帧更新。键盘/手柄焦点经 `focus_entered` 立即显示，锚在目标右侧。触屏分两种语义：可确认的卡片（测试房角色/道具/敌人、商店卡）首点预览、二次点按执行、拖动即收起，`bind()` 的 `on_preview_closed` 回调回写卡片确认态；单次操作的卡片（模式卡、局内升级卡）点按只预览，不进入确认态。商店卡没有焦点，摇杆/键盘导航由 `preview_from_navigation()` 直接预览，切页签时 `ability_shop.gd:_clear_preview()` 统一收起。宿主 `process_mode=3`，暂停期间仍可显示。
+- 视觉：0.6 倍像素字，`title` 20 / `section` 与正文 18；行距按层级收紧——`title` 3、其余 4，同层段间距 4（同级内容连成一块），`title` 后 10、`section` 前额外 8（`SECTION_LEADING`）后 4；内边距 12；面板宽按最长行自适应（下限 140、上限 350），短提示不留空盒；标题用暖金 `#FFEFC2`，`section` 用暗金 `#C9A86A`（弱于标题、强于白正文），正文白、正/负效果沿用卡片绿 `#B0ED47` / 红 `#E4384C`、未解锁用 `muted` 灰；底板为 `ui.png` 的 1px 白框 + α=0.8235 黑填充，再垫 α=0.72 的黑色 `Back`，合成约 95% 不透明（垫层直接设 0.95 会变 99%）；黑描边 2、阴影偏移 1（不透明黑底上不糊字）；`ui.png` 像素边框 expand 5；`top_level` + `z_index=4095`，缩放按 `get_canvas_transform().get_scale()` 反算，不继承业务卡片的动画缩放。
+- 文案默认传本地化键，交给 Label 自动翻译（`LocaleFont` 据此识别本地化文本）；已 `tr()` 过的段落传 `translated: true`。首段惯例用 `role: "title"` 显示名称：测试房角色卡为「`player_card.name` + PS0 说明」（名称循 HUD 口径直接用 `player_card.name`，可能是翻译键），测试房支援卡为「`support_name` + PS + EX」（池内未必拥有，不显示存档等级）；小节标题（`PS`、`EX 费用`）用 `section`。超长内容按可用像素高度截断并补省略号，段数上限 16，不缩字号。测量前先 `LocaleFont.apply_control(label)`（`script/locale_font.gd:99`），否则切换语言后首帧尺寸错误。被动百分比统一走 `SupportData.percent_text()`（整数百分比，与支援商店一致）。
+- 不扩展到：设置页导航页签（用户要求保持无 tooltip，长标题直接裁切）、MOD 管理页（已改为右侧常驻详情）。
 
 ## 6. Rendering & misc / 渲染与杂项
 

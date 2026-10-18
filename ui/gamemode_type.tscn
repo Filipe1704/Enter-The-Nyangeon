@@ -1,12 +1,9 @@
-[gd_scene load_steps=20 format=3 uid="uid://xkb476kh0k68"]
+[gd_scene load_steps=16 format=3 uid="uid://xkb476kh0k68"]
 
 [ext_resource type="Script" path="res://ui/gamemode_type.gd" id="1_n6tyh"]
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="1_t6rmu"]
 [ext_resource type="Resource" uid="uid://cwvyflq4fpd83" path="res://resources/game_mode/blitzkrieg_mode.tres" id="2_c45oc"]
 [ext_resource type="Texture2D" uid="uid://c1rawvvpiqgix" path="res://sprites/item/mission_data_1.png" id="2_ffacl"]
-[ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="5_g2jhj"]
-[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="6_y0v7g"]
-
 [sub_resource type="Gradient" id="Gradient_6wln4"]
 offsets = PackedFloat32Array(0)
 colors = PackedColorArray(0.191, 0.191, 0.191, 1)
@@ -140,21 +137,6 @@ _data = {
 "select_anim": SubResource("Animation_2p1vx")
 }
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_1ntlj"]
-texture = ExtResource("5_g2jhj")
-texture_margin_left = 1.0
-texture_margin_top = 1.0
-texture_margin_right = 1.0
-texture_margin_bottom = 1.0
-expand_margin_left = 5.0
-expand_margin_top = 5.0
-expand_margin_right = 5.0
-expand_margin_bottom = 5.0
-region_rect = Rect2(44, 12, 8, 8)
-
-[sub_resource type="Theme" id="Theme_hrsvu"]
-PanelContainer/styles/panel = SubResource("StyleBoxTexture_1ntlj")
-
 [node name="gamemode_type" type="PanelContainer"]
 modulate = Color(0.533037, 0.533037, 0.533037, 1)
 custom_minimum_size = Vector2(45, 68)
@@ -215,30 +197,3 @@ libraries = {
 "": SubResource("AnimationLibrary_rrqi5")
 }
 
-[node name="Text" type="Node2D" parent="."]
-visible = false
-top_level = true
-z_index = 1
-scale = Vector2(0.6, 0.6)
-
-[node name="PanelContainer" type="PanelContainer" parent="Text"]
-custom_minimum_size = Vector2(150, 0)
-offset_left = 10.0
-offset_top = -63.0
-offset_right = 160.0
-offset_bottom = -15.0
-mouse_filter = 2
-theme = SubResource("Theme_hrsvu")
-
-[node name="ItemText" type="Label" parent="Text/PanelContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 2
-theme_override_constants/outline_size = 4
-theme_override_constants/shadow_outline_size = 0
-theme_override_fonts/font = ExtResource("6_y0v7g")
-theme_override_font_sizes/font_size = 12
-text = "每回合时间减少50%，金币获取提高至200%。"
-autowrap_mode = 1
