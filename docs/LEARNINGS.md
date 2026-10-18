@@ -2648,3 +2648,4 @@
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-18
 - Follow-up / 后续（2026-10-18，来源：user + test）：DISPLAY 两行原本 `CellA`/`CellB` 都设 `size_flags_horizontal=3`，RowDisplay 的右列（下拉框）更宽时 HBox 会给两行 `CellA` 分配不同宽度，导致左列开关与右列控件错位。现固定 `CellA=152`、`CellB=262`，仅 `CellB` 扩展；标签改为 126×22 固定 wrapper + 左对齐 + `clip_text`，两行右控件槽统一 128。4 语言下 `FullScreen`/`VSync`/`MaxFps` 的 x 一致、`Resolutions`/`PhysicsInterp` 的 x 一致，`Content` 最小宽 446（Scroll 宽 454，x=134）。
+- SUPERSEDED: 2026-10-18 设置项标签最终统一右对齐，数值槽改为 96×22 并启用 `clip_text`，避免文本最小宽度挤短滑条；按钮与 PopupMenu 须分别统一字体。当前规范见 `CONVENTIONS.md` §6。（来源：user | code | test）

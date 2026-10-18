@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="1_scroll"]
 [ext_resource type="Script" uid="uid://b18otgy83q75q" path="res://script/game_option.gd" id="2_script"]
-[ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="3_font7"]
 [ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="4_font9"]
 [ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="5_autotext"]
 [ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="6_ui"]
@@ -151,31 +150,35 @@ Label/fonts/font = ExtResource("4_font9")
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_aol56"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_gqnms"]
+content_margin_left = 6.0
 texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_petiq"]
+content_margin_left = 6.0
 texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_b4fip"]
+content_margin_left = 6.0
 texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_wryvx"]
+content_margin_left = 6.0
 texture = ExtResource("6_ui")
 region_rect = Rect2(19, 35, 12, 12)
 
 [sub_resource type="Theme" id="Theme_cpfog"]
-OptionButton/font_sizes/font_size = 10
+OptionButton/font_sizes/font_size = 12
 OptionButton/fonts/font = ExtResource("4_font9")
 OptionButton/styles/focus = SubResource("StyleBoxEmpty_aol56")
 OptionButton/styles/hover = SubResource("StyleBoxTexture_gqnms")
 OptionButton/styles/hover_mirrored = SubResource("StyleBoxTexture_petiq")
 OptionButton/styles/normal = SubResource("StyleBoxTexture_b4fip")
 OptionButton/styles/pressed = SubResource("StyleBoxTexture_wryvx")
-PopupMenu/font_sizes/font_size = 10
-PopupMenu/fonts/font = ExtResource("3_font7")
+PopupMenu/font_sizes/font_size = 12
+PopupMenu/fonts/font = ExtResource("4_font9")
 
 [node name="Game" type="Control" unique_id=1798086965]
 modulate = Color(1, 1, 1, 0)
@@ -226,6 +229,7 @@ custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 theme = SubResource("Theme_section")
 text = "option_group_display"
+vertical_alignment = 1
 
 [node name="Divider" type="ColorRect" parent="Scroll/Content/DisplayCard/VBox" unique_id=939504806]
 custom_minimum_size = Vector2(0, 1)
@@ -261,6 +265,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_row")
 text = "option_full_screen"
+horizontal_alignment = 2
 vertical_alignment = 1
 clip_text = true
 script = ExtResource("5_autotext")
@@ -299,6 +304,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_row")
 text = "option_resolution"
+horizontal_alignment = 2
 vertical_alignment = 1
 clip_text = true
 script = ExtResource("5_autotext")
@@ -322,7 +328,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_cpfog")
 theme_override_fonts/font = ExtResource("4_font9")
-theme_override_font_sizes/font_size = 10
+theme_override_font_sizes/font_size = 12
 selected = 0
 item_count = 3
 popup/item_0/text = "1280 x 720"
@@ -361,6 +367,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_row")
 text = "option_max_fps"
+horizontal_alignment = 2
 vertical_alignment = 1
 clip_text = true
 script = ExtResource("5_autotext")
@@ -379,12 +386,13 @@ max_value = 5.0
 
 [node name="MaxFpsValue" type="Label" parent="Scroll/Content/DisplayCard/VBox/RowMaxFps" unique_id=1734203234]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 20)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 text = "Unlimited"
 horizontal_alignment = 2
+clip_text = true
 vertical_alignment = 1
 
 [node name="RowAdvanced" type="HBoxContainer" parent="Scroll/Content/DisplayCard/VBox" unique_id=155027502]
@@ -415,6 +423,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_row")
 text = "option_v_sync"
+horizontal_alignment = 2
 vertical_alignment = 1
 clip_text = true
 script = ExtResource("5_autotext")
@@ -454,6 +463,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_row")
 text = "option_physics_interp"
+horizontal_alignment = 2
 vertical_alignment = 1
 clip_text = true
 script = ExtResource("5_autotext")
@@ -491,6 +501,7 @@ custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 theme = SubResource("Theme_section")
 text = "option_group_feedback"
+vertical_alignment = 1
 
 [node name="Divider" type="ColorRect" parent="Scroll/Content/FeedbackCard/VBox" unique_id=823109196]
 custom_minimum_size = Vector2(0, 1)
@@ -501,7 +512,7 @@ color = Color(0.223529, 0.223529, 0.223529, 1)
 [node name="RowShake" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=1968803562]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowShake" unique_id=1953598209]
 custom_minimum_size = Vector2(126, 22)
@@ -509,6 +520,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "option_screen_shake"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -525,7 +538,7 @@ track_color = Color(0.164706, 0.164706, 0.164706, 1)
 [node name="RowDamageFreq" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=458078918]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowDamageFreq" unique_id=256490099]
 custom_minimum_size = Vector2(126, 22)
@@ -533,6 +546,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "option_damage_freq"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -548,17 +563,19 @@ size_flags_vertical = 4
 
 [node name="DamageFreqValue" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowDamageFreq" unique_id=1726880748]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 20)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 text = "100%"
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="RowEffectFreq" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=1317537397]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowEffectFreq" unique_id=67347248]
 custom_minimum_size = Vector2(126, 22)
@@ -566,6 +583,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "option_effect_freq"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -581,17 +600,19 @@ size_flags_vertical = 4
 
 [node name="EffectFreqValue" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowEffectFreq" unique_id=176397255]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 20)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 text = "100%"
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="RowHitFlashFreq" type="HBoxContainer" parent="Scroll/Content/FeedbackCard/VBox" unique_id=194926604]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowHitFlashFreq" unique_id=2126962023]
 custom_minimum_size = Vector2(126, 22)
@@ -599,6 +620,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "option_hit_flash_freq"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -614,12 +637,14 @@ size_flags_vertical = 4
 
 [node name="HitFlashFreqValue" type="Label" parent="Scroll/Content/FeedbackCard/VBox/RowHitFlashFreq" unique_id=582698661]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 20)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 text = "100%"
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="AudioCard" type="PanelContainer" parent="Scroll/Content" unique_id=1398412543]
 layout_mode = 2
@@ -636,6 +661,7 @@ custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 theme = SubResource("Theme_section")
 text = "option_group_audio"
+vertical_alignment = 1
 
 [node name="Divider" type="ColorRect" parent="Scroll/Content/AudioCard/VBox" unique_id=484028620]
 custom_minimum_size = Vector2(0, 1)
@@ -646,7 +672,7 @@ color = Color(0.223529, 0.223529, 0.223529, 1)
 [node name="RowMaster" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=1313412632]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowMaster" unique_id=1853155479]
 custom_minimum_size = Vector2(126, 22)
@@ -654,6 +680,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "sounds_master_volume"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -669,16 +697,18 @@ size_flags_vertical = 4
 value_label_path = NodePath("../Value")
 
 [node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowMaster" unique_id=830262730]
-custom_minimum_size = Vector2(48, 22)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="RowSFX" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=1112286395]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowSFX" unique_id=120729756]
 custom_minimum_size = Vector2(126, 22)
@@ -686,6 +716,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "sounds_sfx"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -702,16 +734,18 @@ bus = &"SFX"
 value_label_path = NodePath("../Value")
 
 [node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowSFX" unique_id=549969658]
-custom_minimum_size = Vector2(48, 22)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="RowBGM" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=676677125]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowBGM" unique_id=2014794358]
 custom_minimum_size = Vector2(126, 22)
@@ -719,6 +753,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "sounds_bgm"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -735,16 +771,18 @@ bus = &"BGM"
 value_label_path = NodePath("../Value")
 
 [node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowBGM" unique_id=1166783101]
-custom_minimum_size = Vector2(48, 22)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="RowVOICE" type="HBoxContainer" parent="Scroll/Content/AudioCard/VBox" unique_id=104030964]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="Scroll/Content/AudioCard/VBox/RowVOICE" unique_id=1703067831]
 custom_minimum_size = Vector2(126, 22)
@@ -752,6 +790,8 @@ layout_mode = 2
 theme = SubResource("Theme_row")
 text = "sounds_voice"
 horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
 script = ExtResource("5_autotext")
 base_font_size = 15
 base_size_y = 22.0
@@ -768,11 +808,13 @@ bus = &"VOICE"
 value_label_path = NodePath("../Value")
 
 [node name="Value" type="Label" parent="Scroll/Content/AudioCard/VBox/RowVOICE" unique_id=1641198880]
-custom_minimum_size = Vector2(48, 22)
+custom_minimum_size = Vector2(96, 22)
 layout_mode = 2
 theme = SubResource("Theme_row")
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
+clip_text = true
+vertical_alignment = 1
 
 [node name="MobileNotice" parent="." unique_id=1993449589 instance=ExtResource("9_mobile")]
 unique_name_in_owner = true

@@ -19,6 +19,14 @@
 
 ---
 
+## 2026-10-18 — 设置页布局与字体修正
+- Files / 涉及文件: `ui/game_option.tscn`。
+- Summary / 改动摘要: 统一滑条数值槽与间距、分辨率字体字号和左内边距，分组标题垂直居中；四语言档位检查及最终运行截图已核对。
+- Correction / 修正: 分辨率仅统一字号、混用 9x9 / 7x7 字体 → 按钮及 PopupMenu 均使用 9x9、字号 12（来源：user）。
+- Correction / 修正: 左列标签左对齐 → 全屏、帧率上限、垂直同步及反馈/音频标签右对齐（来源：user）。
+- Correction / 修正: 分辨率、物理插值标签保留左对齐 → 二者也右对齐（来源：user）。
+- Docs synced / 文档同步: `CONVENTIONS.md` §6、`LEARNINGS.md`、`UI_UX_REVIEW.md` §7。
+
 ## 2026-10-17 — 设置页签恢复原版间距/动画并移除 tooltip
 - Correction / 修正: 页签行高 32 + `scale:x` 动画（PR #10）→ 用户要求保留 main 原版间距与动画；页面按钮重做过，实际只用 `on_select`/`selected`（来源：user）。
 - Files / 涉及文件: `ui/option_button.tscn`、`ui/option.tscn`、`script/option_button.gd`、`docs/*`。
