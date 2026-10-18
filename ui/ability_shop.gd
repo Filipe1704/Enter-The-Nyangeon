@@ -17,6 +17,8 @@ func _unhandled_input(event):
 		joy_select(event)
 
 func get_menu_changed(changed_index):
+	if changed_index != menu_index:
+		_clear_preview()
 	if changed_index == menu_index:
 		await get_tree().process_frame
 		on_menu = true
@@ -46,11 +48,11 @@ func joy_select(event: InputEvent):
 		
 		if event.is_action_pressed("ui_left"):
 			joy_index = wrapi(joy_index - 1, 0, joy_box.size())
-			joy_button()
+			joy_box[joy_index].preview_from_navigation()
 		
 		elif event.is_action_pressed("ui_right"):
 			joy_index = wrapi(joy_index + 1, 0, joy_box.size())
-			joy_button()
+			joy_box[joy_index].preview_from_navigation()
 		
 		elif event.is_action_pressed("ui_accept"):
 			joy_button()
@@ -58,4 +60,9 @@ func joy_select(event: InputEvent):
 		can_joy = true
 
 func joy_button():
-	joy_box[joy_index].touch_button()
+	if joy_index >= 0 and joy_index < joy_box.size():
+		joy_box[joy_index].touch_button("focus")
+
+func _clear_preview() -> void:
+	for card in h_box_container.get_children():
+		card.touch_out()

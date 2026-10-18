@@ -4,9 +4,6 @@
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="2_ajfpy"]
 [ext_resource type="Texture2D" uid="uid://btitvjexf1qpv" path="res://ui/hammer_icon.png" id="2_e767y"]
 [ext_resource type="Texture2D" uid="uid://d4hukwsckh3ys" path="res://sprites/weapon/Unique_Idea.png" id="2_l440t"]
-[ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="5_eeir3"]
-[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="6_bgci4"]
-
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_i24sp"]
 
 [sub_resource type="Theme" id="Theme_7snbp"]
@@ -138,21 +135,6 @@ _data = {
 &"mouse_out": SubResource("Animation_q5v3f")
 }
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_uyb8s"]
-texture = ExtResource("5_eeir3")
-texture_margin_left = 1.0
-texture_margin_top = 1.0
-texture_margin_right = 1.0
-texture_margin_bottom = 1.0
-expand_margin_left = 3.0
-expand_margin_top = 3.0
-expand_margin_right = 3.0
-expand_margin_bottom = 3.0
-region_rect = Rect2(44, 12, 8, 8)
-
-[sub_resource type="Theme" id="Theme_uw0i6"]
-PanelContainer/styles/panel = SubResource("StyleBoxTexture_uyb8s")
-
 [node name="AbilityShopPSCard" type="PanelContainer" unique_id=1625574319]
 custom_minimum_size = Vector2(38, 0)
 theme = SubResource("Theme_7snbp")
@@ -253,83 +235,6 @@ theme_override_constants/shadow_outline_size = 2
 theme_override_font_sizes/font_size = 10
 horizontal_alignment = 2
 clip_text = true
-
-[node name="Node2D2" type="Node2D" parent="." unique_id=1511347257]
-visible = false
-z_index = 1
-scale = Vector2(0.7, 0.7)
-
-[node name="PanelContainer" type="PanelContainer" parent="Node2D2" unique_id=575010826]
-custom_minimum_size = Vector2(305, 0)
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -152.5
-offset_top = -95.71429
-offset_right = 152.5
-offset_bottom = -25.714287
-grow_horizontal = 2
-grow_vertical = 0
-mouse_filter = 2
-theme = SubResource("Theme_uw0i6")
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Node2D2/PanelContainer" unique_id=1493201693]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="t0" type="Label" parent="Node2D2/PanelContainer/VBoxContainer" unique_id=1487946722]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("6_bgci4")
-theme_override_font_sizes/font_size = 12
-text = "1"
-autowrap_mode = 1
-
-[node name="t1" type="Label" parent="Node2D2/PanelContainer/VBoxContainer" unique_id=1490730515]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.568973, 0.568973, 0.568973, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("6_bgci4")
-theme_override_font_sizes/font_size = 12
-text = "2"
-autowrap_mode = 1
-
-[node name="t2" type="Label" parent="Node2D2/PanelContainer/VBoxContainer" unique_id=1328387249]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.568973, 0.568973, 0.568973, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("6_bgci4")
-theme_override_font_sizes/font_size = 12
-text = "3"
-autowrap_mode = 1
-
-[node name="t3" type="Label" parent="Node2D2/PanelContainer/VBoxContainer" unique_id=2079643140]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.568973, 0.568973, 0.568973, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("6_bgci4")
-theme_override_font_sizes/font_size = 12
-text = "4"
-autowrap_mode = 1
 
 [node name="Marker2D" type="Marker2D" parent="." unique_id=1284763671]
 position = Vector2(36, 30)

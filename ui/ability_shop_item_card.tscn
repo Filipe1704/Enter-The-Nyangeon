@@ -1,12 +1,9 @@
-[gd_scene load_steps=25 format=3 uid="uid://b0iipco20o0p6"]
+[gd_scene load_steps=21 format=3 uid="uid://b0iipco20o0p6"]
 
 [ext_resource type="Script" path="res://ui/ability_shop_item_card.gd" id="1_bcj12"]
 [ext_resource type="Texture2D" uid="uid://b0vhck4unhuia" path="res://sprites/update_item/school_bag.png" id="1_snb05"]
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="2_lhpak"]
 [ext_resource type="Texture2D" uid="uid://btitvjexf1qpv" path="res://ui/hammer_icon.png" id="2_r4l0l"]
-[ext_resource type="Texture2D" uid="uid://jcqmwo1t8vv0" path="res://ui/ui.png" id="5_1pipi"]
-[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="6_rsksx"]
-
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_i24sp"]
 
 [sub_resource type="Theme" id="Theme_7snbp"]
@@ -143,21 +140,6 @@ _data = {
 [sub_resource type="Theme" id="Theme_frkdq"]
 PanelContainer/styles/panel = SubResource("StyleBoxEmpty_24xot")
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_jr5cw"]
-texture = ExtResource("5_1pipi")
-texture_margin_left = 1.0
-texture_margin_top = 1.0
-texture_margin_right = 1.0
-texture_margin_bottom = 1.0
-expand_margin_left = 3.0
-expand_margin_top = 3.0
-expand_margin_right = 3.0
-expand_margin_bottom = 3.0
-region_rect = Rect2(44, 12, 8, 8)
-
-[sub_resource type="Theme" id="Theme_vg5ts"]
-PanelContainer/styles/panel = SubResource("StyleBoxTexture_jr5cw")
-
 [node name="AbilityShopItemCard" type="PanelContainer"]
 custom_minimum_size = Vector2(38, 0)
 theme = SubResource("Theme_7snbp")
@@ -267,69 +249,6 @@ offset_right = 35.0
 offset_bottom = 47.0
 theme = SubResource("Theme_frkdq")
 
-[node name="Node2D2" type="Node2D" parent="."]
-visible = false
-z_index = 1
-scale = Vector2(0.7, 0.7)
-
-[node name="PanelContainer" type="PanelContainer" parent="Node2D2"]
-offset_left = -55.0
-offset_top = -41.0
-offset_right = 56.0
-offset_bottom = -19.0
-mouse_filter = 2
-theme = SubResource("Theme_vg5ts")
-
-[node name="Label" type="Label" parent="Node2D2/PanelContainer"]
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("6_rsksx")
-theme_override_font_sizes/font_size = 12
-text = "+2生命值  +2攻击力"
-horizontal_alignment = 1
-
 [node name="Marker2D" type="Marker2D" parent="."]
 position = Vector2(19, 30)
 
-[node name="Node2D3" type="Node2D" parent="."]
-visible = false
-z_index = 1
-scale = Vector2(0.7, 0.7)
-
-[node name="PanelContainer" type="PanelContainer" parent="Node2D3"]
-offset_left = -55.0
-offset_top = -59.0
-offset_right = 56.0
-offset_bottom = -19.0
-mouse_filter = 2
-theme = SubResource("Theme_vg5ts")
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Node2D3/PanelContainer"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="Label" type="Label" parent="Node2D3/PanelContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_font_sizes/font_size = 14
-text = "T10"
-
-[node name="Label2" type="Label" parent="Node2D3/PanelContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/outline_size = 5
-theme_override_constants/shadow_outline_size = 2
-theme_override_fonts/font = ExtResource("6_rsksx")
-theme_override_font_sizes/font_size = 12
-text = "+2生命值  +2攻击力"
-horizontal_alignment = 1
