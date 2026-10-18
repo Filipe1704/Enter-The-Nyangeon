@@ -57,8 +57,11 @@ func _clear_self_hits() -> void:
 func _tick_self_hits(delta: float) -> void:
 	if _hit_contacts == null or _hit_contacts.is_empty():
 		return
+	# keys() 只是快照：上一轮 _emit_self_hit() 会同步触发敌人死亡，其（可能多个）HurtBox
+	# 走 area_exited 把键从本表里删掉，后面轮到的键就成了陈旧键。取键后必须再确认一次，
+	# 否则 _hit_contacts[hb] 会报 "Invalid access to property or key 'HurtBox:...'"。
 	for hb in _hit_contacts.keys():
-		if hb == null or not is_instance_valid(hb):
+		if hb == null or not is_instance_valid(hb) or not _hit_contacts.has(hb):
 			_hit_contacts.erase(hb)
 			continue
 		var remain: float = _hit_contacts[hb]
@@ -69,7 +72,9 @@ func _tick_self_hits(delta: float) -> void:
 			_hit_contacts[hb] = remain
 			continue
 		_emit_self_hit(hb)
-		_hit_contacts[hb] = rehit_interval_seconds if rehit_interval_seconds > 0.0 else -1.0
+		# 命中结算可能已经把它自己（及同伴）移出接触表，不能再无条件写回冷却
+		if _hit_contacts.has(hb):
+			_hit_contacts[hb] = rehit_interval_seconds if rehit_interval_seconds > 0.0 else -1.0
 
 func _emit_self_hit(hb: HurtBox) -> void:
 	if hb == null or not is_instance_valid(hb):
