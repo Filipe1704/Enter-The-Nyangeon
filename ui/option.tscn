@@ -7,6 +7,7 @@
 [ext_resource type="Shader" uid="uid://d3frxix26ovel" path="res://shaders/scrolling_bkgd.gdshader" id="3_pigju"]
 [ext_resource type="Texture2D" uid="uid://btpgxdxikpay2" path="res://ui/option_icon.png" id="4_li6t4"]
 [ext_resource type="PackedScene" uid="uid://sosltotyod01" path="res://ui/option_button.tscn" id="5_evgqw"]
+[ext_resource type="FontFile" uid="uid://dixmxc0ljvfh6" path="res://fonts/BoutiqueBitmap9x9_1.9.ttf" id="6_43twi"]
 [ext_resource type="PackedScene" uid="uid://16ybq5tjkt1a" path="res://ui/return.tscn" id="7_mdhts"]
 [ext_resource type="PackedScene" uid="uid://dc68yuhrg5tet" path="res://ui/mod_option.tscn" id="9_mod"]
 [ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="10_title_fit"]
@@ -190,6 +191,7 @@ offset_left = 20.0
 offset_top = 28.0
 offset_right = 98.0
 offset_bottom = 54.0
+theme_override_fonts/font = ExtResource("6_43twi")
 text = "OPTION"
 vertical_alignment = 1
 script = ExtResource("10_title_fit")
@@ -210,6 +212,7 @@ script = ExtResource("2_43twi")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Node2D/option_button_box" unique_id=1004792157]
 layout_mode = 2
+theme_override_constants/separation = 3
 
 [node name="Game" parent="Node2D/option_button_box/VBoxContainer" unique_id=34050120 instance=ExtResource("5_evgqw")]
 layout_mode = 2
