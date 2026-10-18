@@ -28,6 +28,7 @@ var _switching: bool = false
 var _entering: bool = true
 var _input_open: bool = true
 var _touch_mode: bool = false
+var _preview_open: bool = false
 
 func _ready():
 	focus_mode = Control.FOCUS_ALL
@@ -117,30 +118,38 @@ func _on_card_anim_finished(anim_name: StringName):
 			_apply_hover()
 	if anim_name == "branch_anim":
 		_switching = false
-		# RESET 会把 mouse_filter 设成 IGNORE，这里恢复可交互
+		# 分支动画不再先播 RESET，结束时按当前输入/焦点确定性落到展开或收起态
 		mouse_filter = Control.MOUSE_FILTER_STOP if _input_open else Control.MOUSE_FILTER_IGNORE
-		if not _input_open:
-			return
-		var over := _has_card_focus()
+		# 触屏没有焦点，用 on_touch 判断预览是否仍属于本卡
+		var over := _input_open and (_has_card_focus() or (_touch_mode and on_touch))
 		_hovered = over
-		if over:
-			# 瞬间套用 select_card 末帧（尺寸/位置/显示带），不播放过程、无音效
-			card_anim.play("select_card")
-			card_anim.seek(card_anim.get_animation("select_card").length, true)
+		_preview_open = over
+		var settle := "select_card" if over else "select_out"
+		# 瞬间套用末帧（尺寸/位置/显示带），不播放过程、无音效
+		card_anim.play(settle)
+		card_anim.seek(card_anim.get_animation(settle).length, true)
+		# select_out 的 size 末帧先于 custom_minimum_size 应用，会被旧的 165 夹住，这里按末帧宽度补一次
+		var settle_width := custom_minimum_size.x
+		if settle_width > 0.0:
+			size = Vector2(settle_width, size.y)
 
 
 func switch_branch():
-	if branch_list.size() <= 1:
+	if branch_list.size() <= 1 or _switching:
 		return
-	# RESET/分支动画会隐藏按钮面板，先将键盘焦点交还角色卡。
-	if branch_button.has_focus():
-		grab_focus()
 	branch_index = (branch_index + 1) % branch_list.size()
 	cur = branch_list[branch_index]
 	player_card = cur
 	player = cur.scene_path
+	# 先置 _switching，避免焦点交还角色卡时 select_player_card 重播展开动画
 	_switching = true
-	card_anim.play("RESET")
+	# 分支动画会重建预览面板，先将键盘焦点交还角色卡。
+	if branch_button.has_focus():
+		grab_focus()
+	_preview_open = true
+	# branch_anim 按展开态起步；先瞬间补齐 select_card 末帧，避免在收起/半展开姿态中卡住
+	card_anim.play("select_card")
+	card_anim.seek(card_anim.get_animation("select_card").length, true)
 	card_anim.play("branch_anim")
 
 func _update_visual():
@@ -197,9 +206,11 @@ func mouse_open():
 	mouse_filter = 0
 	focus_mode = Control.FOCUS_ALL
 	if on_select == true:
-		card_anim.play("select_out")
 		on_select = false
 		on_touch = false
+		if not _switching:
+			_preview_open = false
+			card_anim.play("select_out")
 
 func mouse_close():
 	_input_open = false
@@ -210,12 +221,17 @@ func select_player_card():
 	if _entering or _switching or on_select:
 		return
 	SoundManager.play_sfx("ButtonSounds2")
+	# 卡片已展开 / 展开中时不要重播 select_card，否则焦点在角色卡与分支按钮间转移会先收起再展开
+	if _preview_open:
+		return
+	_preview_open = true
 	card_anim.play("select_card")
 
 func select_out_player_card():
 	if _entering or _switching or _has_card_focus():
 		return
 	if on_select == false:
+		_preview_open = false
 		card_anim.play("select_out")
 
 func touch_out_player_card():
@@ -224,6 +240,9 @@ func touch_out_player_card():
 	
 	if on_select == false and on_touch == true:
 		on_touch = false
+		_preview_open = false
+		if _switching:
+			return
 		card_anim.play("select_out")
 
 func play_voice():
@@ -242,6 +261,7 @@ func add_player(event: InputEvent):
 			GameEvents.emit_player_card_touch()
 			await get_tree().create_timer(0.1).timeout
 			on_touch = true
+			_preview_open = true
 			SoundManager.play_sfx("ButtonSounds2")
 			card_anim.play("select_card")
 			

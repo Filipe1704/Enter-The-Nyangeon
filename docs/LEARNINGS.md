@@ -2051,6 +2051,7 @@
 ### [UI] 角色卡尺寸动画期间必须显式指定左右焦点邻居
 - Evidence / 证据: 用户 2026-10-11 反馈「角色已完全显示后，连续按左右键」「Esc 可以正常返回」并再次复现；真实 `user://logs/ETN_debug.log` 出现角色卡 → `BranchButton` → null；`scenes/main/menu_screen.gd:_link_player_card_focus`；`ui/player_card.gd:_has_card_focus/_on_card_focus_exited/switch_branch`；`ui/player_card_anim.tres:1020`；`tests/test_ui_ux_regressions.gd:_check_character_focus`。
 - Notes / 说明: 爱丽丝预览展开后，左移柚子并在 0.1 秒退场动画中右返，卡片宽度变化会使原生几何搜索选中仍可见的分支按钮；随后文本面板隐藏释放焦点，方向键与 Enter 均失效，Esc 仍走菜单返回逻辑。修复前折返检查失败，修复后通过。社团填卡后统一设置角色卡的左右邻居，边界指向自身，避免动画影响目标；本体分支按钮沿用同一左右路径。Tab 仍能进入分支按钮，卡片把子按钮焦点视为自身预览焦点；切换分支的 RESET 隐藏面板前先将焦点交回角色卡，避免另一条丢焦点路径。
+- SUPERSEDED: 2026-10-19 分支切换不再先播 `RESET`（改为 `branch_anim` 从展开态直接过渡，结束后按焦点确定性复位），因此不再有「RESET 隐藏面板」这一路径；`switch_branch` 仍会先把焦点交回角色卡，并新增 `_switching` 防重入。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-11
 
@@ -2736,3 +2737,10 @@
 - Date / 日期: 2026-10-18
 
 - Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `CODEBASE_AUDIT.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。
+
+### [UI] `branch_anim` 按「展开态」起步；分支切换不能被焦点转移重播 `select_card`
+- Evidence / 证据: `ui/player_card.gd:108-145,194-246`（`_preview_open` 幂等守卫、`_switching` 先于 `grab_focus`、播放前 seek `select_card` 末帧、结束按焦点/触屏状态复位）、`ui/player_card_anim.tres:438-521`（`branch_anim` 只改立绘 x/alpha，首帧与 `select_card` 末帧一致）、`Button.focus_mode` 默认 `All`（鼠标按下会抢焦点）、`tests/test_ui_ux_regressions.gd:1033-1052`。
+- Notes / 说明: 先播 `RESET` 会把整张卡瞬时打回收起布局，且 `branch_anim` 不改卡宽/面板位置，于是全程停在收起态；只删 `RESET` 还不够：鼠标按下分支按钮会抢焦点（`focus_mode=All`），`focus_entered → select_player_card()` 与松开时的 `grab_focus()` 都会把 `select_card` 从 t=0 重播（t=0 正是收起姿态），`branch_anim` 随即冻结在半展开态。修法是：`select_player_card()` 用 `_preview_open` 防重播；`switch_branch()` 先置 `_switching` 再交还焦点，并在分支动画前瞬间 seek `select_card` 末帧；结束再按 `_input_open` + 焦点（触屏用 `_touch_mode and on_touch`）套 `select_card`/`select_out` 末帧。`touch_out_player_card()` 与 `mouse_open()` 的 `select_out` 都要带 `_switching` 守卫，否则触屏摸别的卡、或难度页关闭会打断分支动画并永久卡住 `_switching`。另注意 `select_out` 的 `.:size` 末帧会先于 `.:custom_minimum_size` 应用，被旧的 165 夹住，seek 后要按 `Vector2(custom_minimum_size.x, size.y)` 补一次宽。官方测试用 `pressed.emit()` 绕过鼠标抢焦点，所以没暴露这条路径。
+- Validation / 验证: `python tests/run_ui_ux_checks.py --godot <Godot 4.7> --character-focus-only` → `checks=15 failures=0`；临时探针（鼠标/键盘/触屏/焦点切走/难度页 17 项）→ `failures=0`。
+- Source / 来源: user + code | test
+- Date / 日期: 2026-10-19
