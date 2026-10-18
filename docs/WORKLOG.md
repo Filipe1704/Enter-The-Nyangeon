@@ -19,6 +19,12 @@
 
 ---
 
+## 2026-10-18 — 设置页滚动条统一使用通用轨道样式
+- Correction: GAME 页脚本局部取消滚动轨道上下内边距 → 在 `ui/pixel_scrollbar_theme.tres` 中统一竖向轨道上下内边距为 0，删除页面局部覆盖（来源：user）。
+- Files / 涉及文件: `ui/pixel_scrollbar_theme.tres`、`script/game_option.gd`、`ui/game_option.tscn`、`docs/CONVENTIONS.md`。
+- Summary / 改动摘要: 横向轨道独立保留原内边距，GAME 页滚动区域仍从顶栏下沿延伸至页面底边，首张设置卡片位置保持不变。
+- Docs synced / 文档同步: `CONVENTIONS.md` §6。
+
 ## 2026-10-18 — 设置页布局与字体修正
 - Files / 涉及文件: `ui/game_option.tscn`。
 - Summary / 改动摘要: 统一滑条数值槽与间距、分辨率字体字号和左内边距，分组标题垂直居中；四语言档位检查及最终运行截图已核对。
@@ -26,6 +32,12 @@
 - Correction / 修正: 左列标签左对齐 → 全屏、帧率上限、垂直同步及反馈/音频标签右对齐（来源：user）。
 - Correction / 修正: 分辨率、物理插值标签保留左对齐 → 二者也右对齐（来源：user）。
 - Docs synced / 文档同步: `CONVENTIONS.md` §6、`LEARNINGS.md`、`UI_UX_REVIEW.md` §7。
+
+## 2026-10-18 — 修正 Mod 原型对照来源
+- Correction / 修正: 以 js.design 纵向详情画板或 HTML 弹窗原型作为本轮参考 → 以用户附图「B · 列表 + 常驻详情」左右双栏方案为准（来源：user）。
+- Files / 涉及文件: `docs/LEARNINGS.md`、`docs/WORKLOG.md`。
+- Summary / 改动摘要: 更正对照来源，未修改游戏实现。
+- Docs synced / 文档同步: `docs/LEARNINGS.md`「本轮原型对照以用户附图『B · 列表 + 常驻详情』为准」。
 
 ## 2026-10-17 — 设置页签恢复原版间距/动画并移除 tooltip
 - Correction / 修正: 页签行高 32 + `scale:x` 动画（PR #10）→ 用户要求保留 main 原版间距与动画；页面按钮重做过，实际只用 `on_select`/`selected`（来源：user）。

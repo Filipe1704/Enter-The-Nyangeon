@@ -50,6 +50,7 @@ var _pending_irreversible: Dictionary = {}
 var _baseline_valid: bool = false
 var _baseline_enabled: Dictionary = {}
 var _baseline_order: Array = []
+var _baseline_ids: Array = []
 var _restoring: bool = false
 var _row_hover_id: String = ""
 
@@ -59,11 +60,13 @@ var _row_style_selected: StyleBoxFlat
 var _row_icon_style: StyleBoxFlat
 
 var _press_row: Control = null
+var _press_touch_index: int = -1
 var _press_viewport: Vector2 = Vector2.ZERO
 var _drag_grab_offset: Vector2 = Vector2.ZERO
 var _drag_active: bool = false
 var _drag_row: Control = null
 var _drag_origin_index: int = 0
+var _drag_origin_row_index: int = 0
 var _spacer: Control = null
 
 
@@ -79,11 +82,13 @@ func _ready() -> void:
 	import_btn.pressed.connect(_on_import_pressed)
 	uninstall_btn.pressed.connect(_on_uninstall_pressed)
 	_confirm = ConfirmationDialog.new()
+	_confirm.title = tr("mod_uninstall")
 	_confirm.ok_button_text = tr("mod_uninstall")
 	_confirm.cancel_button_text = tr("mod_cancel")
 	add_child(_confirm)
 	_confirm.confirmed.connect(_on_uninstall_confirmed)
 	_restart_confirm = ConfirmationDialog.new()
+	_restart_confirm.title = tr("mod_restart_now")
 	_restart_confirm.ok_button_text = tr("mod_restart_now")
 	_restart_confirm.cancel_button_text = tr("mod_cancel")
 	_restart_confirm.dialog_text = tr("mod_restart_confirm")
@@ -99,13 +104,18 @@ func _ready() -> void:
 
 func menu_show() -> void:
 	super()
-	status_label.text = ""
+	_set_status("")
 	_refresh()
 
 
 func menu_hide() -> void:
 	_cancel_drag()
 	super()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_cancel_drag()
 
 
 func _build_row_styles() -> void:
@@ -149,11 +159,21 @@ func _build_row_styles() -> void:
 func _refresh() -> void:
 	if list_box == null or _restoring:
 		return
+	var focused := get_viewport().gui_get_focus_owner()
+	var focus_id := ""
+	var focus_toggle := false
+	for row in _row_children():
+		if focused != null and (row == focused or row.is_ancestor_of(focused)):
+			focus_id = str(row.get_meta("mod_id"))
+			focus_toggle = row != focused
+			break
+	_cancel_drag()
 	_row_hover_id = ""
 	for c in list_box.get_children():
 		list_box.remove_child(c)
 		c.queue_free()
 	_last_mods = ModManager.list_mods()
+	_sync_pending()
 	var groups := {
 		"attention": [],
 		"enabled": [],
@@ -177,6 +197,9 @@ func _refresh() -> void:
 	_update_restart_bar()
 	_update_arrows()
 	_update_detail()
+	_bind_row_navigation()
+	if focus_id != "":
+		_restore_row_focus.call_deferred(focus_id, focus_toggle)
 
 
 func _group_key(m: Dictionary) -> String:
@@ -209,7 +232,8 @@ func _make_row(m: Dictionary) -> PanelContainer:
 	var id := str(m.id)
 	var row := PanelContainer.new()
 	row.custom_minimum_size = Vector2(0, 22)
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.focus_mode = Control.FOCUS_ALL
 	row.set_meta("mod_id", id)
 	row.set_meta("mod_data", m)
 	row.set_meta("is_row", true)
@@ -248,14 +272,21 @@ func _make_row(m: Dictionary) -> PanelContainer:
 	initial.visible = tex == null
 	icon_slot.add_child(initial)
 
+	var text_box := VBoxContainer.new()
+	text_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_box.add_theme_constant_override("separation", 0)
+	box.add_child(text_box)
 	var label := Label.new()
 	label.name = "Name"
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.text = str(m.get("name", id))
 	_apply_row_font(label)
-	box.add_child(label)
+	text_box.add_child(label)
 
 	var pending := Label.new()
 	pending.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -263,14 +294,20 @@ func _make_row(m: Dictionary) -> PanelContainer:
 	pending.add_theme_font_size_override("font_size", 8)
 	pending.add_theme_color_override("font_color", ACCENT)
 	pending.text = tr("mod_detail_pending")
+	pending.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	pending.visible = _is_pending(id)
-	box.add_child(pending)
+	text_box.add_child(pending)
 
 	var toggle = TOGGLE.instantiate()
 	toggle.name = "Toggle"
+	toggle.focus_mode = Control.FOCUS_ALL
+	toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	toggle.set("on", bool(m.get("enabled", false)))
 	toggle.connect("toggled", func(on: bool): _on_toggle(id, on))
 	box.add_child(toggle)
+	row.focus_entered.connect(func(): _focus_row(row))
+	toggle.focus_entered.connect(func(): _focus_row(row))
+	toggle.gui_input.connect(func(event: InputEvent): _on_row_key_input(row, event, true))
 
 	row.mouse_entered.connect(func(): _on_row_hover(row, true))
 	row.mouse_exited.connect(func(): _on_row_hover(row, false))
@@ -278,9 +315,71 @@ func _make_row(m: Dictionary) -> PanelContainer:
 	return row
 
 
+func _focus_row(row: Control) -> void:
+	_select(row)
+	(list_box.get_parent() as ScrollContainer).ensure_control_visible(row)
+
+
+func _restore_row_focus(id: String, to_toggle: bool) -> void:
+	if not shown:
+		return
+	for row in _row_children():
+		if str(row.get_meta("mod_id")) == id:
+			var target: Control = row.find_child("Toggle", true, false) if to_toggle else row
+			target.grab_focus()
+			return
+
+
+func _bind_row_navigation() -> void:
+	var rows := _row_children()
+	import_btn.focus_next = NodePath("")
+	import_btn.focus_neighbor_bottom = NodePath("")
+	if rows.is_empty():
+		return
+	import_btn.focus_neighbor_bottom = import_btn.get_path_to(rows[0])
+	for i in rows.size():
+		var row: Control = rows[i]
+		var toggle: Control = row.find_child("Toggle", true, false)
+		var previous: Control = import_btn if i == 0 else rows[i - 1].find_child("Toggle", true, false)
+		var next: Control = rows[i + 1] if i + 1 < rows.size() else uninstall_btn
+		row.focus_previous = row.get_path_to(previous)
+		row.focus_next = row.get_path_to(toggle)
+		toggle.focus_previous = toggle.get_path_to(row)
+		toggle.focus_next = toggle.get_path_to(next)
+	import_btn.focus_next = import_btn.get_path_to(rows[0])
+
+
+func _on_row_key_input(row: Control, event: InputEvent, from_toggle: bool = false) -> void:
+	var direction := 0
+	if event.is_action_pressed("ui_up"):
+		direction = -1
+	elif event.is_action_pressed("ui_down"):
+		direction = 1
+	if direction != 0:
+		var rows := _row_children()
+		var index := rows.find(row) + direction
+		if index >= 0 and index < rows.size():
+			var target: Control = rows[index].find_child("Toggle", true, false) if from_toggle else rows[index]
+			target.grab_focus()
+		elif index < 0:
+			import_btn.grab_focus()
+		else:
+			uninstall_btn.grab_focus()
+		row.accept_event()
+	elif event.is_action_pressed("ui_right") and not from_toggle:
+		(row.find_child("Toggle", true, false) as Control).grab_focus()
+		row.accept_event()
+	elif event.is_action_pressed("ui_left") and from_toggle:
+		row.grab_focus()
+		row.accept_event()
+	elif event.is_action_pressed("ui_accept") and not from_toggle:
+		row.accept_event()
+		_on_toggle(str(row.get_meta("mod_id")), not bool(row.get_meta("mod_data").get("enabled", false)))
+
+
 func _apply_row_font(label: Label) -> void:
 	label.add_theme_font_override("font", ROW_FONT)
-	label.add_theme_font_size_override("font_size", 15)
+	label.add_theme_font_size_override("font_size", 12)
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	label.add_theme_constant_override("shadow_offset_x", 0)
@@ -338,6 +437,7 @@ func _select(row: Control) -> void:
 	if id == _selected_id:
 		return
 	_selected_id = id
+	detail_scroll.scroll_vertical = 0
 	for c in _row_children():
 		_apply_row_style(c)
 	_update_arrows()
@@ -345,7 +445,7 @@ func _select(row: Control) -> void:
 
 
 func _update_arrows() -> void:
-	var ids := _current_ids()
+	var ids := _displayed_ids()
 	var pos := ids.find(_selected_id)
 	up_btn.disabled = pos <= 0
 	down_btn.disabled = pos < 0 or pos >= ids.size() - 1
@@ -353,6 +453,14 @@ func _update_arrows() -> void:
 
 
 func _current_ids() -> Array:
+	# list_mods 已按用户顺序排序；分组后的节点顺序只用于定位操作目标。
+	var ids: Array = []
+	for m in _last_mods:
+		ids.append(str(m.id))
+	return ids
+
+
+func _displayed_ids() -> Array:
 	var ids: Array = []
 	for c in _row_children():
 		ids.append(str(c.get_meta("mod_id", "")))
@@ -360,33 +468,49 @@ func _current_ids() -> Array:
 
 
 func _move_selected(delta: int) -> void:
-	var ids := _current_ids()
+	var ids := _displayed_ids()
 	var pos := ids.find(_selected_id)
 	var target := pos + delta
 	if pos < 0 or target < 0 or target >= ids.size():
 		return
+	_move_mod(_selected_id, str(ids[target]), delta < 0)
+
+
+func _move_mod(id: String, anchor: String, before: bool) -> bool:
+	var current := _current_ids()
+	if id == anchor or not current.has(id) or not current.has(anchor):
+		return false
+	var next := current.duplicate()
+	next.erase(id)
+	next.insert(next.find(anchor) + (0 if before else 1), id)
+	if next == current:
+		return false
 	_ensure_baseline()
-	var first := str(ids[pos])
-	var second := str(ids[target])
-	ids[pos] = second
-	ids[target] = first
-	_pending_ids[first] = true
-	_pending_ids[second] = true
-	ModManager.set_order(ids)
-	_update_restart_bar()
+	ModManager.set_order(next)
+	return true
 
 
 func _on_row_gui_input(row: Control, event: InputEvent) -> void:
 	if _drag_active:
 		return
+	_on_row_key_input(row, event)
 	var pressed := false
 	if event is InputEventScreenTouch and event.pressed:
+		if _press_row != null:
+			return
 		pressed = true
+		_press_touch_index = event.index
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		pressed = true
+		_press_touch_index = -1
 	if not pressed:
 		return
-	row.accept_event()
+	# 触屏按下继续传给 ScrollContainer；鼠标仍保留整行拖动排序。
+	if _press_touch_index < 0:
+		row.accept_event()
+		row.grab_focus()
 	_press_row = row
 	_press_viewport = row.get_global_transform() * event.position
 	_drag_grab_offset = _press_viewport - row.global_position
@@ -394,6 +518,18 @@ func _on_row_gui_input(row: Control, event: InputEvent) -> void:
 
 func _input(event: InputEvent) -> void:
 	if _press_row == null or not is_instance_valid(_press_row):
+		return
+	if _press_touch_index >= 0:
+		if event is InputEventScreenDrag and event.index == _press_touch_index:
+			if event.position.distance_to(_press_viewport) > DRAG_THRESHOLD:
+				_press_row = null
+				_press_touch_index = -1
+		elif event is InputEventScreenTouch and event.index == _press_touch_index and not event.pressed:
+			if not event.canceled:
+				_select(_press_row)
+				_press_row.grab_focus()
+			_press_row = null
+			_press_touch_index = -1
 		return
 	if _drag_active:
 		var p := _event_viewport_pos(event)
@@ -435,9 +571,11 @@ func _is_release(event: InputEvent) -> bool:
 
 
 func _start_drag() -> void:
+	_ensure_baseline()
 	_drag_active = true
 	_drag_row = _press_row
 	_drag_origin_index = _drag_row.get_index()
+	_drag_origin_row_index = _row_children().find(_drag_row)
 	var h := _drag_row.size.y
 	_spacer = Control.new()
 	_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -490,14 +628,23 @@ func _end_drag() -> void:
 	_spacer.queue_free()
 	_spacer = null
 	_drag_row = null
+	_press_row = null
 	_selected_id = id
-	_pending_ids[id] = true
-	var ids := _current_ids()
-	ModManager.set_order(ids)
+	var ids := _displayed_ids()
+	var target := ids.find(id)
+	var changed := false
+	# 只移动拖动项，保留其余 Mod 的全局相对顺序，避免分组改写冲突优先级。
+	if target > _drag_origin_row_index:
+		changed = _move_mod(id, str(ids[target - 1]), false)
+	elif target < _drag_origin_row_index:
+		changed = _move_mod(id, str(ids[target + 1]), true)
+	if not changed:
+		_refresh()
 
 
 func _cancel_drag() -> void:
 	_press_row = null
+	_press_touch_index = -1
 	if not _drag_active:
 		return
 	_drag_active = false
@@ -517,7 +664,7 @@ func _cancel_drag() -> void:
 func _update_summary() -> void:
 	var effective := 0
 	for m in _last_mods:
-		if bool(m.get("enabled", false)) and bool(m.get("mounted", false)) and str(m.get("error", "")) == "":
+		if bool(m.get("mounted", false)) and str(m.get("error", "")) == "":
 			effective += 1
 	summary_label.text = tr("mod_summary") % [_last_mods.size(), effective, _pending_count()]
 
@@ -550,11 +697,33 @@ func _ensure_baseline() -> void:
 	for m in ModManager.list_mods():
 		_baseline_enabled[str(m.id)] = bool(m.enabled)
 	_baseline_order = ModManager.get_order()
+	_baseline_ids = _current_ids()
+
+
+func _sync_pending() -> void:
+	_pending_ids.clear()
+	if not _baseline_valid:
+		return
+	var current: Array = []
+	for m in _last_mods:
+		var id := str(m.id)
+		if not _baseline_enabled.has(id):
+			continue
+		current.append(id)
+		if bool(m.enabled) != bool(_baseline_enabled[id]):
+			_pending_ids[id] = true
+	# 导入/卸载单独记录；比较仍在安装的基线项，避免增删项造成伪排序改动。
+	var baseline: Array = []
+	for id in _baseline_ids:
+		if current.has(id):
+			baseline.append(id)
+	for i in current.size():
+		if current[i] != baseline[i]:
+			_pending_ids[str(current[i])] = true
 
 
 func _on_toggle(id: String, on: bool) -> void:
 	_ensure_baseline()
-	_pending_ids[id] = true
 	ModManager.set_enabled(id, on)
 
 
@@ -568,7 +737,7 @@ func _on_undo() -> void:
 	_pending_ids.clear()
 	_baseline_valid = false
 	_restoring = false
-	status_label.text = ""
+	_set_status("")
 	_refresh()
 
 
@@ -590,15 +759,15 @@ func _on_zip_selected(path: String) -> void:
 		var id := str(r.get("id", ""))
 		if id != "":
 			_pending_irreversible[id] = true
-		status_label.text = tr("mod_import_ok") % id
+		_set_status(tr("mod_import_ok") % id)
 	else:
-		status_label.text = tr("mod_import_fail") % str(r.get("error", ""))
+		_set_status(tr("mod_import_fail") % str(r.get("error", "")), true)
 	_refresh()
 
 
 func _on_uninstall_pressed() -> void:
 	if _selected_id == "":
-		status_label.text = tr("mod_uninstall_select")
+		_set_status(tr("mod_uninstall_select"), true)
 		return
 	var name := _mod_display_name(_selected_id)
 	_confirm.dialog_text = tr("mod_uninstall_confirm") % name
@@ -614,20 +783,24 @@ func _on_uninstall_confirmed() -> void:
 	var r := ModManager.uninstall(id)
 	if not r.get("ok", false):
 		_refresh()
-		status_label.text = tr("mod_uninstall_fail") % str(r.get("error", ""))
+		_set_status(tr("mod_uninstall_fail") % str(r.get("error", "")), true)
 		return
 	_pending_ids.erase(id)
 	if bool(r.get("restart_required", false)) or not bool(r.get("deleted", false)):
 		_pending_irreversible[id] = true
 	else:
 		_pending_irreversible.erase(id)
-	if bool(r.get("deleted", false)):
-		status_label.text = tr("mod_uninstall_ok") % name
-	else:
-		status_label.text = tr("mod_uninstall_pending")
+	var message := tr("mod_uninstall_ok") % name if bool(r.get("deleted", false)) else tr("mod_uninstall_pending")
 	if bool(r.get("restart_required", false)):
-		status_label.text += "  " + tr("mod_restart_notice")
+		message += "  " + tr("mod_restart_notice")
+	_set_status(message)
 	_refresh()
+
+
+func _set_status(message: String, failed: bool = false) -> void:
+	status_label.text = message
+	status_label.visible = message != ""
+	status_label.add_theme_color_override("font_color", DANGER if failed else OK_COLOR)
 
 
 func _mod_display_name(id: String) -> String:

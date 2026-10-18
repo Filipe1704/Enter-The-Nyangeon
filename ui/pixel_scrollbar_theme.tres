@@ -32,6 +32,12 @@ content_margin_bottom = 4.0
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_focus"]
 
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_vertical_track"]
+content_margin_left = 4.0
+content_margin_top = 0.0
+content_margin_right = 4.0
+content_margin_bottom = 0.0
+
 [resource]
 HScrollBar/styles/grabber = SubResource("StyleBoxFlat_grabber")
 HScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_hover")
@@ -41,5 +47,5 @@ HScrollBar/styles/scroll_focus = SubResource("StyleBoxEmpty_focus")
 VScrollBar/styles/grabber = SubResource("StyleBoxFlat_grabber")
 VScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_hover")
 VScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_pressed")
-VScrollBar/styles/scroll = SubResource("StyleBoxEmpty_track")
+VScrollBar/styles/scroll = SubResource("StyleBoxEmpty_vertical_track")
 VScrollBar/styles/scroll_focus = SubResource("StyleBoxEmpty_focus")

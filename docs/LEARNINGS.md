@@ -2369,6 +2369,9 @@
 - Source / 来源: code + test
 - Date / 日期: 2026-10-18
 
+- SUPERSEDED: 2026-10-18 上述②把「过滤表头后的显示顺序」等同于「用户顺序」的实现判断不成立，④的首次拖动撤销也缺少基线。现分别读取全局顺序与显示目标，仅移动所选 ID；首次拖动保存基线，刷新前取消拖动，待重启按净差异重算。35 项隔离断言通过，覆盖错误分组不改变无关冲突优先级、交错停用项、首次拖动/混合操作撤销、原地/取消拖动、空顺序配置、实际磁盘恢复与不可逆标记保留。此前「排序可撤销」只能作为设计意图，不能当作旧实现已正确的证明。稳定规则已上提 `SYSTEMS.md`「管理面板排序与状态修正」。（来源：code | test）
+- Validation / 验证（2026-10-18）: 设置集成另有 45 项断言通过；旧本地测试仍检查 `ColorRect.scale.x`，与恢复原版后写 `size.x`（选中 114、悬停 9、收起 0）的动画不符，已仅在本地测试中修正断言。两项命令仍因既有 `godot_ai/runtime/game_helper.gd` 缺失及退出资源日志返回非零，未处理 `project.godot`。（来源：code | test）
+
 ### [Git] 本地忽略 `.import`，不提交 `.gitignore` 改动
 - Evidence / 证据: `docs/CONVENTIONS.md` §6.1；本地 `.git/info/exclude` 的 `*.import` 与索引 `skip-worktree` 标记。
 - Notes / 说明: 用户要求忽略 `.import` 且不提交 `.gitignore`。2026-10-14 已将 627 个 `.import` 改动及 `.gitignore` 从暂存区排除；972 个已跟踪 `.import` 用本地 `skip-worktree` 跳过，新文件用 `.git/info/exclude` 忽略，不删除文件或取消既有跟踪。后续暂存须继续排除 `.gitignore`。`skip-worktree` 只影响本地索引，未来上游若修改这些文件，同步前需按需清除标记并保留本地内容。
@@ -2649,3 +2652,17 @@
 - Date / 日期: 2026-10-18
 - Follow-up / 后续（2026-10-18，来源：user + test）：DISPLAY 两行原本 `CellA`/`CellB` 都设 `size_flags_horizontal=3`，RowDisplay 的右列（下拉框）更宽时 HBox 会给两行 `CellA` 分配不同宽度，导致左列开关与右列控件错位。现固定 `CellA=152`、`CellB=262`，仅 `CellB` 扩展；标签改为 126×22 固定 wrapper + 左对齐 + `clip_text`，两行右控件槽统一 128。4 语言下 `FullScreen`/`VSync`/`MaxFps` 的 x 一致、`Resolutions`/`PhysicsInterp` 的 x 一致，`Content` 最小宽 446（Scroll 宽 454，x=134）。
 - SUPERSEDED: 2026-10-18 设置项标签最终统一右对齐，数值槽改为 96×22 并启用 `clip_text`，避免文本最小宽度挤短滑条；按钮与 PopupMenu 须分别统一字体。当前规范见 `CONVENTIONS.md` §6。（来源：user | code | test）
+
+### [Mod/UI] 本轮原型对照以用户附图「B · 列表 + 常驻详情」为准
+- Evidence / 证据: 用户 2026-10-18 附图 `codex-clipboard-413402ed-c756-48c6-a76e-191da22bba18.png`；历史同方向截图 `.godot/prototype_mod_list/mod_list_B.png`；实现 `ui/mod_option.tscn`、`script/mod_option.gd`。
+- Notes / 说明: 用户明确纠正参考对象为附图中的左右双栏方案，包含顶部统计/待重启条、左侧三组列表及右侧常驻详情；此前找到的 js.design 纵向详情画板与 HTML 弹窗原型均不能代替此参考。历史 B 截图的底色、分组数量与待重启数量不同，也不能视为附图的同一状态。此纠正只确定本轮对照来源，不代表用户已要求改代码或确认全部视觉细节。
+- Source / 来源: user
+- Date / 日期: 2026-10-18
+
+
+### [Mod/UI] 行排序会抢占触屏滚动；开关支持确认键不等于可获得焦点
+- Evidence / 证据: `script/mod_option.gd:397`、`:413`；`ui/option_toggle.tscn:160`；本地复现 `tests/mod_ui_audit.gd`，日志 `.godot/mod_ui_audit_20261018/audit.log`。
+- Notes / 说明: 当前 Mod 行在触屏按下时 `accept_event()`，移动超过 6 像素即进入排序，父级 `ScrollContainer` 无法接管。隔离渲染检查中，从行上向上滑动 100 个逻辑像素，`scroll_vertical` 始终为 0，却改写顺序并产生待重启项；尚未 Android 实机复核。另：共享 Toggle 脚本虽处理 `ui_accept`，场景根 `PanelContainer` 未设焦点，Mod 创建行也未补设；运行时行与开关 `focus_mode=0`，`grab_focus()` 被拒绝，不能据处理函数存在就认定键盘可用。本条记录现状，尚未修复。
+- Source / 来源: code | test
+- Date / 日期: 2026-10-18
+- SUPERSEDED: 2026-10-18 已修复：Mod 行设为 `MOUSE_FILTER_PASS`，触屏按下/拖动交给父级滚动，轻点选中，触屏排序使用上下移按钮；鼠标仍可整行拖动排序。Mod 页创建的行与 Toggle 显式启用焦点，方向键选择、Tab 切换与刷新后的焦点恢复均经真实输入验证。共享 Toggle 场景仍不默认启用焦点，其他使用方须按需设置。复现脚本已转为断言回归，修复后日志 `.godot/mod_ui_fix_20261018/audit.log`：触屏滑动 `scroll=59`、顺序不变，无待重启改动。Android 实机仍待验证。来源：code | test。
