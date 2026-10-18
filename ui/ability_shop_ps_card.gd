@@ -153,7 +153,9 @@ func item_upgrade():
 		cost.text = "MAX"
 
 func preview_from_navigation() -> void:
+	GameEvents.emit_player_card_touch()
 	on_touch = true
+	mouse_in()
 	_tooltip.preview("focus")
 
 func _notification(what: int) -> void:
