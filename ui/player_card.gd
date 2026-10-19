@@ -238,8 +238,10 @@ func touch_out_player_card():
 	
 	await get_tree().create_timer(0.05).timeout
 	
-	if on_select == false and on_touch == true:
+	# 预览可能由焦点/悬停打开（on_touch=false），触摸切换时也要收回
+	if on_select == false and _preview_open:
 		on_touch = false
+		_hovered = false
 		_preview_open = false
 		if _switching:
 			return
@@ -258,6 +260,11 @@ func add_player(event: InputEvent):
 	
 	if event as InputEventScreenTouch and event.pressed:
 		if on_touch == false:
+			# 已由焦点/悬停展开时直接接管触摸态，避免点击本卡先收回再重播
+			if _preview_open:
+				on_touch = true
+				SoundManager.play_sfx("ButtonSounds2")
+				return
 			GameEvents.emit_player_card_touch()
 			await get_tree().create_timer(0.1).timeout
 			on_touch = true

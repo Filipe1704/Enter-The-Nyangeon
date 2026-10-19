@@ -2829,3 +2829,10 @@
 - Notes / 说明: 关卡内会顶掉裁决 BGM 的入口：`_on_bgm_timer_timeout`（捡紫水晶 `main.gd:42` + 240s `BGM_timer` → `bgm_slow_fade_out`）与 `bgm_loop_play`（`cut_finish`）。本体在这两处先查 `bgm_rotate_gate`：返回 true 则本次跳过（轮替入口仍 `BGM_timer.start()` 保持计时）。mod 只在**本地 PS**（`not _is_remote()`）注册、`_exit_tree` 解绑；镜像 PS 不注册（避免用远端裁决态挡本机轮替）。**Boss 曲路径不挡**（用户确认允许覆盖）。干净本体无该门 → `add_hook` 惰性、自动退化（不崩，但仍会被轮替）。⚠ 门在 `main.gd`/`extension_hooks.gd`（本体），**不在 mod pck 内**，需重新导出本体才生效。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-19
+
+### [UI] 触屏收回预览要按 `_preview_open`，不能只看 `on_touch`
+- Evidence / 证据: `ui/player_card.gd:237-250`（`touch_out_player_card` 改为 `on_select == false and _preview_open`）、`ui/player_card.gd:257-270`（首次触摸时若 `_preview_open` 已为真则只接管 `on_touch`）、`scenes/main/menu_screen.gd:287-288`（选角自动聚焦首卡）、`ui/player_card.gd:111-118`（`add_card` 结束在非触屏模式先 `_apply_hover`）。
+- Notes / 说明: 移动端进入选角时首卡由自动焦点走 `select_player_card()` 展开，`_preview_open=true` 但 `on_touch=false`；旧的 `touch_out_player_card` 只在 `on_touch` 为真时收回，导致触摸其它卡时首卡始终不播放 `select_out`。`_preview_open` 是展开状态的并集，`on_touch` 只标记触摸来源；触摸切换必须按 `_preview_open` 收回。另：已展开的卡被直接点击时要先把 `on_touch` 接管为 true 且不重播 `select_card`，否则会先收回再展开。用户确认保留“进入即展开首卡”，只修触摸收回。
+- Validation / 验证: `python tests/run_ui_ux_checks.py --godot H:\Godot_v4.7-stable_win64_console.exe --character-focus-only` → `checks=19 failures=0`（新增触屏首卡收回检查）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19
