@@ -62,6 +62,11 @@ var boss_timeout_gate: Callable = Callable()
 var boss_enter_cinematic_gate: Callable = Callable()
 var boss_death_cinematic_gate: Callable = Callable()
 
+# ---------------- BGM ----------------
+# 接管：本次「关卡 BGM 随机轮替 / 过场回循环」是否跳过；返回 true = mod 已接管。
+# 由 main.gd:_on_bgm_timer_timeout / bgm_loop_play 调用。
+var bgm_rotate_gate: Callable = Callable()
+
 # ---------------- 查询类 ----------------
 # 敌人附加数值乘数：返回 {hp: float, damage: float}；未注入/空字典 = 1.0。
 # 由 spawn_anim.spawn_enemy_body() 在写入 max_hp_mult / damage_mult 前调用。

@@ -2817,3 +2817,15 @@
 - Validation / 验证: `python tests/run_ui_ux_checks.py --godot <Godot 4.7> --character-focus-only` → `checks=15 failures=0`；临时探针（鼠标/键盘/触屏/焦点切走/难度页 17 项）→ `failures=0`。
 - Source / 来源: user + code | test
 - Date / 日期: 2026-10-19
+
+### [Mod/Glory] 待处决敌人贴身接触不再造成伤害（接触锁 + 停火）
+- Evidence / 证据: `mods/doom_slayer_izzy/script/glory_manager.gd:24`（`CONTACT_LOCK_META="ds_contact_lock"`）、`:47`（`_process` 的 has_buff 分支每帧 `_lock_contact`）、`:70-71`（`_mark` 里 `_lock_contact` + `_interrupt_weapons`）、`:85-97`（`_lock_contact`：`base_damage=0`、`knockback_force=0`、`source_type.clear()`）、`:100-116`（`_unlock_contact` 优先 `create_damage_data()` 重建）、`:144`（`_clear_enemy` 解锁）。本体：`script/hurt_box.gd:125-136`（`_emit_contact` 读敌人 `damage_data`，空 source → `Faction.of_source` 视为玩家侧 → 不 hostile）、`script/EnemyStateMachine.gd:22`（`frozen` 只让状态机 return）、`script/entity_ENEMY.gd:131-136`（`_interrupt_weapons`）。
+- Notes / 说明: 待处决只设 `frozen=true` **不会**阻止贴身接触（玩家 HurtBox 接触探针读**敌人自身**的 `damage_data`）与定时器攻击。现标记时把敌人 `damage_data` 的 `base_damage`/`knockback_force` 归 0、`source_type` 清空（空 source 被 `Faction.of_source` 视为玩家侧 → 玩家接触探针直接跳过，连命中/i-frame/击退都不触发），并 `_interrupt_weapons()`；`_process` 每帧重锁，防 `create_damage_data` 重跑覆盖；解除时优先 `create_damage_data()` 按当前阵营重建（兼容被策反）。`_lock_contact` 在 `_mark` 的 server 判断之前调用，客机镜像也锁（避免本地预测受伤）。**残余**：标记前已发射的子弹、已生成的火场/毒环等持续伤害不处理（用户确认先不处理）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19
+
+### [BGM/Mod] 裁决态 BGM 不被随机轮替顶掉：本体 `bgm_rotate_gate` + mod 注册
+- Evidence / 证据: `script/extension_hooks.gd:68`（`var bgm_rotate_gate: Callable = Callable()`）；`scenes/main/main.gd:51`（`bgm_loop_play` 内 `if ExtensionHooks.intercept_named("bgm_rotate_gate", []): return`）、`:238`（`_on_bgm_timer_timeout` 开头 gate + `BGM_timer.start()` 后 return）；`mods/doom_slayer_izzy/scenes/doom_slayer_izzy_ps.gd:52`（`_ready` 里 `ExtensionHooks.add_hook(&"bgm_rotate_gate", ...)`）、`:69`（`_bgm_rotate_blocked()` 返回 `crucible`）、`:98`（`_exit_tree` 里 `remove_hook`）。
+- Notes / 说明: 关卡内会顶掉裁决 BGM 的入口：`_on_bgm_timer_timeout`（捡紫水晶 `main.gd:42` + 240s `BGM_timer` → `bgm_slow_fade_out`）与 `bgm_loop_play`（`cut_finish`）。本体在这两处先查 `bgm_rotate_gate`：返回 true 则本次跳过（轮替入口仍 `BGM_timer.start()` 保持计时）。mod 只在**本地 PS**（`not _is_remote()`）注册、`_exit_tree` 解绑；镜像 PS 不注册（避免用远端裁决态挡本机轮替）。**Boss 曲路径不挡**（用户确认允许覆盖）。干净本体无该门 → `add_hook` 惰性、自动退化（不崩，但仍会被轮替）。⚠ 门在 `main.gd`/`extension_hooks.gd`（本体），**不在 mod pck 内**，需重新导出本体才生效。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-19

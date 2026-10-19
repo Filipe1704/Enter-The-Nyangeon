@@ -48,6 +48,8 @@ func game_over_true(_player_dead: bool):
 
 func bgm_loop_play():
 	if game_over == false:
+		if ExtensionHooks.intercept_named("bgm_rotate_gate", []):
+			return
 		if _boss_bgm_loop != null:
 			SoundManager.play_bgm(_boss_bgm_loop, 0.0)
 		else:
@@ -233,6 +235,9 @@ func _on_boss_phase_changed(boss: BossEnemy, phase: int) -> void:
 	SoundManager.play_bgm(phase_data.bgm, 0.0)
 
 func _on_bgm_timer_timeout() -> void:
+	if ExtensionHooks.intercept_named("bgm_rotate_gate", []):
+		BGM_timer.start()   # 保持轮替计时，本次不换歌
+		return
 	var first_bgm = bgm_num
 	bgm_num = randi_range(1, bgm_first_cut.size() - 1)
 	if bgm_num != first_bgm:
