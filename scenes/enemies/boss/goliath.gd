@@ -20,6 +20,10 @@ enum State {
 }
 
 @onready var body = $Graphics/Body
+@onready var left_arm: AnimatedSprite2D = $Graphics/LArm
+@onready var right_arm: AnimatedSprite2D = $Graphics/RArm
+@onready var left_explosion_fx: ExplosionAnim = $Graphics/explosion_anim
+@onready var right_explosion_fx: ExplosionAnim = $Graphics/explosion_anim_R
 
 @onready var body_anim: AnimationPlayer = $BodyAnim
 @onready var leg_anim: AnimationPlayer = $LegAnim
@@ -58,6 +62,13 @@ enum State {
 
 @export var charge: bool = false
 @export var charge_speed_mult: float = 1
+@export var charge_aim_spread_deg: float = 10.0
+@export var charge_bounce_spread_deg: float = 15.0
+@export var charge_bounce_speed_mult: float = 0.5
+@export var charge_bounce_min_wall_angle_deg: float = 30.0
+@export var charge_bounce_lock_frames: int = 3
+@export var shoot_to_shoot_interval: float = 0.8
+@export var attack_interval: float = 1.5
 @export var random_shoot_num: int = 80
 @export var strafe_shoot_num: int = 50
 @export var big_gun_shoot_num: int = 8
@@ -67,10 +78,39 @@ enum State {
 
 var charge_speed: int = 0
 
+var charge_active: bool = false
+var _charge_ending: bool = false
+var _charge_bounce_lock: int = 0
+var _is_fever_time: bool = false
+
 var can_charge: bool = false
 var can_big_gun: bool = false
 
 var charge_dir: Vector2 = Vector2.ZERO
+
+const STEP_NONE := -1
+const STEP_SHOOT := 0
+const STEP_CHARGE := 1
+const STEP_BIG_GUN := 2
+const PHASE_60_RATIO := 0.6
+const PHASE_30_RATIO := 0.3
+
+var _cycle_stage: int = 0
+var _cycle_shoot_count: int = 0
+var _cycle_first_template: int = -1
+var _shoot_template: int = 0
+var _shoot_cancel: bool = false
+var _shoot_generation: int = 0
+var _charge_generation: int = 0
+var _big_gun_generation: int = 0
+var _big_gun_cancelled: bool = false
+var _next_attack_delay_override: float = -1.0
+var _last_step: int = STEP_NONE
+var _shooting_disabled: bool = false
+var _first_hand_destroyed: bool = false
+var _second_hand_destroyed: bool = false
+var _left_arm_destroyed: bool = false
+var _right_arm_destroyed: bool = false
 
 @export var move_mode: int = 0
 
@@ -87,26 +127,52 @@ func _ready():
 	random_shoot_end.connect(func(): GameEvents.emit_boss_event("goliath_random_end", {}))
 	strafe_shoot_end.connect(func(): GameEvents.emit_boss_event("goliath_strafe_end", {}))
 	big_gun_shoot_end.connect(func(): GameEvents.emit_boss_event("goliath_big_gun_end", {}))
-	hit_wall.connect(func(): GameEvents.emit_boss_event("goliath_hit_wall", {}))
+	hit_wall.connect(func(): GameEvents.emit_boss_event("goliath_hit_wall", {"net_id": _local_net_id()}))
 	GameEvents.boss_event.connect(_on_network_boss_event)
+	if stats != null and not stats.hp_changed.is_connected(_on_hp_changed):
+		stats.hp_changed.connect(_on_hp_changed)
+	decision_timer.wait_time = attack_interval
 
 
 # 联机：把可视动画态广播给其它端；远程镜像回放（host 本机已直接播放）
 var _net_visual_replaying: bool = false
 
-func _net_boss_visual(fn_name: String) -> void:
+func _local_net_id() -> int:
+	return int(get_meta("net_id")) if has_meta("net_id") else -1
+
+func _net_boss_visual(fn_name: String, extra: Dictionary = {}) -> void:
 	if _net_visual_replaying:
 		return
-	GameEvents.emit_boss_event("goliath_visual", {"fn": fn_name})
+	var payload := {"fn": fn_name}
+	var boss_net_id := _local_net_id()
+	if boss_net_id >= 0:
+		payload["net_id"] = boss_net_id
+	payload.merge(extra, true)
+	GameEvents.emit_boss_event("goliath_visual", payload)
 
 
 func _on_network_boss_event(event_name: String, data: Dictionary) -> void:
 	if not has_meta("network_remote_enemy"):
 		return
+	var local_net_id := _local_net_id()
+	if event_name == "goliath_hit_wall":
+		var hit_net_id = data.get("net_id", null)
+		if hit_net_id != null and int(hit_net_id) != local_net_id:
+			return
+		mobile_3.play()
+		return
 	if event_name != "goliath_visual":
 		return
+	var target_net_id = data.get("net_id", null)
+	if target_net_id != null and int(target_net_id) != local_net_id:
+		return
 	var fn: String = str(data.get("fn", ""))
-	if fn == "" or not has_method(fn):
+	if fn == "":
+		return
+	if fn == "spawn_cannon_visual":
+		_spawn_cannon_visual(data.get("pos", Vector2.ZERO))
+		return
+	if not has_method(fn):
 		return
 	_net_visual_replaying = true
 	call(fn)
@@ -115,17 +181,56 @@ func _on_network_boss_event(event_name: String, data: Dictionary) -> void:
 func idle_state():
 	reset_physics_interpolation()
 	super.idle_state()
+	_reset_charge_state()
+	_reset_attack_state()
 	boss_hp.game_ui_visible(false)
 	decision_timer.stop()
 
 func active_state():
 	reset_physics_interpolation()
 	super.active_state()
+	_reset_charge_state()
+	_reset_attack_state()
 	weapon_halted = false
 	boss_enter_anim()
 	# 镜像不本地跑决策（AI 由 host 快照驱动）
 	if not has_meta("network_remote_enemy"):
+		decision_timer.wait_time = _interval_before_next_step()
 		decision_timer.start()
+
+func _reset_charge_state():
+	charge_active = false
+	_charge_ending = false
+	_charge_bounce_lock = 0
+	charge_speed = 0
+	charge_dir = Vector2.ZERO
+	_is_fever_time = false
+
+func _reset_attack_state():
+	_cycle_stage = 0
+	_cycle_shoot_count = 0
+	_cycle_first_template = -1
+	_shoot_template = 0
+	_shoot_cancel = false
+	_shoot_generation += 1
+	_charge_generation += 1
+	_big_gun_generation += 1
+	_big_gun_cancelled = false
+	_next_attack_delay_override = -1.0
+	_last_step = STEP_NONE
+	_shooting_disabled = false
+	_first_hand_destroyed = false
+	_second_hand_destroyed = false
+	_left_arm_destroyed = false
+	_right_arm_destroyed = false
+	if left_arm != null:
+		left_arm.visible = true
+	if right_arm != null:
+		right_arm.visible = true
+	if left_explosion_fx != null:
+		left_explosion_fx.stop()
+	if right_explosion_fx != null:
+		right_explosion_fx.stop()
 
 func boss_enter_anim():
 	enter_anim.play("enter_anim")
@@ -201,25 +306,71 @@ func move(delta: float, acceleration_local: float ,MAX_SPEED: float ) -> void:
 	
 	if stats.hp != 0:
 		
-		if move_mode == 1:
-			var collisionResult = get_last_slide_collision()
-			if collisionResult :
-				direction = velocity.bounce(collisionResult.get_normal()).normalized() + (get_target_position() - global_position).normalized()
-				velocity = Vector2.ZERO
-				hit_wall.emit()
+		var move_dir: Vector2 = charge_dir if move_mode == 1 else direction
 		
-		velocity.x = move_toward(velocity.x, direction.x * MAX_SPEED, acceleration_local * delta)
-		velocity.y = move_toward(velocity.y, direction.y * MAX_SPEED, acceleration_local * delta)
+		velocity.x = move_toward(velocity.x, move_dir.x * MAX_SPEED, acceleration_local * delta)
+		velocity.y = move_toward(velocity.y, move_dir.y * MAX_SPEED, acceleration_local * delta)
 		
-		if direction.x > 0:
+		if move_dir.x > 0:
 			graphics.scale.x = 1.2
-		elif direction.x < 0:
+		elif move_dir.x < 0:
 			graphics.scale.x = -1.2
 		
 	else:
 		velocity = Vector2.ZERO
 	
+	var can_check_bounce := _charge_bounce_lock <= 0
+	if _charge_bounce_lock > 0:
+		_charge_bounce_lock -= 1
+	
+	var impact_velocity := velocity
 	move_and_slide()
+	
+	if move_mode == 1 and charge_active and stats.hp != 0 and can_check_bounce:
+		var collisionResult = get_last_slide_collision()
+		if collisionResult:
+			_bounce_off_wall(collisionResult.get_normal(), impact_velocity)
+			hit_wall.emit()
+
+func _charge_direction_to_target(spread_deg: float) -> Vector2:
+	var to_target := get_target_position() - global_position
+	var angle := to_target.angle()
+	if to_target.length_squared() <= 0.0001:
+		angle = randf_range(-PI, PI)
+	return Vector2.RIGHT.rotated(angle + deg_to_rad(randf_range(-spread_deg, spread_deg)))
+
+func _charge_aim_direction() -> Vector2:
+	return _charge_direction_to_target(charge_aim_spread_deg)
+
+func _bounce_off_wall(collision_normal: Vector2, impact_velocity: Vector2) -> void:
+	var wall_normal := collision_normal.normalized()
+	if wall_normal == Vector2.ZERO:
+		return
+	
+	var desired := _charge_direction_to_target(charge_bounce_spread_deg)
+	var min_normal_dot := sin(deg_to_rad(charge_bounce_min_wall_angle_deg))
+	var normal_dot := desired.dot(wall_normal)
+	if normal_dot < min_normal_dot:
+		var tangent := desired - wall_normal * normal_dot
+		if tangent.length_squared() <= 0.0001:
+			var to_target := get_target_position() - global_position
+			tangent = to_target - wall_normal * to_target.dot(wall_normal)
+			if tangent.length_squared() <= 0.0001:
+				tangent = wall_normal.orthogonal()
+				if randf() < 0.5:
+					tangent = -tangent
+		tangent = tangent.normalized()
+		var tangent_amount := sqrt(maxf(0.0, 1.0 - min_normal_dot * min_normal_dot))
+		desired = (wall_normal * min_normal_dot + tangent * tangent_amount).normalized()
+	
+	charge_dir = desired
+	var impact_speed := impact_velocity.length()
+	if impact_speed < 1.0:
+		impact_speed = float(charge_speed)
+	if not _is_fever_time:
+		impact_speed *= charge_bounce_speed_mult
+	velocity = charge_dir * impact_speed
+	_charge_bounce_lock = charge_bounce_lock_frames
 
 func get_next_state(state: State) -> State:
 	
@@ -276,38 +427,62 @@ func get_next_state(state: State) -> State:
 
 func transition_state(_from:State, to: State) -> void:
 	
+	if has_meta("network_remote_enemy"):
+		if (_from == State.SHOOTINGREADY or _from == State.SHOOTING) and to != State.SHOOTINGREADY and to != State.SHOOTING:
+			_interrupt_shoot()
+		if _from == State.CHARGING and to != State.CHARGING:
+			_interrupt_charge()
+		if (_from == State.TURRETREADY or _from == State.TURRETSHOOT) and to != State.TURRETREADY and to != State.TURRETSHOOT and to != State.TURRETEND:
+			_interrupt_big_gun()
+	
 	match to:
 		State.IDLE:
 			can_knockback = true
 			move_mode = 10
 			idle_state_anim()
-			decision_timer.start()
+			if not has_meta("network_remote_enemy"):
+				decision_timer.wait_time = _interval_before_next_step()
+				decision_timer.start()
 	
 		State.RUNNING:
 			can_knockback = true
 			running_state_anim()
 		
 		State.CHARGING:
+			_charge_generation += 1
+			var charge_gen := _charge_generation
 			charge_num = 6
 			can_knockback = false
+			charge_active = false
+			_charge_ending = false
+			_charge_bounce_lock = 0
+			charge_speed = 0
+			velocity = Vector2.ZERO
 			charge_state_anim()
 			mobile_2.play()
 			await body_anim.animation_finished
-			direction = get_direction_to_player()
-			if direction == Vector2.ZERO:
-				direction = Vector2( randf_range(-1,1), randf_range(-1,1))
-			static_bullet_1.bullet_timer_1.start()
-			charge_shoot()
+			if charge_gen != _charge_generation or move_mode != 1 or weapon_halted:
+				return
+			charge_dir = _charge_aim_direction()
+			if not has_meta("network_remote_enemy"):
+				static_bullet_1.bullet_timer_1.start()
+				charge_shoot()
+				if charge_active:
+					velocity = charge_dir * charge_speed
 		
 		State.SHOOTINGREADY:
 			can_knockback = false
+			_shoot_cancel = false
+			_shoot_generation += 1
 			gatling_in.play()
 			shoot_ready_state_anim()
 		
 		State.SHOOTING:
+			if _shooting_disabled or _shoot_cancel:
+				move_mode = 0
+				return
 			shoot_state_anim()
-			var n = randi_range(0,1)
-			if n == 0:
+			if _shoot_template == 0:
 				random_bullet()
 			else:
 				strafe_bullet()
@@ -315,9 +490,13 @@ func transition_state(_from:State, to: State) -> void:
 		
 		State.TURRETREADY:
 			can_knockback = false
+			_big_gun_cancelled = false
 			turret_ready_state_anim()
 		
 		State.TURRETSHOOT:
+			if _big_gun_cancelled:
+				move_mode = 0
+				return
 			big_gun_shoot()
 		
 		State.TURRETEND:
@@ -369,9 +548,12 @@ func body_play_shoot():
 func L_shoot():
 	if is_idle == 1:
 		return
+	if _left_arm_destroyed:
+		return
 	SoundManager.play_sfx("GunSounds3")
-	L_launcher.bullet_damage = stats.Enemy_bullet_damage
-	L_launcher.shoot_bullet.call_deferred()
+	if not has_meta("network_remote_enemy"):
+		L_launcher.bullet_damage = stats.Enemy_bullet_damage
+		L_launcher.shoot_bullet.call_deferred()
 	
 	if PoolManager.fx_allowed(&"muzzle_flash"):
 		var now_shoot_flash_L = PoolManager.get_pool("enemy_flash_1")
@@ -385,9 +567,12 @@ func L_shoot():
 func R_shoot():
 	if is_idle == 1:
 		return
+	if _right_arm_destroyed:
+		return
 	SoundManager.play_sfx("GunSounds3")
-	R_launcher.bullet_damage = stats.Enemy_bullet_damage
-	R_launcher.shoot_bullet.call_deferred()
+	if not has_meta("network_remote_enemy"):
+		R_launcher.bullet_damage = stats.Enemy_bullet_damage
+		R_launcher.shoot_bullet.call_deferred()
 	
 	if PoolManager.fx_allowed(&"muzzle_flash"):
 		var now_shoot_flash_R = PoolManager.get_pool("enemy_flash_1")
@@ -398,7 +583,34 @@ func R_shoot():
 		now_shoot_flash_R.rotation = shoot_position_R.global_rotation
 		now_shoot_flash_R.active_state()
 
+func _shoot_cancelled() -> bool:
+	return weapon_halted or _shoot_cancel or _shooting_disabled
+
+func sync_shoot_template_random() -> void:
+	_shoot_template = 0
+
+func sync_shoot_template_strafe() -> void:
+	_shoot_template = 1
+
+func _cancel_current_shoot() -> void:
+	if move_mode != 2 and move_mode != 3:
+		return
+	_shoot_cancel = true
+	gatling_out.play()
+	move_mode = 0
+
+func _stop_shoot_if_needed(generation: int) -> bool:
+	if generation != _shoot_generation:
+		return true
+	if _shoot_cancelled():
+		_cancel_current_shoot()
+		return true
+	return false
+
 func random_bullet():
+	var shoot_gen := _shoot_generation
+	if _stop_shoot_if_needed(shoot_gen):
+		return
 	if player != null:
 		for i in random_shoot_num:
 			var player_rotation = (get_target_position() - global_position).angle()
@@ -410,15 +622,20 @@ func random_bullet():
 			R_shoot()
 			random_shoot_timer.start()
 			await random_shoot_timer.timeout
-			if weapon_halted:
+			if _stop_shoot_if_needed(shoot_gen):
 				return
 		random_shoot_end.emit()
 		body_anim.play_backwards("shoot_ready")
 		gatling_out.play()
 		await body_anim.animation_finished
+		if _stop_shoot_if_needed(shoot_gen):
+			return
 		move_mode = 0
 
 func strafe_bullet():
+	var shoot_gen := _shoot_generation
+	if _stop_shoot_if_needed(shoot_gen):
+		return
 	if player != null:
 		for x in 2:
 			for i in strafe_shoot_num * 0.5:
@@ -438,7 +655,7 @@ func strafe_bullet():
 				
 				strafe_shoot_timer.start()
 				await strafe_shoot_timer.timeout
-				if weapon_halted:
+				if _stop_shoot_if_needed(shoot_gen):
 					return
 			for i in strafe_shoot_num * 0.5:
 				
@@ -457,63 +674,107 @@ func strafe_bullet():
 				
 				strafe_shoot_timer.start()
 				await strafe_shoot_timer.timeout
-				if weapon_halted:
+				if _stop_shoot_if_needed(shoot_gen):
 					return
 		strafe_shoot_end.emit()
 		body_anim.play_backwards("shoot_ready")
 		gatling_out.play()
 		await body_anim.animation_finished
+		if _stop_shoot_if_needed(shoot_gen):
+			return
 		move_mode = 0
 
+func _big_gun_interrupted(generation: int) -> bool:
+	return _big_gun_cancelled or generation != _big_gun_generation or weapon_halted
+
 func big_gun_shoot():
-	
+	MapBounds.ensure_ready()
+	var big_gun_gen := _big_gun_generation
+	var is_mirror := has_meta("network_remote_enemy")
 	for i in big_gun_shoot_num:
+		if _big_gun_interrupted(big_gun_gen):
+			return
 		body_anim.play("turret_shoot")
 		SoundManager.play_sfx("CannonSounds1")
 		await body_anim.animation_finished
-		if weapon_halted:
+		if _big_gun_interrupted(big_gun_gen):
 			return
-		var cannon_bullet_ins = PoolManager.get_pool("cannon_bullet_1")
-		if cannon_bullet_ins == null or cannon_bullet_ins.is_idle == 0:
-			cannon_bullet_ins = cannon_bullet.instantiate()
-			get_tree().get_first_node_in_group("SELayer").add_child(cannon_bullet_ins)
-		
 		if player != null:
 			var shoot_p = get_target_position() + Vector2(randf_range(-150,150),randf_range(-150,150))
-			cannon_bullet_ins.setup(shoot_p, 1.2 * stats.Enemy_bullet_damage * stats.bullet_damage_mult, stats.Enemy_Knockback, 9)
-			cannon_bullet_ins.shoot_bullet_num = 12
-			cannon_bullet_ins.active_state()
+			if not is_mirror:
+				shoot_p = MapBounds.nearest_inside(shoot_p, 0.0)
+				var cannon_bullet_ins = PoolManager.get_pool("cannon_bullet_1")
+				if cannon_bullet_ins == null or cannon_bullet_ins.is_idle == 0:
+					cannon_bullet_ins = cannon_bullet.instantiate()
+					get_tree().get_first_node_in_group("SELayer").add_child(cannon_bullet_ins)
+				cannon_bullet_ins.setup(shoot_p, 1.2 * stats.Enemy_bullet_damage * stats.bullet_damage_mult, stats.Enemy_Knockback, 9)
+				cannon_bullet_ins.shoot_bullet_num = 12
+				cannon_bullet_ins.active_state()
+				cannon_bullet_ins.set_meta("_coop_visual_broadcast", true)
+				_net_boss_visual("spawn_cannon_visual", {"pos": shoot_p})
 			big_gun_shoot_timer.start()
 			await big_gun_shoot_timer.timeout
-			if weapon_halted:
+			if _big_gun_interrupted(big_gun_gen):
 				return
 			
 	big_gun_shoot_end.emit()
 	body_anim.play_backwards("turret_shoot_ready")
 	leg_anim.play_backwards("turret_shoot")
 	await body_anim.animation_finished
+	if _big_gun_interrupted(big_gun_gen):
+		return
 	big_gun_cd = 400
 	can_big_gun = false
 	move_mode = 0
 
+func _spawn_cannon_visual(pos) -> void:
+	if not (pos is Vector2):
+		return
+	var layer := get_tree().get_first_node_in_group("SELayer")
+	if layer == null:
+		return
+	var ins = cannon_bullet.instantiate()
+	ins.visual_only = true
+	ins.set_meta("remote_visual", true)
+	layer.add_child(ins)
+	ins.global_position = pos
+	ins.call("active_state")
+
 func charge_shoot():
 	if is_idle == 1:
+		return
+	if move_mode != 1:
 		return
 	
 	if charge_num > 0:
 		mobile_3.play()
 		charge_num -= 1
 		charge_speed = 600
+		charge_active = true
 	else:
-		charge_speed = 0
-		body_anim.play_backwards("charge")
-		leg_anim.play_backwards("charge")
-		mobile_2.play()
-		static_bullet_1.bullet_timer_1.stop()
-		await body_anim.animation_finished
-		charge_cd = 250
-		can_charge = false
-		move_mode = 0
+		_end_charge()
+
+func _end_charge():
+	if _charge_ending:
+		return
+	_charge_ending = true
+	var charge_gen := _charge_generation
+	charge_active = false
+	_charge_bounce_lock = 0
+	charge_speed = 0
+	velocity = Vector2.ZERO
+	body_anim.play_backwards("charge")
+	leg_anim.play_backwards("charge")
+	mobile_2.play()
+	static_bullet_1.bullet_timer_1.stop()
+	await body_anim.animation_finished
+	if charge_gen != _charge_generation:
+		_charge_ending = false
+		return
+	charge_cd = 250
+	can_charge = false
+	move_mode = 0
+	_charge_ending = false
 
 func add_cannon_flash():
 	if PoolManager.fx_allowed(&"muzzle_flash"):
@@ -547,11 +808,24 @@ func on_dead():
 	if is_idle == 1:
 		return
 	weapon_halted = true
+	_shoot_cancel = true
+	_shoot_generation += 1
+	_charge_generation += 1
+	_big_gun_generation += 1
+	_big_gun_cancelled = true
+	_next_attack_delay_override = -1.0
+	charge_active = false
+	charge_speed = 0
+	velocity = Vector2.ZERO
 	hurt_box_shape_2d.set_deferred("disabled", true)
 	random_shoot_timer.stop()
 	strafe_shoot_timer.stop()
 	big_gun_shoot_timer.stop()
 	decision_timer.stop()
+	if left_explosion_fx != null:
+		left_explosion_fx.stop()
+	if right_explosion_fx != null:
+		right_explosion_fx.stop()
 	_interrupt_weapons()
 	GameEvents.emit_boss_round_end()
 	boss_death_anim()
@@ -580,19 +854,189 @@ func enemy_fever_time():
 	random_shoot_num = 120
 	strafe_shoot_num = 75
 	big_gun_shoot_num = 12
+	_is_fever_time = true
 	stats.MAX_SPEED_mult = 1.5
 	stats.update_body_ability()
 	leg_anim.speed_scale = 1.5
 	fever_gpu.emitting = true
 
-func _on_decision_timer_timeout() -> void:
-	
-	if can_big_gun == true:
-		move_mode = 4
-	elif can_charge == true:
-		move_mode = 1
+func _on_hp_changed() -> void:
+	if has_meta("network_remote_enemy"):
+		return
+	if stats == null or stats.max_hp <= 0:
+		return
+	var ratio := float(stats.hp) / float(stats.max_hp)
+	if ratio <= PHASE_30_RATIO and not _second_hand_destroyed:
+		if not _first_hand_destroyed:
+			_destroy_hand(randi_range(0, 1))
+			_first_hand_destroyed = true
+		_destroy_hand(_remaining_arm_side())
+		_second_hand_destroyed = true
+		_shooting_disabled = true
+		_interrupt_current_attack()
+	elif ratio <= PHASE_60_RATIO and not _first_hand_destroyed:
+		_destroy_hand(randi_range(0, 1))
+		_first_hand_destroyed = true
+		_interrupt_current_attack()
+
+func _remaining_arm_side() -> int:
+	return 0 if not _left_arm_destroyed else 1
+
+func _destroy_hand(side: int) -> void:
+	_apply_arm_destroyed(side)
+	_net_boss_visual("destroy_left_arm_visual" if side == 0 else "destroy_right_arm_visual")
+
+func destroy_left_arm_visual() -> void:
+	_apply_arm_destroyed(0)
+
+func destroy_right_arm_visual() -> void:
+	_apply_arm_destroyed(1)
+
+func _apply_arm_destroyed(side: int) -> void:
+	if side == 0:
+		if _left_arm_destroyed:
+			return
+		_left_arm_destroyed = true
+		if left_arm != null:
+			left_arm.visible = false
+		if left_explosion_fx != null:
+			left_explosion_fx.play()
 	else:
-		move_mode = 2
+		if _right_arm_destroyed:
+			return
+		_right_arm_destroyed = true
+		if right_arm != null:
+			right_arm.visible = false
+		if right_explosion_fx != null:
+			right_explosion_fx.play()
+	if _left_arm_destroyed and _right_arm_destroyed:
+		_shooting_disabled = true
+		_second_hand_destroyed = true
+	_first_hand_destroyed = true
+
+func get_network_boss_visual_state() -> Dictionary:
+	var state := {}
+	if _left_arm_destroyed:
+		state["left"] = true
+	if _right_arm_destroyed:
+		state["right"] = true
+	return state
+
+func _apply_attack_interrupt() -> bool:
+	if move_mode == 2 or move_mode == 3:
+		_interrupt_shoot()
+		return true
+	if move_mode == 1:
+		_interrupt_charge()
+		return true
+	if move_mode == 4 or move_mode == 5:
+		_interrupt_big_gun()
+		return true
+	return false
+
+func _interrupt_current_attack() -> void:
+	if _apply_attack_interrupt():
+		_next_attack_delay_override = attack_interval
+	_net_boss_visual("interrupt_attack_visual")
+
+func interrupt_attack_visual() -> void:
+	_interrupt_shoot()
+	_interrupt_charge()
+	_interrupt_big_gun()
+
+func _interrupt_shoot() -> void:
+	_shoot_cancel = true
+	_shoot_generation += 1
+	random_shoot_timer.stop()
+	strafe_shoot_timer.stop()
+	gatling_in.stop()
+	gatling_out.play()
+	move_mode = 0
+
+func _interrupt_charge() -> void:
+	_charge_generation += 1
+	charge_active = false
+	_charge_ending = false
+	_charge_bounce_lock = 0
+	charge_speed = 0
+	velocity = Vector2.ZERO
+	static_bullet_1.bullet_timer_1.stop()
+	mobile_2.stop()
+	mobile_3.stop()
+	move_mode = 0
+
+func _interrupt_big_gun() -> void:
+	_big_gun_generation += 1
+	_big_gun_cancelled = true
+	big_gun_shoot_timer.stop()
+	move_mode = 0
+
+func _max_shoots_for_phase() -> int:
+	if _shooting_disabled or _second_hand_destroyed:
+		return 0
+	if _first_hand_destroyed:
+		return 1
+	return 2
+
+func _can_start_shoot_step() -> bool:
+	return not _shooting_disabled and _cycle_shoot_count < _max_shoots_for_phase()
+
+func _begin_new_cycle() -> void:
+	_cycle_stage = 0
+	_cycle_shoot_count = 0
+	_cycle_first_template = randi_range(0, 1)
+
+func _start_shoot_step() -> void:
+	var template: int
+	if _max_shoots_for_phase() >= 2:
+		template = _cycle_first_template if _cycle_shoot_count == 0 else 1 - _cycle_first_template
+	else:
+		template = randi_range(0, 1)
+	_shoot_template = template
+	_net_boss_visual("sync_shoot_template_random" if template == 0 else "sync_shoot_template_strafe")
+	_cycle_shoot_count += 1
+	_shoot_generation += 1
+	_shoot_cancel = false
+	_last_step = STEP_SHOOT
+	move_mode = 2
+
+func _peek_next_step() -> int:
+	if _cycle_stage == 2:
+		return STEP_SHOOT if _max_shoots_for_phase() > 0 else STEP_CHARGE
+	if _cycle_stage == 0:
+		return STEP_SHOOT if _can_start_shoot_step() else STEP_CHARGE
+	return STEP_BIG_GUN
+
+func _interval_before_next_step() -> float:
+	if _next_attack_delay_override >= 0.0:
+		var delay := _next_attack_delay_override
+		_next_attack_delay_override = -1.0
+		return delay
+	if _last_step == STEP_SHOOT and _peek_next_step() == STEP_SHOOT:
+		return shoot_to_shoot_interval
+	return attack_interval
+
+func _on_decision_timer_timeout() -> void:
+	if is_idle == 1 or has_meta("network_remote_enemy"):
+		decision_timer.stop()
+		return
+	if move_mode != 0 and move_mode != 10:
+		return
+	if _cycle_stage == 2 or _cycle_first_template < 0:
+		_begin_new_cycle()
+	if _cycle_stage == 0:
+		if _can_start_shoot_step():
+			_start_shoot_step()
+			return
+		_cycle_stage = 1
+		_last_step = STEP_CHARGE
+		move_mode = 1
+		return
+	if _cycle_stage == 1:
+		_cycle_stage = 2
+		_last_step = STEP_BIG_GUN
+		_big_gun_cancelled = false
+		move_mode = 4
 
 func _on_enemy_stats_is_dead() -> void:
 	on_dead.call_deferred()

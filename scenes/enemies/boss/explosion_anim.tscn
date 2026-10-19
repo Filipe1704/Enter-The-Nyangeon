@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://dbhelj333ismj"]
+
+[ext_resource type="Script" uid="uid://x5cekipqgtgu" path="res://scenes/enemies/boss/explosion_anim.gd" id="1_0omix"]
+[ext_resource type="Texture2D" uid="uid://ccv20w8histyb" path="res://sprites/particle/explosion_0001.png" id="1_ng6ka"]
+[ext_resource type="Texture2D" uid="uid://b5nbmcnfshgb8" path="res://sprites/particle/circular_1.png" id="2_ps4gl"]
+[ext_resource type="AudioStream" uid="uid://bpb8yo6cu206y" path="res://sounds/game_explosion.wav" id="4_x3upv"]
+
+[sub_resource type="Gradient" id="Gradient_hdy1b"]
+colors = PackedColorArray(0.544974, 0.544974, 0.544974, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_0omix"]
+gradient = SubResource("Gradient_hdy1b")
+
+[sub_resource type="Gradient" id="Gradient_x3upv"]
+offsets = PackedFloat32Array(0.393443, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0.439049, 0.439049, 0.439049, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_eikbl"]
+gradient = SubResource("Gradient_x3upv")
+
+[sub_resource type="Curve" id="Curve_pnjh3"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.686667, 1), -0.966276, -0.966276, 0, 0, Vector2(1, 0), -4.67033, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_03k4y"]
+curve = SubResource("Curve_pnjh3")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_cm4gh"]
+lifetime_randomness = 0.5
+particle_flag_disable_z = true
+emission_shape = 1
+emission_sphere_radius = 10.0
+direction = Vector3(0, -1, 0)
+initial_velocity_min = 40.0
+initial_velocity_max = 60.0
+gravity = Vector3(0, -98, 0)
+scale_max = 2.0
+scale_curve = SubResource("CurveTexture_03k4y")
+color = Color(0.288518, 0.28851798, 0.28851798, 1)
+color_ramp = SubResource("GradientTexture1D_eikbl")
+color_initial_ramp = SubResource("GradientTexture1D_0omix")
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_ps4gl"]
+particles_animation = true
+particles_anim_h_frames = 4
+particles_anim_v_frames = 3
+particles_anim_loop = false
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_hdy1b"]
+lifetime_randomness = 0.2
+particle_flag_disable_z = true
+emission_shape = 3
+emission_box_extents = Vector3(20, 20, 1)
+angle_min = -45.0
+angle_max = 45.0
+gravity = Vector3(0, 50, 0)
+scale_min = 0.5
+anim_speed_min = 1.0
+anim_speed_max = 1.0
+
+[node name="explosion_anim" type="Node2D" unique_id=809352989]
+script = ExtResource("1_0omix")
+
+[node name="smoke" type="GPUParticles2D" parent="." unique_id=1612576443]
+emitting = false
+amount = 12
+texture = ExtResource("2_ps4gl")
+lifetime = 0.5
+process_material = SubResource("ParticleProcessMaterial_cm4gh")
+
+[node name="explosion" type="GPUParticles2D" parent="." unique_id=781213344]
+material = SubResource("CanvasItemMaterial_ps4gl")
+emitting = false
+amount = 10
+texture = ExtResource("1_ng6ka")
+one_shot = true
+process_material = SubResource("ParticleProcessMaterial_hdy1b")
+
+[node name="ExplosionSfx" type="AudioStreamPlayer2D" parent="." unique_id=2052554737]
+stream = ExtResource("4_x3upv")
+bus = &"SFX"

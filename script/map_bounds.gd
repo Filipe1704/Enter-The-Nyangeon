@@ -67,6 +67,10 @@ func _is_out(pos: Vector2) -> bool:
 		return false
 	return not _point_in_polygon(pos, poly)
 
+func ensure_ready() -> void:
+	if _hull.size() < 3:
+		_ensure_hull()
+
 func nearest_inside(pos: Vector2, radius: float = 0.0) -> Vector2:
 	var poly := _poly_for_radius(radius)
 	if poly.size() < 3 or _point_in_polygon(pos, poly):

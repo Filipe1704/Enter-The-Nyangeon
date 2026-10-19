@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://bhaktofgt0o5w" path="res://scenes/bullet/enemy_bullet.tscn" id="6_3vkxy"]
 [ext_resource type="Texture2D" uid="uid://b5nbmcnfshgb8" path="res://sprites/particle/circular_1.png" id="6_xca5e"]
 [ext_resource type="Script" uid="uid://b8e2jlmuhbtm5" path="res://script/EnemyStateMachine.gd" id="7_5vgmw"]
+[ext_resource type="PackedScene" uid="uid://dbhelj333ismj" path="res://scenes/enemies/boss/explosion_anim.tscn" id="7_466xo"]
 [ext_resource type="Script" uid="uid://b36s5d5e3v3h4" path="res://script/EnemyStats.gd" id="8_f6fdd"]
 [ext_resource type="PackedScene" uid="uid://dcixivms2uc75" path="res://script/enemy_hurt_floating_text.tscn" id="9_fg1oy"]
 [ext_resource type="PackedScene" uid="uid://btl1l8a33rp5b" path="res://scenes/manager/enemy_buff_manager.tscn" id="10_86ntb"]
@@ -30,6 +31,7 @@ shader = ExtResource("1_ialcu")
 shader_parameter/outline_width = 0.0
 shader_parameter/outline_color = Color(2, 2, 2, 1)
 shader_parameter/flash_opacity = 0.0
+shader_parameter/design_size = Vector2(640, 360)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_irf2u"]
 atlas = ExtResource("1_2cnvt")
@@ -2231,12 +2233,14 @@ shader = ExtResource("1_ialcu")
 shader_parameter/outline_width = 0.0
 shader_parameter/outline_color = Color(0, 0, 0, 0)
 shader_parameter/flash_opacity = 0.0
+shader_parameter/design_size = Vector2(640, 360)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_whgnn"]
 shader = ExtResource("1_ialcu")
 shader_parameter/outline_width = 0.0
 shader_parameter/outline_color = Color(2, 2, 2, 1)
 shader_parameter/flash_opacity = 1.0
+shader_parameter/design_size = Vector2(640, 360)
 
 [sub_resource type="Animation" id="Animation_14otn"]
 resource_name = "death_anim"
@@ -2519,6 +2523,9 @@ hframes = 8
 vframes = 3
 frame = 20
 
+[node name="explosion_anim" parent="Graphics" unique_id=809352989 instance=ExtResource("7_466xo")]
+position = Vector2(16.666666, -10)
+
 [node name="LFoot" type="AnimatedSprite2D" parent="Graphics" unique_id=106210020]
 position = Vector2(10.6667, 24.6667)
 sprite_frames = SubResource("SpriteFrames_rkt08")
@@ -2616,6 +2623,9 @@ hframes = 8
 vframes = 3
 frame = 20
 
+[node name="explosion_anim_R" parent="Graphics" unique_id=1851752285 instance=ExtResource("7_466xo")]
+position = Vector2(-19.166666, -10)
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1327987578]
 position = Vector2(0, -23)
 shape = SubResource("CircleShape2D_wjr0y")
@@ -2648,13 +2658,11 @@ script = ExtResource("7_5vgmw")
 
 [node name="EnemyStats" type="Node" parent="." unique_id=1745484097]
 script = ExtResource("8_f6fdd")
-convert_resist = 90
-convert_threshold = 2000
 score = 75000
 max_hp = 25000
 knockback_resis = 100
-Enemy_Knockback = 400
 penetrate_resis = 50
+Enemy_Knockback = 400
 Enemy_damage = 14
 Enemy_bullet_damage = 12
 Enemy_coin = 600
@@ -2662,6 +2670,8 @@ MAX_SPEED = 75
 SPEED_TIME = 0.2
 weigth = 1000.0
 convertible = false
+convert_resist = 90
+convert_threshold = 2000
 
 [node name="EnemyHurtFloatingText" parent="." unique_id=2130114702 node_paths=PackedStringArray("health_component") instance=ExtResource("9_fg1oy")]
 position = Vector2(0, -63)

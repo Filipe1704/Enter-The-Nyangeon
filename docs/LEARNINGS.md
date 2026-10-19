@@ -2836,3 +2836,33 @@
 - Validation / 验证: `python tests/run_ui_ux_checks.py --godot H:\Godot_v4.7-stable_win64_console.exe --character-focus-only` → `checks=19 failures=0`（新增触屏首卡收回检查）。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-19
+
+### [Boss] Goliath 冲撞方向不能被基类 `time_count()` 覆盖：用独立 `charge_dir`
+- Evidence / 证据: `script/entity_ENEMY.gd:300-302`（`time_count()` 每次都 `direction = get_direction_to_player()`）、`scenes/enemies/boss/goliath.gd:244-257`（子类仅在 `move_mode != 1` 时重设 `direction`）、`:281-350`（冲撞移动/反弹改读 `charge_dir`）、`:428-447`（蓄力结束写入起手方向）。
+- Notes / 说明: 基类 `time_count()` 由 `GameEvents.global_time_count` 每 0.1 秒驱动一次，即便 `move_mode == 1` 也会先把 `direction` 拉回玩家方向；Goliath 原来的“冲撞期间不改 direction”实际无效，轨迹会持续追踪玩家。冲撞方向必须用独立字段 `charge_dir`（起手按玩家方向 ±10°，撞墙后按玩家方向 ±15° 重新瞄准，并用 30° 最小离墙法线分量与 3 帧撞墙锁防止贴墙连撞），移动与朝向翻转都读它；`direction` 继续留给非冲撞状态。非 Fever 反弹速度为撞墙瞬间 `velocity.length() × 0.5`，Fever 不减半。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-19
+
+### [Boss] Goliath 周期出招靠 `move_mode` 动画轨推进；破手用 `explosion_anim`
+- Evidence / 证据: `scenes/enemies/boss/goliath.gd:405-475`（`transition_state`）、`:815-978`（HP 破手 + 周期调度）、`:524-654`（`L_shoot`/`R_shoot` 短路与射击取消）、`scenes/enemies/boss/goliath.tscn`（`BodyAnim` 的 `shoot_ready` t=2→`move_mode=3`、`turret_shoot_ready` t=0.5→5、`RESET`→0）、`scenes/enemies/boss/explosion_anim.gd`。
+- Notes / 说明: 周期调度只负责在 IDLE 结束后把 `move_mode` 置为 2/1/4；`SHOOTINGREADY`→`SHOOTING` 与 `TURRETREADY`→`TURRETSHOOT` 仍由 `BodyAnim` 的 value track 推进。因此 `_shoot_template` 必须在置 `move_mode=2` 前写好；取消射击时仅把 `move_mode=0` 不够，`shoot_ready` 的 t=2 track 仍可能把状态推回 `SHOOTING`，`transition_state(SHOOTING)` 必须再用 `_shooting_disabled/_shoot_cancel` 守门。60% 随机爆一只手后射击 2→1 且 `L_shoot`/`R_shoot` 按已毁手短路；30% 爆另一只并取消当前射击。手臂特效 `explosion_anim` 的 `explosion` 一次性、`smoke` 持续到死亡/重置，音效 4 次 × 0.25s；远端通过 `goliath_visual` 回放 `destroy_*_arm_visual`，镜像不得自己随机选边。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19
+
+### [Boss] Goliath 阈值打断：所有攻击协程都要 generation 守门
+- Evidence / 证据: `scenes/enemies/boss/goliath.gd:428-500`（`transition_state` 的 SHOOTING/TURRETSHOOT 守门与远端离开攻击态兜底）、`:544-682`（射击 generation/cancel）、`:683-737`（大炮 generation/cancel）、`:739-774`（冲撞 generation）、`:859-970`（HP 阈值与 `_interrupt_*`）、`:1006-1041`（1.5s override 与周期步进）。
+- Notes / 说明: 60% / 30% 时若 `move_mode` 为 1/2/3/4/5，`_interrupt_current_attack()` 立即打断当前招式，设置 `_next_attack_delay_override = attack_interval`（1.5s），IDLE 后由 `_interval_before_next_step()` 消费；IDLE 时跨阈值不打断、不额外加时。射击用 `_shoot_generation + _shoot_cancel` 并停止两个 shoot timer；冲撞用 `_charge_generation`，蓄力与 `_end_charge` 的 `await` 后都校验；大炮用 `_big_gun_generation + _big_gun_cancelled`，`TURRETSHOOT` 入口守门，**只停止后续发射**，已发射炮弹继续爆炸/散射。`SHOOTINGREADY` / `TURRETREADY` 入口重置对应 cancel 标记，避免一次打断永久挡掉后续招式；远端另用 `interrupt_attack_visual` 和离开攻击态的 transition 兜底停止本地协程。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19
+
+### [Boss] Goliath 大炮落点夹取与冲撞防连墙
+- Evidence / 证据: `scenes/enemies/boss/goliath.gd:300-369`（撞墙锁读帧顺序）、`:345-369`（冲撞反弹改为玩家方向 + 最小离墙角）、`:690-737`（大炮落点 `MapBounds.nearest_inside`）、`script/map_bounds.gd:70-75`（`ensure_ready` / `nearest_inside`）。
+- Notes / 说明: 大炮随机落点先加 ±150，再 `MapBounds.nearest_inside(shoot_p, 0.0)` 夹到墙体内壁凸包；`MapBounds.ensure_ready()` 保证首次 1s tick 前也不会静默失效。冲撞反弹改为玩家方向 ±15°，用 30° 最小离墙法线分量（`sin30°=0.5`）防止玩家贴墙时直接再次撞同一面墙，并用 3 帧撞墙锁避免角落连续反弹。锁的读帧顺序必须是“先算 `can_check_bounce = _charge_bounce_lock <= 0`，再递减”，否则实际只跳过 2 帧。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19
+
+### [Boss][Coop] Goliath 视觉事件按 `net_id` 定向；镜像手枪/大炮改视觉-only
+- Evidence / 证据: `scenes/enemies/boss/goliath.gd:140-176`（`_local_net_id`/`_net_boss_visual`/`net_id` 过滤）、`:544-682`（镜像 `L_shoot`/`R_shoot` 跳过投射物、`sync_shoot_template_*`）、`:690-737`（host 真实炮弹 + `spawn_cannon_visual`、`_coop_visual_broadcast`）、`:730-737`（镜像纯视觉炮弹）、`:891-941`（断手状态、`get_network_boss_visual_state`、远端无条件打断）；`scenes/enemies/cannon_bullet.gd:20-82`（`visual_only` 不生成爆炸/子子弹、自动释放）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:1255-1273,5836-5852,8119-8133`（加入/重连后定向补发）。
+- Notes / 说明: 所有 `goliath_visual` 载荷带 `net_id`，远端只处理匹配自己的事件；射击模板通过 `sync_shoot_template_random/strafe` 提前同步，镜像不再使用默认模板。镜像只保留枪声/火光/蓄力与炮塔动画，跳过 `L_launcher`/`R_launcher`/`StaticBullet1`/真实 `cannon_bullet` 的本地生成，host 的投射物走 `ProjectileSpawner` 权威同步。host 的真实炮弹不是经 `ProjectileSpawner` 生成，池化复用不会触发通用 `child_entered_tree` 广播；改为主动 `spawn_cannon_visual` 带夹取落点，host 炮弹标 `_coop_visual_broadcast` 防通用视觉通道重复，镜像用 `cannon_bullet.visual_only` 生成纯视觉炮弹（`add_explosion`/`shoot_bullet` 直接返回）。中途加入/重连由 `_send_boss_visual_states_to_peer()` 在 `_send_existing_enemies_to_peer()` 之后定向补发断手事件，避免旧客户端重复特效，也不需要升协议版本。另：Godot 4.7 下 `get_meta("net_id", null)` 在不存在 meta 时会报错，统一用 `has_meta` + `_local_net_id()` 取值。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19

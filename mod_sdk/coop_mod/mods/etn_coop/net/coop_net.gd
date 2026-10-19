@@ -1268,6 +1268,7 @@ func _accept_peer(id: int) -> void:
 	if battle_active:
 		rpc_id(id, "_client_sync_roster", player_scene_by_peer)
 		_send_existing_enemies_to_peer(id)
+		_send_boss_visual_states_to_peer(id)
 		_send_existing_summons_to_peer(id)
 		_send_existing_medkits_to_peer(id)
 
@@ -5529,6 +5530,7 @@ func dev_resend_existing() -> void:
 		return
 	for id in multiplayer.get_peers():
 		_send_existing_enemies_to_peer(int(id))
+		_send_boss_visual_states_to_peer(int(id))
 	print("[etn_coop] dev-resend existing to peers=%d enemies=%d" % [multiplayer.get_peers().size(), enemy_by_net_id.size()])
 
 
@@ -5829,6 +5831,24 @@ func _snapshot_cadence_mult(enemy: Node) -> int:
 	if nearest <= ENEMY_SNAP_MID_DIST:
 		return 2
 	return 3
+
+
+func _send_boss_visual_states_to_peer(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	for net_id in enemy_by_net_id.keys():
+		var enemy = enemy_by_net_id[net_id]
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if not enemy.has_method("get_network_boss_visual_state"):
+			continue
+		var state = enemy.call("get_network_boss_visual_state")
+		if not (state is Dictionary) or state.is_empty():
+			continue
+		if bool(state.get("left", false)):
+			rpc_id(peer_id, "_remote_boss_event", "goliath_visual", {"fn": "destroy_left_arm_visual", "net_id": int(net_id)})
+		if bool(state.get("right", false)):
+			rpc_id(peer_id, "_remote_boss_event", "goliath_visual", {"fn": "destroy_right_arm_visual", "net_id": int(net_id)})
 
 
 func _send_existing_enemies_to_peer(peer_id: int) -> void:
@@ -8107,6 +8127,7 @@ func _client_scene_ready() -> void:
 	if battle_active:
 		rpc_id(sender, "_client_sync_roster", player_scene_by_peer)
 		_send_existing_enemies_to_peer(sender)
+		_send_boss_visual_states_to_peer(sender)
 		_send_existing_summons_to_peer(sender)
 		# host 侧也补生远端镜像（覆盖被 reset_clear_unit 清掉的情况）
 		_respawn_remote_players()

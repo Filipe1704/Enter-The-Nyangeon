@@ -8,6 +8,7 @@ var shoot_bullet_num: int = 12
 @export var spread_damage_ratio: float = 0.5
 
 var is_idle: int = 1
+var visual_only: bool = false
 
 @onready var explosion: PackedScene = preload("res://scenes/bullet/enemy_explosion_damage.tscn")
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
@@ -17,7 +18,18 @@ var is_idle: int = 1
 @export var bullet_id: String
 
 func _ready():
+	if visual_only:
+		collision_layer = 0
+		collision_mask = 0
+		monitoring = false
+		monitorable = false
+		get_tree().create_timer(4.0).timeout.connect(_free_visual_copy)
+		return
 	PoolManager.add_pool(bullet_id, self)
+
+func _free_visual_copy() -> void:
+	if is_instance_valid(self):
+		queue_free()
 
 func idle_state():
 	reset_physics_interpolation()
@@ -49,6 +61,8 @@ func particles_emitting():
 	gpu_particles_2d.restart()
 
 func shoot_bullet():
+	if visual_only:
+		return
 	if bullet_launcher.bullet_count > 0:
 		bullet_launcher.source_faction = source_faction
 		bullet_launcher.shoot_bullet_num = shoot_bullet_num
@@ -57,6 +71,8 @@ func shoot_bullet():
 		bullet_launcher.shoot_bullet()
 
 func add_explosion():
+	if visual_only:
+		return
 	var ins = PoolManager.get_pool("enemy_explosion")
 	var add_ins: bool = false
 	if ins == null or ins.is_idle == 0:
