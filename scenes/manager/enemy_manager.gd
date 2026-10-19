@@ -37,6 +37,13 @@ extends Node
 @export var hp_growth_curve: Curve # HP 难度成长的"回合指数形状"（替换 pow(level_hp, now_round/(max_round*0.5)) 的指数）
 @export var round_manager: Node
 
+@export_category("Boss 权重")
+@export var boss_weight_initial: float = 1.0
+@export var boss_weight_decay: float = 0.7
+@export var boss_weight_min: float = 0.1
+@export var boss_weight_boost: float = 0.5
+@export var boss_weight_max: float = 4.0
+
 @onready var enemies_spawn_group: Array = [
 lv1,
 lv2,
@@ -69,12 +76,16 @@ var endless_round: int = 0
 var endless_hp: float = 1
 var endless_boss_hp: float = 1
 var endless_damage: float = 1
+var _boss_weights: Dictionary = {}
+var _boss_identity_cache: Dictionary = {}
 
 func _ready():
 	add_to_group("EnemyManager")
 	GameEvents.round_num_changed.connect(round_num_changed)
 	GameEvents.round_start.connect(round_enemy_spawn_start)
 	GameEvents.round_end.connect(round_enemy_spawn_end)
+	GameEvents.first_round_add.connect(_reset_boss_weights)
+	_reset_boss_weights()
 	for wave in ModManager.get_mod_waves():
 		var scene = wave.get("scene")
 		if scene == null:
@@ -164,11 +175,17 @@ func round_enemy_spawn_start():
 		if not plan.is_empty():
 			boss_controller.begin_round(plan)
 			return
+	var group_name := _group_name(group_num)
+	var is_weighted_boss := _is_weighted_boss_group(group_name)
 	var num = enemies_spawn_group[group_num].size() - 1
-	spawn_num = randi_range(0, num)
-	if PlayerData.game_mode.has("hujiu") and group_num == 14:
-		spawn_num = 1
-	var spawn_ins = enemies_spawn_group[group_num][spawn_num].instantiate()
+	if is_weighted_boss:
+		spawn_num = _pick_weighted_boss_index(enemies_spawn_group[group_num])
+	else:
+		spawn_num = randi_range(0, num)
+	var spawn_scene: PackedScene = enemies_spawn_group[group_num][spawn_num]
+	var spawn_ins = spawn_scene.instantiate()
+	if is_weighted_boss and spawn_ins != null:
+		_apply_boss_weight_update(spawn_scene, enemies_spawn_group[group_num])
 	spawn_ins.mode_mult = mode_mult
 	spawn_ins.endless_hp = endless_hp
 	spawn_ins.endless_boss_hp = endless_boss_hp
@@ -183,6 +200,74 @@ func round_enemy_spawn_start():
 		GameEvents.emit_boss_round_start()
 	else:
 		GameEvents.emit_spawn_start()
+
+func _is_weighted_boss_group(group: String) -> bool:
+	return group == "lv15" or group == "lv20" or group == "lv_endless_boss"
+
+func _boss_identity(scene: PackedScene) -> String:
+	if scene == null:
+		return ""
+	var path := scene.resource_path
+	if path != "" and _boss_identity_cache.has(path):
+		return str(_boss_identity_cache[path])
+	var identity := path if path != "" else str(scene.get_instance_id())
+	var inst := scene.instantiate()
+	if inst != null:
+		var cards = inst.get("enemy")
+		if cards is Array and not cards.is_empty():
+			var ids: PackedStringArray = []
+			for card in cards:
+				if card == null:
+					continue
+				var card_id := str(card.get("id"))
+				if card_id != "" and not ids.has(card_id):
+					ids.append(card_id)
+			if not ids.is_empty():
+				identity = "+".join(ids)
+		inst.free()
+	if path != "":
+		_boss_identity_cache[path] = identity
+	return identity
+
+func _boss_weight(identity: String) -> float:
+	return maxf(0.0, float(_boss_weights.get(identity, boss_weight_initial)))
+
+func _pick_weighted_boss_index(scenes: Array) -> int:
+	if scenes.is_empty():
+		return 0
+	var weights: Array[float] = []
+	weights.resize(scenes.size())
+	var total := 0.0
+	for i in scenes.size():
+		var weight := _boss_weight(_boss_identity(scenes[i]))
+		weights[i] = weight
+		total += weight
+	if total <= 0.0:
+		return randi_range(0, scenes.size() - 1)
+	var pick := randf() * total
+	for i in range(scenes.size()):
+		pick -= weights[i]
+		if pick <= 0.0:
+			return i
+	return scenes.size() - 1
+
+func _apply_boss_weight_update(scene: PackedScene, pool: Array) -> void:
+	var selected := _boss_identity(scene)
+	if selected == "":
+		return
+	var identities: Array[String] = []
+	for entry in pool:
+		var identity := _boss_identity(entry)
+		if identity != "" and not identities.has(identity):
+			identities.append(identity)
+	for identity in identities:
+		if identity == selected:
+			_boss_weights[identity] = maxf(boss_weight_min, _boss_weight(identity) * boss_weight_decay)
+		else:
+			_boss_weights[identity] = minf(boss_weight_max, _boss_weight(identity) + boss_weight_boost)
+
+func _reset_boss_weights() -> void:
+	_boss_weights.clear()
 
 func round_enemy_spawn_end():
 	GameEvents.emit_spawn_end()

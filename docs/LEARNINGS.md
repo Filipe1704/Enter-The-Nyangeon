@@ -2866,3 +2866,9 @@
 - Notes / 说明: 所有 `goliath_visual` 载荷带 `net_id`，远端只处理匹配自己的事件；射击模板通过 `sync_shoot_template_random/strafe` 提前同步，镜像不再使用默认模板。镜像只保留枪声/火光/蓄力与炮塔动画，跳过 `L_launcher`/`R_launcher`/`StaticBullet1`/真实 `cannon_bullet` 的本地生成，host 的投射物走 `ProjectileSpawner` 权威同步。host 的真实炮弹不是经 `ProjectileSpawner` 生成，池化复用不会触发通用 `child_entered_tree` 广播；改为主动 `spawn_cannon_visual` 带夹取落点，host 炮弹标 `_coop_visual_broadcast` 防通用视觉通道重复，镜像用 `cannon_bullet.visual_only` 生成纯视觉炮弹（`add_explosion`/`shoot_bullet` 直接返回）。中途加入/重连由 `_send_boss_visual_states_to_peer()` 在 `_send_existing_enemies_to_peer()` 之后定向补发断手事件，避免旧客户端重复特效，也不需要升协议版本。另：Godot 4.7 下 `get_meta("net_id", null)` 在不存在 meta 时会报错，统一用 `has_meta` + `_local_net_id()` 取值。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-19
+
+### [Boss] 固定第 15 关也是 Boss 关；lv15 / lv20 同名 Boss 必须按 EnemyCard.id 归一
+- Evidence / 证据: `scenes/manager/enemy_manager.tscn:93,98,100`（`lv15` / `lv20` / `lv_endless_boss` 均为 Boss 池）、`scenes/enemies/enemies_spawn/goliath_spawn.tscn`、`tower_spawn.tscn`、`goliath_spawn_lv_20.tscn`、`tower_spawn_lv_20.tscn`（均 `boss_round=true`）；`scenes/manager/enemy_manager.gd:204-270`（权重抽取/身份归一/衰减与加成）。
+- Notes / 说明: 除第 20 关外，普通模式第 15 关（`lv15`）也是 Boss 关，而 `lv15` 与 `lv20` 是同一 Goliath / Erosion Tower 的两套场景（基础版与 lv20 版）。若按 `PackedScene.resource_path` 记账，同名 Boss 会被当成两个；权重必须取生成场景根节点的 `enemy` 数组里的 `EnemyCard.id`（`goliath` / `erosion_tower`）作为身份，才能让第 15、20 关和无尽共享衰减/加成。`goliath_spawn_lv_10.tscn` 当前未被 `enemy_manager` 引用。`hujiu` 第 5 关原先强制 `spawn_num=1`（Tower），2026-10-19 已移除，与其它 Boss 关一样走权重。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-19
