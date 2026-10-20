@@ -2872,3 +2872,27 @@
 - Notes / 说明: 除第 20 关外，普通模式第 15 关（`lv15`）也是 Boss 关，而 `lv15` 与 `lv20` 是同一 Goliath / Erosion Tower 的两套场景（基础版与 lv20 版）。若按 `PackedScene.resource_path` 记账，同名 Boss 会被当成两个；权重必须取生成场景根节点的 `enemy` 数组里的 `EnemyCard.id`（`goliath` / `erosion_tower`）作为身份，才能让第 15、20 关和无尽共享衰减/加成。`goliath_spawn_lv_10.tscn` 当前未被 `enemy_manager` 引用。`hujiu` 第 5 关原先强制 `spawn_num=1`（Tower），2026-10-19 已移除，与其它 Boss 关一样走权重。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-19
+
+### [Combat] 腐化的有效上限必须收口在 `Stats.hp` setter，且 `corruption` 声明在 `hp` 之前
+- Evidence / 证据: `script/Stats.gd`（`corruption` setter、`get_effective_max_hp()`、`hp` setter 的 overflow/clamp）、`script/player_health_component.gd:_accumulate_corruption_on_hit()`、`scenes/item/medical_kit.gd`、`ui/game_ui.tscn`（`Corruption_HP_BAR`）
+- Notes / 说明: 腐化不是直接改 `max_hp`（会被 `PlayerData._recompute_player_ability()` 覆盖），而是独立 `corruption` + 有效上限。治疗/溢出/赋值全部经 `Stats.hp` setter，故只改这一处即可覆盖所有治疗来源；`heal_overflow_to_t_hp` 的溢出基准也必须同步改为有效上限。`@onready` 初始化不经过 setter，但运行期外部赋值会访问 `hp`，因此 `corruption` 必须声明在 `hp` 之前；`max_hp` 被 `PlayerData` 重算后要调 `reclamp_corruption()`，否则腐化可能超过 `max_hp-1`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Coop/Mod] 玩家状态 RPC 追加字段必须同步 sanitize 索引、proxy 赋值顺序与协议版本
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（`_sanitize_player_state` 返回 13 项、`_server_receive_player_state`/`_apply_player_state` 末尾追加 `corruption`）、`net/coop_player_proxy.gd:apply_state`、`net/coop_health_bar.gd`
+- Notes / 说明: `_sanitize_player_state` 的每个返回值靠位置索引传递，追加字段必须同时改所有 `safe[i]` 调用点，否则会把腐化当 hp/t_hp 使用。镜像赋值顺序必须是 `max_hp → corruption → max_t_hp → t_hp → hp`：腐化 setter 依赖 `max_hp`，hp 又要按有效上限钳制。RPC 参数数量变化即破坏旧客户端，必须递增 `PROTOCOL_VERSION`（本次 4→5）并同步两份副本与 `mod.json`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [UI] 血条大数值：HP_VAL / +临时生命 / -腐化不能放在同一水平带
+- Evidence / 证据: `ui/game_ui.tscn`（`HP_VAL` / `T_HP_VAL` / `CORRUPTION_VAL` / `Life_value` 的 offset 与 `scale=2`）；用户反馈 4 位数时腐化数字严重重叠
+- Notes / 说明: `Label` 默认不裁剪，`scale=2` 会把 4 位数文本放大到约 108px，超过 133px 血条的中段；三个标签锚点都在同一带内时会互相覆盖。`+N` / `-N` 必须放到血条右下的独立两行（相对中心 `offset 25..62`，即屏幕约 151..188，字号 10、`scale=1`），避开 `Life_value`（`x3`）、下方弹药数字与玩家名。`HP_VAL` 5 位数时约 132px，仍能放进血条，但会贴近 `xN`，极端数值如需再处理。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-20
+
+### [UI] 本地血条层级：临时生命必须绘制在腐化之上（用户裁定）
+- Evidence / 证据: `ui/game_ui.tscn`（`HP_BAR` 子节点顺序：`HP_BAR_3` → `Corruption_HP_BAR` → `Temporary_HP_BAR2` → `Temporary_HP_BAR`；`Corruption_HP_BAR.show_behind_parent=true`）；用户反馈临时生命段被腐化紫段盖住。
+- Notes / 说明: `show_behind_parent` 的子节点在父节点自身纹理之前绘制，多个同标志兄弟按声明顺序绘制；因此要让青色临时生命盖住紫色腐化，`Corruption_HP_BAR` 必须设 `show_behind_parent=true` 并排在 `Temporary_HP_BAR2` 之前。此改动只影响本地 HUD 表现，不改 `Stats` 有效上限或腐化数值；联机队友头顶 44×4 小血条按用户要求不调整。极端情况下临时生命会暂时完全盖住紫段，腐化量仍以 `-N` 为准。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-20

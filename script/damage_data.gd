@@ -48,6 +48,7 @@ func reset_data():
 	source_type.clear()
 	flags.clear()
 	convert_power = 0
+	corruption_power = 0
 	damage_modifier.clear()
 	on_damage_dealt.clear()
 	owner_peer = 0
@@ -128,6 +129,8 @@ func _apply_cfg(cfg: Dictionary) -> void:
 		is_crit = cfg["crit"]
 	if cfg.has("convert"):
 		convert_power = cfg["convert"]
+	if cfg.has("corrupt"):
+		corruption_power = cfg["corrupt"]
 	if cfg.has("knockback"):
 		knockback_force = cfg["knockback"]
 	if cfg.has("direction"):
@@ -194,6 +197,10 @@ func center(value: Vector2) -> DamageData:
 
 func convert(value: int) -> DamageData:
 	convert_power = value
+	return self
+
+func corrupt(value: int) -> DamageData:
+	corruption_power = value
 	return self
 
 func from(node: Node) -> DamageData:

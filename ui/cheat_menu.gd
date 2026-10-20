@@ -186,3 +186,15 @@ func _on_temp_hp_pressed() -> void:
 	if p == null or p.get("stats") == null:
 		return
 	p.stats.t_hp += max(1, int(round(p.stats.max_hp * 0.1)))
+
+func _on_corruption_pressed() -> void:
+	var p := _get_player()
+	if p == null or p.get("stats") == null:
+		return
+	p.stats.add_corruption(max(1, int(round(p.stats.max_hp * 0.1))))
+
+func _on_purify_corruption_pressed() -> void:
+	var p := _get_player()
+	if p == null or p.get("stats") == null:
+		return
+	p.stats.purify_corruption(max(1, int(round(p.stats.max_hp * 0.1))))

@@ -156,7 +156,7 @@ Declared in `project.godot:25-39`. **Order = `_ready()` order** (relevant: `Game
 - **传输与重建**：`coop_net.gd:_send_local_player_state` 随既有玩家快照发送 `items`，房主校验后转发；`_apply_item_states` 缓存最近状态并补建缺失动态外观，`_rebuild_peer_item_visuals` 重放缓存。现有房主身份迁移路径同时迁移道具 id、外观列表与状态缓存。
 - **外观唯一性**：`coop_net.gd:_ensure_item_visual` 按 peer + item_id 复用节点，先登记 id 再等待镜像生成；重复升级更新显示状态，不重复挂载外观。
 - **瞄准与玩法隔离**：`coop_player_proxy.gd:130` 回填远端 `crosshair_pos`，菜刀支持世界原点瞄准并先应用翻面/高度再旋转。`coop_item_visuals.gd:_prepare_visual_resources` 复制材质和动画库，过滤方法、音频、碰撞、计时器和 Label 轨道，关闭 Timer.autostart；副本不运行 EquipItem 玩法脚本。
-- **兼容与验证**：玩家状态 RPC 增加道具快照，协议相对上游 v3 升为 v4，联机双方须使用配套构建；发布版本保持 `0.1.10`。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 从当前源码打包，隔离 user://，检查 LAN/Relay 双向与原点瞄准、动态范围/动画、碰撞隔离、重复升级、补建和镜像重建。
+- **兼容与验证**：玩家状态 RPC 增加道具快照，协议相对上游 v3 升为 v4；2026-10-20 腐化同步再升为 v5，联机双方须使用配套构建；发布版本为 `0.1.12`（最低本体 `v0.5.1.4`）。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 从当前源码打包，隔离 user://，检查 LAN/Relay 双向与原点瞄准、动态范围/动画、碰撞隔离、重复升级、补建和镜像重建。
 
 ## 2. Save & config / 存档与配置
 

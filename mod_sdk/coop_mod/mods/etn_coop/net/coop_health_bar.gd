@@ -15,6 +15,7 @@ const COLOR_BG := Color(0, 0, 0, 0.55)
 const COLOR_BORDER := Color(0, 0, 0, 0.85)
 const COLOR_HP := Color(0.29, 0.87, 0.36, 1.0)
 const COLOR_T_HP := Color(0.55, 0.9, 1.0, 1.0)
+const COLOR_CORRUPTION := Color(0.549, 0.212, 0.922, 1.0)
 const COLOR_DOWN_DARK := Color(0.42, 0.0, 0.0, 1.0)
 const COLOR_DOWN_BRIGHT := Color(1.0, 0.15, 0.15, 1.0)
 
@@ -23,6 +24,7 @@ var _flash_t: float = 0.0
 var _last_hp: int = -1
 var _last_max_hp: int = -1
 var _last_t_hp: int = -1
+var _last_corruption: int = -1
 var _last_downed: bool = false
 
 
@@ -46,10 +48,12 @@ func _process(delta: float) -> void:
 	var hp: int = int(stats.hp) if stats != null else 0
 	var max_hp: int = int(stats.max_hp) if stats != null else 0
 	var t_hp: int = int(stats.t_hp) if stats != null else 0
-	if hp != _last_hp or max_hp != _last_max_hp or t_hp != _last_t_hp or _last_downed:
+	var corruption: int = int(stats.corruption) if stats != null and stats.get("corruption") != null else 0
+	if hp != _last_hp or max_hp != _last_max_hp or t_hp != _last_t_hp or corruption != _last_corruption or _last_downed:
 		_last_hp = hp
 		_last_max_hp = max_hp
 		_last_t_hp = t_hp
+		_last_corruption = corruption
 		_last_downed = false
 		_flash_t = 0.0
 		queue_redraw()
@@ -74,4 +78,10 @@ func _draw() -> void:
 	var t_end: float = clampf((hp + t_hp) / max_hp, 0.0, 1.0)
 	if t_end > hp_frac:
 		draw_rect(Rect2(Vector2(BAR_W * hp_frac, 0.0), Vector2(BAR_W * (t_end - hp_frac), BAR_H)), COLOR_T_HP, true)
+	# 腐化段：从右向左增长，覆盖在其它段之上
+	var corruption: float = float(stats.corruption) if stats != null and stats.get("corruption") != null else 0.0
+	var corr_frac: float = clampf(corruption / max_hp, 0.0, 1.0)
+	if corr_frac > 0.0:
+		var corr_w: float = BAR_W * corr_frac
+		draw_rect(Rect2(Vector2(BAR_W - corr_w, 0.0), Vector2(corr_w, BAR_H)), COLOR_CORRUPTION, true)
 	draw_rect(rect, COLOR_BORDER, false, 1.0)

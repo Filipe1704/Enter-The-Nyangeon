@@ -266,6 +266,9 @@ func reset_date():
 	
 	heal_mult_add = 0
 	
+	if player != null and is_instance_valid(player) and player.get("stats") != null:
+		player.stats.corruption = 0
+	
 	reset_done.emit()
 
 func get_player_base_ability():
@@ -360,6 +363,7 @@ func _recompute_player_ability():
 		player.stats.max_hp = v
 		player.stats.hp += value
 		max_hp_changed.emit(value)
+	player.stats.reclamp_corruption()
 	player.stats.max_t_hp = max(0, round(( v/2 + max_t_hp_add) * max_t_hp_mult))
 	player.stats.max_ammo = clamp(1, base_max_ammo + max_ammo_add * max_ammo_mult , max_ammo_value)
 	# = player.stats.max_cost = base_max_cost

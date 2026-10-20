@@ -44,7 +44,6 @@ shader = ExtResource("9_7nctg")
 shader_parameter/outline_width = 0.0
 shader_parameter/outline_color = Color(60, 60, 60, 1)
 shader_parameter/flash_opacity = 0.0
-shader_parameter/outline_glow_strength = 20.0
 
 [sub_resource type="Gradient" id="Gradient_43u6i"]
 offsets = PackedFloat32Array(1)
@@ -60,7 +59,6 @@ shader = ExtResource("9_7nctg")
 shader_parameter/outline_width = 0.0
 shader_parameter/outline_color = Color(2, 2, 2, 1)
 shader_parameter/flash_opacity = 1.0
-shader_parameter/outline_glow_strength = 20.0
 
 [sub_resource type="Gradient" id="Gradient_n3mwk"]
 offsets = PackedFloat32Array(0)
@@ -80,12 +78,20 @@ gradient = SubResource("Gradient_533wg")
 width = 133
 height = 18
 
+[sub_resource type="Gradient" id="Gradient_7corr"]
+offsets = PackedFloat32Array(1)
+colors = PackedColorArray(0.54902, 0.211765, 0.921569, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_7corr"]
+gradient = SubResource("Gradient_7corr")
+width = 133
+height = 18
+
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_liufe"]
 shader = ExtResource("9_7nctg")
 shader_parameter/outline_width = 1.0
 shader_parameter/outline_color = Color(1, 1, 1, 1)
 shader_parameter/flash_opacity = 0.0
-shader_parameter/outline_glow_strength = 20.0
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_8dfw8"]
 atlas = ExtResource("8_2qj50")
@@ -262,6 +268,17 @@ step = 0.0
 value = 0.83
 texture_progress = SubResource("GradientTexture2D_mwv4o")
 
+[node name="Corruption_HP_BAR" type="TextureProgressBar" parent="MarginContainer/HpValue/HP_BAR" unique_id=1732552101]
+unique_name_in_owner = true
+show_behind_parent = true
+layout_mode = 0
+offset_right = 133.0
+offset_bottom = 18.0
+max_value = 1.0
+step = 0.0
+fill_mode = 1
+texture_progress = SubResource("GradientTexture2D_7corr")
+
 [node name="Temporary_HP_BAR2" type="TextureProgressBar" parent="MarginContainer/HpValue/HP_BAR" unique_id=1496938624]
 unique_name_in_owner = true
 show_behind_parent = true
@@ -306,7 +323,7 @@ theme_override_constants/outline_size = 4
 theme_override_constants/shadow_outline_size = 0
 theme_override_fonts/font = ExtResource("6_lvkqd")
 theme_override_font_sizes/font_size = 10
-text = "60/60"
+text = "9999/9999"
 horizontal_alignment = 1
 
 [node name="T_HP_VAL" type="Label" parent="MarginContainer/HpValue" unique_id=1330361200]
@@ -317,13 +334,11 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = 29.0
-offset_top = -14.0
-offset_right = 49.0
-offset_bottom = -3.0
+offset_left = 50.0
+offset_top = -11.0
+offset_right = 85.0
 grow_horizontal = 2
 grow_vertical = 2
-scale = Vector2(2, 2)
 theme_override_colors/font_color = Color(0, 0.793359, 0.908551, 1)
 theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
 theme_override_constants/shadow_offset_x = 0
@@ -332,12 +347,34 @@ theme_override_constants/outline_size = 4
 theme_override_constants/shadow_outline_size = 0
 theme_override_fonts/font = ExtResource("6_lvkqd")
 theme_override_font_sizes/font_size = 10
-text = "+150"
-horizontal_alignment = 2
+text = "+9999"
+
+[node name="CORRUPTION_VAL" type="Label" parent="MarginContainer/HpValue" unique_id=1732552102]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 50.0
+offset_top = -1.0
+offset_right = 85.0
+offset_bottom = 10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.635, 0.31, 1, 1)
+theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 0
+theme_override_fonts/font = ExtResource("6_lvkqd")
+theme_override_font_sizes/font_size = 10
+text = "-0"
 
 [node name="Life_value" type="Label" parent="MarginContainer/HpValue" unique_id=1472518298]
 unique_name_in_owner = true
-visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -345,9 +382,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = 69.0
-offset_top = 5.0
+offset_top = 11.0
 offset_right = 78.0
-offset_bottom = 15.0
+offset_bottom = 21.0
 grow_horizontal = 2
 grow_vertical = 2
 scale = Vector2(2, 2)
@@ -358,7 +395,7 @@ theme_override_constants/shadow_offset_y = 0
 theme_override_constants/outline_size = 4
 theme_override_constants/shadow_outline_size = 0
 theme_override_fonts/font = ExtResource("6_lvkqd")
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 7
 text = "x3"
 
 [node name="TextureRect" type="ColorRect" parent="." unique_id=618739092]

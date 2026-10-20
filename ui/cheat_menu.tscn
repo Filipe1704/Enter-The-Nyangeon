@@ -177,6 +177,20 @@ theme_override_font_sizes/font_size = 12
 toggle_mode = true
 text = "一击必杀"
 
+[node name="Corruption" type="Button" parent="Panel/VBox/Actions/Player" unique_id=1732552103]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("18_m8l6k")
+theme_override_font_sizes/font_size = 12
+text = "腐化+10%"
+
+[node name="PurifyCorruption" type="Button" parent="Panel/VBox/Actions/Player" unique_id=1732552104]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("18_m8l6k")
+theme_override_font_sizes/font_size = 12
+text = "净化腐化10%"
+
 [node name="Body" type="GridContainer" parent="Panel/VBox" unique_id=938726915]
 layout_mode = 2
 size_flags_vertical = 3
@@ -246,3 +260,5 @@ columns = 5
 [connection signal="pressed" from="Panel/VBox/Actions/Player/Heal" to="." method="_on_heal_pressed"]
 [connection signal="pressed" from="Panel/VBox/Actions/Player/TempHP" to="." method="_on_temp_hp_pressed"]
 [connection signal="toggled" from="Panel/VBox/Actions/Player/OneHitKill" to="." method="_on_one_hit_kill_toggled"]
+[connection signal="pressed" from="Panel/VBox/Actions/Player/Corruption" to="." method="_on_corruption_pressed"]
+[connection signal="pressed" from="Panel/VBox/Actions/Player/PurifyCorruption" to="." method="_on_purify_corruption_pressed"]

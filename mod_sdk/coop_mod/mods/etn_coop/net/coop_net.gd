@@ -30,8 +30,8 @@ const LOBBY_SCENE: String = "res://scenes/main/test_room.tscn"
 const DEFAULT_BATTLE_SCENE: String = "res://scenes/main/main.tscn"
 const MENU_SCENE: String = "res://scenes/main/menu_screen.tscn"
 # 协议/版本握手：不一致直接拒绝。RPC 契约变更时必须递增 PROTOCOL_VERSION。
-const PROTOCOL_VERSION: int = 4
-const MOD_VERSION: String = "0.1.10"
+const PROTOCOL_VERSION: int = 5
+const MOD_VERSION: String = "0.1.12"
 const HELLO_TIMEOUT_MSEC: int = 30000
 # 客机：发出 _client_hello 后等待 _hello_accept 的上限；超时视为握手失败（旧房主/版本不匹配）
 const HELLO_ACCEPT_TIMEOUT_MSEC: int = 30000
@@ -453,12 +453,12 @@ func _sanitize_for_authority(cfg: Dictionary) -> Dictionary:
 	return out
 
 
-# 消毒客机上报的玩家状态（仅影响镜像显示；非有限坐标直接拒绝）。返回 12 项数组，非法返回 []
+# 消毒客机上报的玩家状态（仅影响镜像显示；非有限坐标直接拒绝）。返回 13 项数组，非法返回 []
 func _sanitize_player_state(
 	position: Vector2, velocity: Vector2, look_position: Vector2,
 	hp: int, ammo: int, sprite_y: float, state: int,
 	character_state: int, heading: Vector2, max_hp: int,
-	t_hp: int, max_t_hp: int
+	t_hp: int, max_t_hp: int, corruption: int
 ) -> Array:
 	if not (is_finite(position.x) and is_finite(position.y) \
 			and is_finite(velocity.x) and is_finite(velocity.y) \
@@ -466,7 +466,8 @@ func _sanitize_player_state(
 		return []
 	var mhp: int = clampi(max_hp, 1, MAX_NET_STAT)
 	var mthp: int = clampi(max_t_hp, 0, MAX_NET_STAT)
-	var shp: int = clampi(hp, 1, mhp)
+	var scorr: int = clampi(corruption, 0, maxi(0, mhp - 1))
+	var shp: int = clampi(hp, 1, maxi(1, mhp - scorr))
 	var sthp: int = clampi(t_hp, 0, mthp)
 	var s_ammo: int = clampi(ammo, 0, MAX_NET_STAT)
 	var s_sprite_y: float = clampf(sprite_y, -1000.0, 1000.0)
@@ -4781,6 +4782,7 @@ func _send_local_player_state() -> void:
 	var max_hp: int = int(p.stats.max_hp)
 	var t_hp: int = int(p.stats.t_hp)
 	var max_t_hp: int = int(p.stats.max_t_hp)
+	var corruption: int = int(p.stats.corruption) if p.stats.get("corruption") != null else 0
 	var ammo: int = 0
 	if p.stats.get("ammo") != null:
 		ammo = int(p.stats.ammo)
@@ -4796,9 +4798,9 @@ func _send_local_player_state() -> void:
 			heading = h
 	var items: Dictionary = ItemState.capture(p)
 	if multiplayer.is_server():
-		rpc("_apply_player_state", multiplayer.get_unique_id(), pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp, items)
+		rpc("_apply_player_state", multiplayer.get_unique_id(), pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp, items, corruption)
 	else:
-		rpc_id(1, "_server_receive_player_state", pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp, items)
+		rpc_id(1, "_server_receive_player_state", pos, vel, look, hp, ammo, sprite_y, state, cstate, heading, max_hp, t_hp, max_t_hp, items, corruption)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -4844,7 +4846,7 @@ func _server_receive_player_state(
 	position: Vector2, velocity: Vector2, look_position: Vector2,
 	hp: int, ammo: int, sprite_y: float = -17.0, state: int = 0,
 	character_state: int = 0, heading: Vector2 = Vector2.ZERO, max_hp: int = -1,
-	t_hp: int = 0, max_t_hp: int = -1, items: Dictionary = {}
+	t_hp: int = 0, max_t_hp: int = -1, items: Dictionary = {}, corruption: int = 0
 ) -> void:
 	if not multiplayer.is_server():
 		return
@@ -4853,15 +4855,15 @@ func _server_receive_player_state(
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _rate_allow_tokens(peer_id, "pstate", 45.0, 15.0):
 		return
-	var safe: Array = _sanitize_player_state(position, velocity, look_position, hp, ammo, sprite_y, state, character_state, heading, max_hp, t_hp, max_t_hp)
+	var safe: Array = _sanitize_player_state(position, velocity, look_position, hp, ammo, sprite_y, state, character_state, heading, max_hp, t_hp, max_t_hp, corruption)
 	if safe.is_empty():
 		return
 	# 镜像坐标夹回地图内（客机谎报图外坐标会拉仇恨/扰乱；MapBounds 未就绪时原样返回，安全）
 	if MapBounds != null:
 		safe[0] = MapBounds.nearest_inside(safe[0] as Vector2)
 	var safe_items: Dictionary = ItemState.sanitize(items)
-	_apply_player_state(peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11], safe_items)
-	rpc("_apply_player_state", peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11], safe_items)
+	_apply_player_state(peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11], safe_items, safe[12])
+	rpc("_apply_player_state", peer_id, safe[0], safe[1], safe[2], safe[3], safe[4], safe[5], safe[6], safe[7], safe[8], safe[9], safe[10], safe[11], safe_items, safe[12])
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -4869,14 +4871,14 @@ func _apply_player_state(
 	peer_id: int, position: Vector2, velocity: Vector2, look_position: Vector2,
 	hp: int, ammo: int, sprite_y: float = -17.0, state: int = 0,
 	character_state: int = 0, heading: Vector2 = Vector2.ZERO, max_hp: int = -1,
-	t_hp: int = 0, max_t_hp: int = -1, items: Dictionary = {}
+	t_hp: int = 0, max_t_hp: int = -1, items: Dictionary = {}, corruption: int = 0
 ) -> void:
 	# 客户端：收到房主的玩家状态即视为房主存活（战斗期 ~20Hz，比心跳更密）
 	if not multiplayer.is_server():
 		_last_host_packet_msec = Time.get_ticks_msec()
 	var proxy: Node = _get_player_proxy(peer_id)
 	if proxy != null and proxy.has_method("apply_state"):
-		proxy.apply_state(position, velocity, look_position, hp, ammo, sprite_y, state, character_state, heading, max_hp, t_hp, max_t_hp)
+		proxy.apply_state(position, velocity, look_position, hp, ammo, sprite_y, state, character_state, heading, max_hp, t_hp, max_t_hp, corruption)
 	_apply_item_states(peer_id, items)
 
 

@@ -9,6 +9,8 @@ extends CanvasLayer
 @onready var temporary_hp_bar = %Temporary_HP_BAR
 @onready var temporary_hp_bar_2 = %Temporary_HP_BAR2
 @onready var t_hp_val = %T_HP_VAL
+@onready var corruption_hp_bar = %Corruption_HP_BAR
+@onready var corruption_val = %CORRUPTION_VAL
 @onready var coin = $%Coin
 @onready var ammo = $%Ammo
 @onready var buff_box = $%HBoxContainer
@@ -100,6 +102,15 @@ func update_hp():
 		t_hp_val.text = str("+",str(0))
 		create_tween().tween_property(temporary_hp_bar_2, "value", 0, 0.05 )
 		create_tween().tween_property(temporary_hp_bar, "value", 0, 0.05 )
+	
+	var corruption_ratio: float = clampf(stats.corruption / float(stats.max_hp), 0.0, 1.0)
+	create_tween().tween_property(corruption_hp_bar, "value", corruption_ratio, 0.05 )
+	if stats.corruption > 0:
+		corruption_val.visible = true
+		corruption_val.text = str("-", str(stats.corruption))
+	else:
+		corruption_val.visible = false
+		corruption_val.text = str("-", str(0))
 	
 	create_tween().tween_property(hp_bar, "value", percentage, 0.05 )
 	create_tween().tween_property(hp_bar_3, "value", percentage, 0.3 )

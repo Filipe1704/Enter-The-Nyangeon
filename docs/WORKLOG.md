@@ -368,3 +368,9 @@
 - Files / 涉及文件: `ui/pixel_scrollbar_theme.tres`。
 - Summary / 改动摘要: 轨道与焦点外框改为不绘制，保留原尺寸；滑块无描边，普通、悬停和按下状态分别使用灰度 0.58、0.70、0.80。实际渲染复核及 82 项设置断言通过，既有插件和退出资源报错仍在。
 - Docs synced / 文档同步: `docs/ARCHITECTURE.md` 设置菜单布局、`docs/CONVENTIONS.md` 设置滚动条样式。
+
+## 2026-10-20 — 本地 HUD 临时生命与腐化层级修正
+- Correction / 修正: 腐化条绘制在临时生命条之上 → 本地 HUD 临时生命条绘制在腐化条之上（来源：user）。
+- Files / 涉及文件: `ui/game_ui.tscn`、`docs/CONVENTIONS.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`。
+- Summary / 改动摘要: `Corruption_HP_BAR` 设 `show_behind_parent=true` 并移到 `Temporary_HP_BAR2` 之前，使青色临时生命段覆盖紫色腐化段；不改 `Stats` 有效上限、腐化数值或联机队友头顶小血条。
+- Docs synced / 文档同步: `docs/CONVENTIONS.md` §6、`docs/SYSTEMS.md` §2.4、`docs/LEARNINGS.md` 新增 `[UI] 本地血条层级` 条目。

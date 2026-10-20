@@ -16,6 +16,11 @@ var heal_data: HealData
 var is_invincible : bool = false
 var invincibility_timer : float = 0.0
 
+## 腐化积累：只有 TORMENT 难度生效；3 秒内再次实际扣血时，按本次扣血量的 20% 转腐化。
+const CORRUPTION_WINDOW_MSEC: int = 3000
+const CORRUPTION_GAIN_RATE: float = 0.2
+var _last_corruption_hit_msec: int = -1
+
 # 属性引用，从外部注入（例如玩家的StatResource）
 var damage_multiplier : float = 1.0   # 全局伤害加成（如果是敌人，为 1.0）
 var crit_chance_bonus : float = 0.0   # 额外暴击率
@@ -24,6 +29,11 @@ var on_hit_effects : Array = []       # 受到伤害时触发的效果
 func _ready():
 	hurt_box.hit_received.connect(take_damage)
 	heal_data = HealData.make()
+	GameEvents.round_start.connect(_on_round_start)
+
+func _on_round_start() -> void:
+	# 腐化跨回合保留，但“持续受伤”窗口不跨回合
+	_last_corruption_hit_msec = -1
 
 func _is_friendly_fire(damage_data: HealthChangeData) -> bool:
 	if not damage_data.is_heal:
@@ -112,6 +122,7 @@ func take_damage(damage_data: HealthChangeData):
 			damage_multiplier = 1.0
 			
 			# 4. 扣血
+			var actual_hp_loss: int = 0
 			if stats.t_hp > 0:
 				stats.t_hp -= final_damage
 				GameEvents.emit_player_hurt_t_hp(final_damage)
@@ -120,12 +131,18 @@ func take_damage(damage_data: HealthChangeData):
 				if !damage_data.damage_type.has(GameTags.DOT_DAMAGE):
 					owner._on_invincible_frame(true)
 			else:
+				var hp_before: int = stats.hp
 				stats.hp -= final_damage
+				actual_hp_loss = maxi(0, hp_before - stats.hp)
 				GameEvents.emit_player_hurt_hp(final_damage)
 				owner.on_hit_sounds.play()
 				owner.invincible_frame.start()
 				if !damage_data.damage_type.has(GameTags.DOT_DAMAGE):
 					owner._on_invincible_frame(true)
+			# 词条/攻击附加腐化（不受难度门控，填 corruption_power 即生效）
+			if damage_data.corruption_power > 0:
+				stats.add_corruption(damage_data.corruption_power)
+			_accumulate_corruption_on_hit(actual_hp_loss)
 			stats.is_hurt.emit()
 			damage_taken.emit(final_damage, damage_data)
 			GameEvents.emit_player_is_hurt(owner)
@@ -172,3 +189,18 @@ func _apply_player_knockback(damage_data: HealthChangeData) -> void:
 	knockback_value *= DamageRouter.melee_knockback_mult(dmg.damage_type)
 	if knockback_value > 0 and owner.has_method("apply_knockback"):
 		owner.apply_knockback(knockback_dir * knockback_value)
+
+## TORMENT 难度：短时间内持续受到实际扣血伤害时，按本次扣血量累积腐化。
+## 首次受伤只记录时间；窗口断档后重新计时。被临时生命吸收的伤害不计入。
+func _accumulate_corruption_on_hit(actual_hp_loss: int) -> void:
+	if actual_hp_loss <= 0:
+		return
+	if PlayerData == null or PlayerData.level_id != "torment" or PlayerData.on_test_room:
+		return
+	var now: int = Time.get_ticks_msec()
+	if _last_corruption_hit_msec >= 0 \
+			and now - _last_corruption_hit_msec <= CORRUPTION_WINDOW_MSEC:
+		var gain: int = roundi(actual_hp_loss * CORRUPTION_GAIN_RATE)
+		if gain > 0:
+			stats.add_corruption(gain)
+	_last_corruption_hit_msec = now

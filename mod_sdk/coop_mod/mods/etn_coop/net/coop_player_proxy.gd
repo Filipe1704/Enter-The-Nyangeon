@@ -124,7 +124,8 @@ func apply_state(
 	heading: Vector2 = Vector2.ZERO,
 	max_hp: int = -1,
 	t_hp: int = 0,
-	max_t_hp: int = -1
+	max_t_hp: int = -1,
+	corruption: int = 0
 ) -> void:
 	target_position = position
 	target_velocity = velocity
@@ -140,6 +141,11 @@ func apply_state(
 	# 先同步 max_hp（升级会提升），否则用镜像基础 max_hp 钳制会显示错误血条
 	if max_hp > 0 and int(player_stats.max_hp) != max_hp:
 		player_stats.max_hp = max_hp
+	# 腐化依赖 max_hp 上限，必须在 max_hp 之后、hp 之前设置
+	var resolved_corruption: int = clampi(corruption, 0, maxi(0, int(player_stats.max_hp) - 1))
+	if player_stats.get("corruption") != null and int(player_stats.corruption) != resolved_corruption:
+		player_stats.corruption = resolved_corruption
+	player.set_meta("net_corruption", resolved_corruption)
 	# 临时生命上限（默认 max_hp/2，可被升级改变）；先设上限再设值（setter 依赖上限钳制）
 	if max_t_hp > 0 and int(player_stats.max_t_hp) != max_t_hp:
 		player_stats.max_t_hp = max_t_hp
@@ -147,7 +153,7 @@ func apply_state(
 	player.set_meta("net_t_hp", resolved_t_hp)
 	player_stats.t_hp = resolved_t_hp
 	# 远程玩家不本地判死：clamp 到至少 1，避免触发玩家死亡/游戏结束链路
-	player_stats.hp = clampi(hp, 1, maxi(1, player_stats.max_hp))
+	player_stats.hp = clampi(hp, 1, maxi(1, player_stats.get_effective_max_hp()))
 	if player_stats.get("ammo") != null:
 		player_stats.ammo = ammo
 

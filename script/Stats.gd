@@ -2,6 +2,7 @@ class_name  Stats
 extends Node
 
 signal hp_changed
+signal corruption_changed
 signal coin_changed
 signal is_hurt
 signal ammo_changed
@@ -141,11 +142,27 @@ var usable_coin: int:
 		coin = v
 		coin_changed.emit()
 
+# 腐化值：直接扣减生命上限，最多留 1 血。必须声明在 hp 之前（hp 初始化依赖它）。
+@onready var corruption: int = 0:
+	set(v):
+		v = clampi(v, 0, maxi(0, max_hp - 1))
+		if corruption == v:
+			return
+		corruption = v
+		var eff_max: int = get_effective_max_hp()
+		if hp > eff_max:
+			# 由 hp setter 负责发 hp_changed
+			hp = eff_max
+		else:
+			hp_changed.emit()
+		corruption_changed.emit()
+
 @onready var hp: int = max_hp:
 	set(v):
 		# 治疗溢出：把超过血量上限的部分转为临时生命值（仅在 heal_overflow_to_t_hp 开启时）
-		var overflow: int = v - max_hp
-		v = clamp(v, 0, max_hp)
+		var eff_max: int = get_effective_max_hp()
+		var overflow: int = v - eff_max
+		v = clamp(v, 0, eff_max)
 		if overflow > 0 and heal_overflow_to_t_hp:
 			t_hp += overflow
 		if hp == v:
@@ -189,3 +206,28 @@ var usable_coin: int:
 			return
 		cost = v
 		cost_changed.emit()
+
+## 腐化后的实际生命上限：至少保留 1 点生命。
+func get_effective_max_hp() -> int:
+	return maxi(1, max_hp - corruption)
+
+## 增加腐化（正的 amount 才生效）。腐化 setter 会把当前生命压到新的有效上限。
+func add_corruption(amount: int) -> void:
+	if amount <= 0:
+		return
+	corruption += amount
+
+## 净化腐化（医疗包/道具用），不会超过已累积的腐化值。
+func purify_corruption(amount: int) -> void:
+	if amount <= 0:
+		return
+	corruption -= amount
+
+## max_hp 变化后调用：重新钳制腐化上限，并把生命压回有效上限。
+func reclamp_corruption() -> void:
+	var max_corruption: int = maxi(0, max_hp - 1)
+	if corruption > max_corruption:
+		corruption = max_corruption
+	var eff_max: int = get_effective_max_hp()
+	if hp > eff_max:
+		hp = eff_max

@@ -105,6 +105,7 @@ layer N = bit `1<<(N-1)`：
 
 - `default_texture_filter=3`, `viewport/hdr_2d=true`, shader cache disabled（`project.godot:236-243`）。
 - 全局 UI 主题 `res://fonts/theme.tres`，`default_font_antialiasing=0`。
+- 玩家血条上的腐化段固定为紫色 `#8C36EB`（`ui/game_ui.tscn` 的 `Corruption_HP_BAR`，`fill_mode=1` 从右向左），数值 `CORRUPTION_VAL` 用同色系 `#A24FFF`；不要复用临时生命的青色。**本地 HUD 中临时生命条绘制在腐化条之上**（2026-10-20 用户裁定：`Corruption_HP_BAR` 设 `show_behind_parent=true` 并排在 `Temporary_HP_BAR2` 之前；腐化数值仍以 `-N` 为准）。联机队友头顶 44×4 小血条暂不调整。
 - GAME 设置项标签统一右对齐，列宽 126、控件间距 8；分组标题左对齐并在高 18 的 Header 内垂直居中。滑条数值槽统一为 96×22、右对齐并启用 `clip_text`，防止长文本撑宽 HBox；新增翻译须检查最长数值文案。见 `ui/game_option.tscn` 的 Header、行 Label 和数值 Label。
 - 分辨率按钮及 PopupMenu 共用 `BoutiqueBitmap9x9_1.9.ttf`、字号 12（两种控件的字体主题项分别配置）；按钮 normal / hover / hover_mirrored / pressed 样式的左内边距统一为 6。见 `ui/game_option.tscn` 的 `Theme_cpfog` 及 StyleBoxTexture。
 - 设置页滚动条样式集中在 `ui/pixel_scrollbar_theme.tres`，由 `ui/option.tscn` 的导航 ScrollContainer 和右侧 `menu_box` 分别挂载，并向内容页继承；仅定义 HScrollBar / VScrollBar，避免改变其他界面的全局样式。轨道和焦点外框使用 StyleBoxEmpty 不绘制；竖向轨道上下内边距统一为 0，左右各 4（维持宽 8），横向轨道独立保留四侧各 4，不再由页面脚本局部覆盖；滑块使用无圆角、无描边、关闭抗锯齿的 StyleBoxFlat，宽 8，普通 / 悬停 / 按下使用灰度 0.58 / 0.70 / 0.80，不使用金色；保持原滚动策略和输入逻辑。

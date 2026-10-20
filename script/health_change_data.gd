@@ -17,6 +17,9 @@ var on_damage_dealt : Array[Callable] = []
 ## 策反积蓄值：本次伤害对目标累积的策反进度（0 = 无）
 @export var convert_power : int = 0
 
+## 腐化值：本次伤害/攻击附加的腐化积累（0 = 无）。敌人词条可填此字段。
+@export var corruption_power : int = 0
+
 ## 伤害归属玩家（联机 peer id；0 = 未指定/本地）。用于命中 proc 的归属分发。
 @export var owner_peer : int = 0
 

@@ -7,7 +7,9 @@ func _on_pickup_complete(p):
 		return
 	set_meta("coop_medkit_consumed", true)
 	if p != null:
-		if p.stats.hp >= p.stats.max_hp:
+		# 医疗包同时净化腐化：按基础上限的 10%（至少 1 点）
+		p.stats.purify_corruption(max(1, int(round(p.stats.max_hp * 0.1))))
+		if p.stats.hp >= p.stats.get_effective_max_hp():
 			var coin_value: int = ceil(20 * p.stats.coin_mult)
 			p.stats.coin += coin_value
 
