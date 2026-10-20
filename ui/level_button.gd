@@ -99,6 +99,7 @@ func level_selected(event: InputEvent):
 			PlayerData.level_damage = level.level_damage
 			PlayerData.level_score_mult = level.level_score_mult
 			PlayerData.level_reward = level.level_reward
+			PlayerData.current_level = level
 			
 			timer.start()
 	
@@ -115,6 +116,7 @@ func level_selected(event: InputEvent):
 		PlayerData.level_damage = level.level_damage
 		PlayerData.level_score_mult = level.level_score_mult
 		PlayerData.level_reward = level.level_reward
+		PlayerData.current_level = level
 		
 		timer.start()
 

@@ -13,3 +13,18 @@ class_name Level
 # 可选：该难度进入的关卡场景；留空则使用本体默认 main.tscn。
 # 供关卡选择/联机准备房读取，便于 Mod 新增关卡而不改流程。
 @export_file("*.tscn") var level_scene_path: String = ""
+
+@export_group("Non-endless growth")
+# 仅非无尽模式生效的 HP 成长曲线覆盖；留空则使用 EnemyManager 的全局 hp_growth_curve。
+@export var non_endless_hp_growth_curve: Curve
+
+@export_group("Boss Intrusion")
+@export var boss_intrusion_enabled: bool = false
+@export var boss_intrusion_scenes: Array[PackedScene] = []
+@export_range(0.0, 1.0, 0.01) var boss_intrusion_chance: float = 0.35
+@export var boss_intrusion_round_min: int = 8
+@export var boss_intrusion_round_max: int = 9999
+@export var boss_intrusion_cooldown_rounds: int = 2
+@export var boss_intrusion_delay_min: float = 10.0
+@export var boss_intrusion_delay_max: float = 25.0
+@export var boss_intrusion_endless: bool = true

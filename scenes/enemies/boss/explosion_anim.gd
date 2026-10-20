@@ -25,6 +25,20 @@ func play() -> void:
 	_sound_generation += 1
 	_play_explosion_sounds(_sound_generation)
 
+# 清场复用：只播爆炸粒子，不生成黑烟、不播音效。
+func play_explosion_only(play_sound: bool = false) -> void:
+	visible = true
+	_sound_generation += 1
+	if explosion_sfx != null:
+		explosion_sfx.stop()
+	if smoke != null:
+		smoke.emitting = false
+	if explosion != null:
+		explosion.emitting = true
+		explosion.restart()
+	if play_sound:
+		_play_explosion_sounds(_sound_generation)
+
 func stop() -> void:
 	_sound_generation += 1
 	if explosion_sfx != null:

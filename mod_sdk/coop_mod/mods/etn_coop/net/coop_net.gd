@@ -9695,6 +9695,7 @@ const _BASE_LEVELS: Array[String] = [
 	"res://resources/level/hard.tres",
 	"res://resources/level/extreme.tres",
 	"res://resources/level/insane.tres",
+	"res://resources/level/torment.tres",
 ]
 
 

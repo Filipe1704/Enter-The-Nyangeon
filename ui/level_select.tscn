@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3 uid="uid://dmlxiy6dwwoi1"]
+[gd_scene load_steps=25 format=3 uid="uid://dmlxiy6dwwoi1"]
 
 [ext_resource type="Shader" path="res://shaders/motion_screen.gdshader" id="1_0xuv1"]
 [ext_resource type="Script" path="res://ui/level_select.gd" id="1_qu4ss"]
@@ -10,6 +10,7 @@
 [ext_resource type="Resource" uid="uid://bcc6dxp088o4m" path="res://resources/level/hard.tres" id="5_i55qb"]
 [ext_resource type="Resource" uid="uid://b186oosga4op3" path="res://resources/level/extreme.tres" id="6_frnug"]
 [ext_resource type="Resource" uid="uid://ba3flk6iu1lla" path="res://resources/level/insane.tres" id="7_a4c1p"]
+[ext_resource type="Resource" uid="uid://dv4y17hq6vqey" path="res://resources/level/torment.tres" id="11_torment"]
 [ext_resource type="PackedScene" uid="uid://c7svo40h476xs" path="res://ui/gamemode_button.tscn" id="8_v8dv3"]
 [ext_resource type="PackedScene" uid="uid://dwsd13u7soadu" path="res://ui/support_ui/support_select_ui.tscn" id="9_pnmhr"]
 [ext_resource type="PackedScene" uid="uid://16ybq5tjkt1a" path="res://ui/return.tscn" id="10_3m0td"]
@@ -616,6 +617,11 @@ level_select = NodePath("../../../../..")
 [node name="LevelButton4" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
 layout_mode = 2
 level = ExtResource("7_a4c1p")
+level_select = NodePath("../../../../..")
+
+[node name="LevelButton5" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
+layout_mode = 2
+level = ExtResource("11_torment")
 level_select = NodePath("../../../../..")
 
 [node name="gamemode_button" parent="Node2D2" instance=ExtResource("8_v8dv3")]

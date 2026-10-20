@@ -23,6 +23,7 @@ var attack_type: int = 1
 
 # 防止 is_dead 与状态机 DEAD 双路触发导致重复结算
 var _dead_started: bool = false
+var _intruder_escaping: bool = false
 
 # 联机：塔组可视动画态广播（host 发、镜像回放）
 var _net_visual_replaying: bool = false
@@ -50,6 +51,7 @@ func _on_network_boss_event(event_name: String, data: Dictionary) -> void:
 func active_state():
 	reset_physics_interpolation()
 	_dead_started = false
+	_intruder_escaping = false
 	await get_tree().create_timer(0.1).timeout
 	update_tower()
 	count_max_hp()
@@ -66,6 +68,8 @@ func count_hp():
 		attack_type = 1
 
 func time_count():
+	if _intruder_escaping:
+		return
 	if shoot_time > 0:
 		shoot_time -= 1
 		if shoot_time <= 0:
@@ -82,6 +86,8 @@ func stop_shoot():
 		i.can_shoot = false
 
 func attack_state(_type: int):
+	if _intruder_escaping:
+		return
 	shoot_time = shoot_time_max
 	match attack_type:
 		1:
@@ -129,12 +135,15 @@ func update_tower():
 
 func boss_dead(tower: ErosionTower):
 	# 聚合血量依赖子塔 hp_changed 时序；结算前强制重算，且只结算一次
+	if _intruder_escaping:
+		return
 	count_now_hp()
 	if _dead_started:
 		return
 	if stats.hp <= 0:
 		_dead_started = true
-		GameEvents.emit_boss_round_end()
+		if not has_meta("boss_intruder"):
+			GameEvents.emit_boss_round_end()
 		boss_death_anim(tower)
 
 
@@ -149,6 +158,14 @@ func boss_death_anim(tower: Node = null) -> void:
 	animation_player.play("death_anim")
 	# 镜像只播动画，不做相机/暂停演出；塔组由死亡动画 method 轨 _coin_drops 自释放
 	if has_meta("network_remote_enemy"):
+		return
+	# 乱入：死亡动画照常播放，但不运镜、不暂停；死亡位置立即上报。
+	if has_meta("boss_intruder"):
+		GameEvents.emit_enemy_dead_position(self.global_position)
+		await animation_player.animation_finished
+		self.visible = false
+		for i in tower_group:
+			i.idle_state.call_deferred()
 		return
 	if tower != null:
 		camera_marker.position = tower.position + Vector2(0, -64)
@@ -166,6 +183,40 @@ func boss_death_anim(tower: Node = null) -> void:
 	for i in tower_group:
 		i.idle_state.call_deferred()
 
+# 乱入超时：三塔倒放入场动画后消失，不运镜、不暂停、不结算奖励。
+func boss_intruder_escape() -> void:
+	if _intruder_escaping or _dead_started:
+		return
+	_intruder_escaping = true
+	stop_shoot()
+	var boss_hp_ui := get_node_or_null("BossHP")
+	if boss_hp_ui != null and boss_hp_ui.has_method("game_ui_visible"):
+		boss_hp_ui.game_ui_visible(false)
+	for tower in tower_group:
+		if tower == null or not is_instance_valid(tower):
+			continue
+		tower.can_defense = false
+		tower.collision_shape_2d.set_deferred("disabled", true)
+		tower.hurt_box_shape_2d.set_deferred("disabled", true)
+		tower.set_physics_process(false)
+		tower.animation_player_1.process_mode = Node.PROCESS_MODE_ALWAYS
+		tower.animation_player_2.process_mode = Node.PROCESS_MODE_ALWAYS
+		tower.animation_player_3.process_mode = Node.PROCESS_MODE_ALWAYS
+		tower.animation_player_3.play_backwards("enter_anim")
+	if tower_1 != null and is_instance_valid(tower_1):
+		await tower_1.animation_player_3.animation_finished
+	self.visible = false
+	for i in tower_group:
+		if i != null and is_instance_valid(i):
+			i.idle_state.call_deferred()
+	PoolManager.erase_pool("erosion_tower")
+	queue_free()
+
+# FEVER 内击杀：等死亡动画播完再让回合结算，避免截断掉落表现。
+func boss_intruder_wait_death() -> void:
+	if animation_player != null and animation_player.is_playing():
+		await animation_player.animation_finished
+
 func boss_enter_anim():
 	for i in tower_group:
 		if not i.tower_dead.is_connected(boss_dead):
@@ -176,17 +227,21 @@ func boss_enter_anim():
 	# 镜像只播动画，不做相机/暂停演出（否则镜像本地 pause 整棵树）
 	if has_meta("network_remote_enemy"):
 		return
-	GameEvents.emit_camera_move(camera_marker, true)
-	GameEvents.emit_ui_visible(false)
-	GameEvents.emit_pause_lock(true)
-	get_tree().paused = true
+	# 乱入：不运镜、不暂停，但入场动画结束后仍要开始攻击。
+	var no_cinematic := has_meta("boss_intruder")
+	if not no_cinematic:
+		GameEvents.emit_camera_move(camera_marker, true)
+		GameEvents.emit_ui_visible(false)
+		GameEvents.emit_pause_lock(true)
+		get_tree().paused = true
 	await tower_1.animation_player_3.animation_finished
 	for i in tower_group:
 		i.animation_player_3.process_mode = Node.PROCESS_MODE_INHERIT
-	GameEvents.emit_camera_reset()
-	GameEvents.emit_ui_visible(true)
-	get_tree().paused = false
-	GameEvents.emit_pause_lock(false)
+	if not no_cinematic:
+		GameEvents.emit_camera_reset()
+		GameEvents.emit_ui_visible(true)
+		get_tree().paused = false
+		GameEvents.emit_pause_lock(false)
 	attack_state(attack_type)
 
 func count_now_hp():
@@ -205,14 +260,16 @@ func _coin_drops():
 		await animation_player.animation_finished
 		queue_free()
 		return
+	var intruder := has_meta("boss_intruder")
 	var coin_box = coins.instantiate()
-	var p_box = pyroxenes.instantiate()
 	coin_box.global_position = self.global_position
-	coin_box.coin_count = stats.Enemy_coin
-	coin_box.coin_quantity = 100
-	p_box.global_position = self.global_position
+	coin_box.coin_count = maxi(1, int(stats.Enemy_coin * (0.3 if intruder else 1.0)))
+	coin_box.coin_quantity = 30 if intruder else 100
 	get_tree().get_first_node_in_group("CoinRoot").add_child(coin_box)
-	get_tree().get_first_node_in_group("CoinRoot").add_child(p_box)
+	if not intruder:
+		var p_box = pyroxenes.instantiate()
+		p_box.global_position = self.global_position
+		get_tree().get_first_node_in_group("CoinRoot").add_child(p_box)
 	await animation_player.animation_finished
 	coin_box.add_coin()
 	PoolManager.erase_pool("erosion_tower")

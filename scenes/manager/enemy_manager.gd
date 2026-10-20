@@ -78,13 +78,19 @@ var endless_boss_hp: float = 1
 var endless_damage: float = 1
 var _boss_weights: Dictionary = {}
 var _boss_identity_cache: Dictionary = {}
+var _intrusion_generation: int = 0
+var _last_intrusion_round: int = -999
 
 func _ready():
 	add_to_group("EnemyManager")
 	GameEvents.round_num_changed.connect(round_num_changed)
 	GameEvents.round_start.connect(round_enemy_spawn_start)
+	GameEvents.round_start.connect(_on_round_start_intrusion)
 	GameEvents.round_end.connect(round_enemy_spawn_end)
+	GameEvents.round_end.connect(_on_round_end_intrusion)
+	GameEvents.game_over.connect(_on_game_over_intrusion)
 	GameEvents.first_round_add.connect(_reset_boss_weights)
+	GameEvents.first_round_add.connect(_reset_intrusion_state)
 	_reset_boss_weights()
 	for wave in ModManager.get_mod_waves():
 		var scene = wave.get("scene")
@@ -118,6 +124,9 @@ func _group_name(index: int) -> String:
 # BossSpawner 与普通波次共用的最终血量/伤害倍率（已包含无尽倍率）。
 func get_spawn_multipliers(is_boss: bool) -> Dictionary:
 	var max_round_value: float = float(round_manager.max_round) if round_manager != null else 20.0
+	var growth_override: Curve = null
+	if PlayerData.current_level != null:
+		growth_override = PlayerData.current_level.non_endless_hp_growth_curve
 	return EnemyScaling.hp_damage_multipliers(
 		float(PlayerData.now_round),
 		max_round_value,
@@ -132,7 +141,8 @@ func get_spawn_multipliers(is_boss: bool) -> Dictionary:
 		round_boss_hp_curve,
 		round_damage_curve,
 		hp_growth_curve,
-		PlayerData.game_mode.has("hujiu")
+		PlayerData.game_mode.has("hujiu"),
+		growth_override
 	)
 
 func round_num_changed(now_round_num: int):
@@ -186,6 +196,16 @@ func round_enemy_spawn_start():
 	var spawn_ins = spawn_scene.instantiate()
 	if is_weighted_boss and spawn_ins != null:
 		_apply_boss_weight_update(spawn_scene, enemies_spawn_group[group_num])
+	_configure_spawn_instance(spawn_ins)
+	add_child(spawn_ins)
+	if spawn_ins.boss_round == true:
+		GameEvents.emit_boss_round_start()
+	else:
+		GameEvents.emit_spawn_start()
+
+func _configure_spawn_instance(spawn_ins: Node) -> void:
+	if spawn_ins == null:
+		return
 	spawn_ins.mode_mult = mode_mult
 	spawn_ins.endless_hp = endless_hp
 	spawn_ins.endless_boss_hp = endless_boss_hp
@@ -195,11 +215,122 @@ func round_enemy_spawn_start():
 	spawn_ins.round_boss_hp_curve = round_boss_hp_curve
 	spawn_ins.hp_growth_curve = hp_growth_curve
 	spawn_ins.max_round = round_manager.max_round
+
+# ---------------- Boss 乱入 ----------------
+
+func _reset_intrusion_state() -> void:
+	_intrusion_generation += 1
+	_last_intrusion_round = -999
+	_clear_boss_intruders()
+
+func _on_round_start_intrusion() -> void:
+	_intrusion_generation += 1
+	var generation := _intrusion_generation
+	_schedule_boss_intrusion.call_deferred(generation)
+
+func _on_round_end_intrusion() -> void:
+	_intrusion_generation += 1
+	_clear_boss_intruders()
+
+func _on_game_over_intrusion(_player_dead: bool) -> void:
+	_intrusion_generation += 1
+	_clear_boss_intruders()
+
+func _schedule_boss_intrusion(generation: int) -> void:
+	if generation != _intrusion_generation:
+		return
+	var level := PlayerData.current_level
+	if level == null or not level.boss_intrusion_enabled or level.boss_intrusion_scenes.is_empty():
+		return
+	if PlayerData.on_test_room or PlayerData.game_mode.has("hujiu"):
+		return
+	if PlayerData.on_endless and not level.boss_intrusion_endless:
+		return
+	var round_index := int(PlayerData.now_round)
+	if round_index <= 0:
+		return
+	if round_index < level.boss_intrusion_round_min or round_index > level.boss_intrusion_round_max:
+		return
+	var cooldown := maxi(0, level.boss_intrusion_cooldown_rounds)
+	if _last_intrusion_round >= 0 and round_index - _last_intrusion_round <= cooldown:
+		return
+	var group := _group_name(group_num)
+	if _is_weighted_boss_group(group):
+		return
+	if PlayerData.on_endless:
+		if round_manager != null and (round_index - int(round_manager.max_round)) % 5 == 0:
+			return
+	elif round_index == 15 or round_index == 20:
+		return
+	if ExtensionHooks.intercept_named("round_enemy_spawn_gate", []):
+		return
+	if randf() >= clampf(level.boss_intrusion_chance, 0.0, 1.0):
+		return
+	var delay_min := maxf(0.0, minf(level.boss_intrusion_delay_min, level.boss_intrusion_delay_max))
+	var delay_max := maxf(delay_min, level.boss_intrusion_delay_max)
+	var delay := randf_range(delay_min, delay_max)
+	if delay > 0.0:
+		await get_tree().create_timer(delay, true, false, true).timeout
+	if generation != _intrusion_generation:
+		return
+	if int(PlayerData.now_round) != round_index:
+		return
+	if ExtensionHooks.intercept_named("round_enemy_spawn_gate", []):
+		return
+	_spawn_boss_intruder(level, round_index)
+
+func _spawn_boss_intruder(level: Level, round_index: int) -> void:
+	if level == null or level.boss_intrusion_scenes.is_empty():
+		return
+	var spawn_scene: PackedScene = level.boss_intrusion_scenes.pick_random()
+	if spawn_scene == null:
+		return
+	var spawn_ins = spawn_scene.instantiate()
+	if spawn_ins == null:
+		return
+	spawn_ins.is_intruder = true
+	_configure_spawn_instance(spawn_ins)
 	add_child(spawn_ins)
-	if spawn_ins.boss_round == true:
-		GameEvents.emit_boss_round_start()
-	else:
-		GameEvents.emit_spawn_start()
+	spawn_ins.get_level()
+	spawn_ins.boss_spawn()
+	spawn_ins.queue_free()
+	_last_intrusion_round = round_index
+
+func has_active_boss_intruder() -> bool:
+	for node in get_tree().get_nodes_in_group("BossIntruder"):
+		if node == null or not is_instance_valid(node):
+			continue
+		var stats = node.get("stats")
+		if stats != null:
+			if int(stats.hp) > 0:
+				return true
+			continue
+		# 尚未落地（spawn_anim 正在播放/等待）
+		if bool(node.get("is_intruder")):
+			return true
+	return false
+
+func resolve_boss_intruder_timeout() -> void:
+	for node in get_tree().get_nodes_in_group("BossIntruder").duplicate():
+		if node == null or not is_instance_valid(node):
+			continue
+		var stats = node.get("stats")
+		if stats != null:
+			if int(stats.hp) <= 0:
+				if node.has_method("boss_intruder_wait_death"):
+					await node.boss_intruder_wait_death()
+				continue
+			if node.has_method("boss_intruder_escape"):
+				await node.boss_intruder_escape()
+			if is_instance_valid(node):
+				node.queue_free()
+		else:
+			node.queue_free()
+
+func _clear_boss_intruders() -> void:
+	for node in get_tree().get_nodes_in_group("BossIntruder").duplicate():
+		if node != null and is_instance_valid(node):
+			node.queue_free()
 
 func _is_weighted_boss_group(group: String) -> bool:
 	return group == "lv15" or group == "lv20" or group == "lv_endless_boss"

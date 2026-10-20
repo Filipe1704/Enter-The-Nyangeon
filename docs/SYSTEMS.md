@@ -221,7 +221,7 @@
 | `Equip` | `resources/equip/equip.gd` | `id, icon, value_1_name/id/value(Array[int]), value_2_..., value_3_..., name, description` |
 | `ClothesCard` | `resources/clothes/clothes_card.gd` | `id, id_name, name_1/2, user_name, icon_1/2, cost, sprite` |
 | `GameMode` | `resources/game_mode/game_mode.gd` | `game_mode_name, game_mode_id, game_mode_icon, gamemode_conflicting: Array[String]` |
-| `Level` | `resources/level/level.gd` | `level_name, level_id, level_name_color, level_color, level_num, level_hp, level_damage, level_score_mult, level_reward` |
+| `Level` | `resources/level/level.gd` | `level_name, level_id, level_name_color, level_color, level_num, level_hp, level_damage, level_score_mult, level_reward, level_scene_path`；可选 `non_endless_hp_growth_curve` 与 `Boss Intrusion` 组（`boss_intrusion_enabled/scenes/chance/round_min/round_max/cooldown_rounds/delay_min/delay_max/endless`） |
 | `RaidFormwork` | `resources/raid_formwork/raid_formwork.gd` | `enemy: Array[EnemyCard], enemy_id, enemy_num, spawn_position: Dictionary` |
 | `CharacterCard` | `resources/shop/character/character_card.gd` | `cost, name_1/2, character_sprite, weapon_name/type_name/icon, school_name/icon, id, group`（缺 shop 条目时由对应 `PlayerCard` 合成，见 §11） |
 | `SupportCard` | `resources/support/support_card.gd` | `support_id, support_name/name2, ex_cost=50, unlock_cost=20, max_lv=100, pa_ability, ability_id, pa_value: Curve, support_pack: PackedScene, ex_voice, lv_voice` |
@@ -394,6 +394,19 @@
 - `max_round` 由 `round_manager` 传入（普通 20 / 闪击 15 / 护聚 5），base 曲线按 `(round-1)/(max_round-1)` 归一化 → 自动**等比**（闪击第 15 关 = 普通第 20 关的曲线末端）。
 - 无尽时 `now_round > max_round`：base 曲线的 x 被 `enemies_spawn.gd:49`（血量）与 `:55`（攻击）clamp 到 1（血量 base 取曲线末端：杂兵 35 / Boss 6.5；攻击 base 取 `round_damage_curve` 末端 ×10）。血量的持续项是 `endless_hp`/`endless_boss_hp`（`endless_mult`）与 `hp_growth` 指数：2026-09-28 起 `endless_mult` 与 `hp_growth_curve` 两条都已延长到 x>1，故无尽血量持续增长；指数项仅对 `level_hp>1` 难度生效。攻击的持续项是 `endless_damage`：2026-09-28 起已去掉 `:100` clamp 并把曲线线性延长到 x>1，故无尽攻击也随回合线性无限增长（第 100 关 ×10，详见 §6.1）。
 
+**难度专属非无尽成长曲线（2026-10-20）**
+- `Level.non_endless_hp_growth_curve` 可选覆盖 `enemy_manager.hp_growth_curve`；`EnemyScaling.hp_damage_multipliers()` 新增 `hp_growth_curve_override`，仅在 `on_endless == false` 时采用。无尽仍用全局曲线，因此 TORMENT 的无尽成长形状与 INS 一致，仅因 `level_hp` 更高而整体略高。
+- TORMENT（`resources/level/torment.tres`）使用近似直线 `(0,0) → (1,1.8)`：第 5 回合 HP 指数约 0.45（INS 全局曲线约 0.30），第 20 回合指数 1.8（INS 2.0）；配合 `level_hp=6.0`，第 20 回合约 `×25.16`，与 INS `×25.0` 基本持平略高。`level_damage=4.0`、`level_num=1.6`、`level_score_mult=2.6`、`level_reward=36.0`。
+
+### 6.2.1 Boss intrusion / 本体 Boss 乱入（2026-10-20）
+
+- 配置在 `Level`：`boss_intrusion_enabled/scenes/chance/round_min/round_max/cooldown_rounds/delay_min/delay_max/endless`。TORMENT 从第 8 回合起、每回合 35%、冷却 2 个完整回合、随机延迟 10–25 秒、无尽也生效；跳过第 15/20 回合、无尽 Boss 回合、`hujiu` 与测试房。
+- 生成：`EnemyManager._on_round_start_intrusion()` 在 `round_start` 后延迟调度，复用 `goliath_spawn.tscn` / `tower_spawn.tscn` 的 `enemies_spawn.boss_spawn()`；**不触发** `boss_round_start`，普通回合计时与刷怪继续。
+- 标记：`enemies_spawn.is_intruder` → `spawn_anim.is_intruder` → Boss 实体 meta `boss_intruder` 与组 `"BossIntruder"`；`spawn_anim.idle_state()` 清理。乱入 Boss 血量在 `spawn_anim.spawn_enemy_body()` 里 `hp_final *= 0.5`，掉落金币总量 30%（`coin_count = Enemy_coin × 0.3`，`coin_quantity=30`），不掉青辉石。
+- 表现：Goliath / 侵蚀之塔保留入场与死亡动画，但乱入时不发 `camera_move` / `ui_visible` / `pause_lock`，也不 `get_tree().paused`；死亡照常掉金币。两者在乱入时不发 `emit_boss_round_end()`，避免误停普通回合计时。
+- 普通计时归零：`round_timer._on_timer_timeout()` 若检测到 `EnemyManager.has_active_boss_intruder()`，调用 `start_intruder_fever(15.0)`，进入 15 秒 FEVER（红字/横幅；每 5 秒对场上 BOSS 施一次 rage buff），不直接结束回合。FEVER 结束调用 `resolve_boss_intruder_timeout()`：存活 Boss 播放 `enter_anim` 倒放后消失（不运镜/不暂停/不结算奖励），随后 `emit_round_end`。FEVER 内击杀会提前结束 FEVER；`resolve_boss_intruder_timeout()` 对已死亡 Boss 通过 `boss_intruder_wait_death()` 等待死亡动画后再结算。
+- 清理：`BossIntruder` 组是新加的兜底索引；**侵蚀之塔组根节点不在 `Enemy` 组**，`main.gd:enemy_clear_unit()` 只清 `EnemiesRoot` 下直接属于 `Enemy` 组的节点，因此必须靠该组在 `round_end` / `game_over` / 乱入超时时显式 `queue_free`。
+
 ### 6.3 Map bounds / 出界回位（autoload `MapBounds` → `script/map_bounds.gd`，2026-09-29）
 
 - 目的：玩家 / 敌人 / 召唤物（含支援 kei 的召唤物）被击退或穿墙甩出地图时，拉回地图内最近点。
@@ -428,6 +441,7 @@
     - **生命数复活优先于倒地（mod，2026-10-11）**：本体 `Stats.hp` setter 在 `hp<=0` 时**先**问 `ExtensionHooks.player_death_gate`，命中即 `return`，之后才到 `life_num > 0` 复活分支；联机 `_gate_player_death` 原来无条件把本地玩家转倒地，导致生命数（+`emit_player_revive`）复活分支永不执行——Ichika 杂鱼酱（mobu）被动在联机失效。修法（仅改 mod）：`_gate_player_death` 在本地玩家 `stats.life_num > 0` 时返回 false，交还本体走 `life_num` 复活（扣生命数 + `emit_player_revive`），生命数耗尽才转倒地/救援。详见 `LEARNINGS.md`。
 
    - `round_manager._on_round_end()`：清敌/币；若 `now_round_num >= max_round` 且非 endless → `emit_game_over(false)`（胜利）；否则转场、清子弹/背景/道具、传送玩家、`emit_round_upgrade`、`emit_player_buff_clear`、`get_tree().paused = true`。
+   - **普通敌人清场特效（2026-10-20）**：`main.enemy_clear_unit()` 在 `queue_free()` 前对非 `BOSS`、非 `EnemyPart` 的敌人调用 `Enemy.play_clear_death()`；普通敌人复用 `DeathAnim`/`death_gpu` 死亡粒子但静音，坦克类（`EnemyTank`）覆写为实例化 `explosion_anim.tscn` 并调用 `play_explosion_only()`（只播爆炸粒子，无 `smoke`、无 `ExplosionSfx`），约 1.2 秒后 `queue_free`，不入对象池。清场视觉不 emit `stats.is_dead`、不调用 `on_dead()`，避免金币/分数/死亡位置结算；`clear_death_played` meta 防止重复清场重复播放。
    - `upgrade_manager` 弹 `UpgradeScreen` 三选一；`UpgradeScreen.next_round_button()` 先 `emit_round_upgrade_closing`（收起属性/装备栏）再 `emit_round_upgrade_end` → `round_manager._on_round_start()` 开下一回合。
    - 联机（mod）下 `round_upgrade_end` 由 mod 的 `round_upgrade_end_gate` 接管：本机点继续即播过场前半到黑屏并保持、显示「等待所有人就绪」遮罩，全员就绪后本体 `_on_round_start()` 经 `round_upgrade_cover_hold` 跳过前半、只播后半揭示（详见 `docs/LEARNINGS.md`）。
 5. **结束**：玩家死亡在 `Stats.hp` setter（`life_num>0` 复活/hujiu 50% 复活，否则 `emit_game_over(true)`）；`game_over_page.gd` 停表、胜负、记分、返回菜单。

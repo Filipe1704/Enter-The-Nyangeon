@@ -14,6 +14,8 @@ var hp_mult = 1
 var damage_mult = 1
 
 var is_boss: bool = false
+# 普通回合中途乱入：血量减半、奖励削减，且不触发 Boss 回合/运镜。
+var is_intruder: bool = false
 # true = 由 BossRoundController/BossSpawner 编排（入场/死亡演出由控制器负责）
 var controller_managed: bool = false
 
@@ -48,7 +50,9 @@ func idle_state():
 	coin_mult = 1
 	has_path = false
 	is_boss = false
+	is_intruder = false
 	controller_managed = false
+	remove_from_group("BossIntruder")
 	# 作弊菜单暂停生成时会把本节点置 ALWAYS；归还空闲复位为默认，避免池化后在暂停菜单中仍处理
 	process_mode = PROCESS_MODE_INHERIT
 	self.visible = false
@@ -105,11 +109,22 @@ func spawn_enemy_body(enemy: EnemyCard):
 		_setup_path(enemy_body, route_scene, path_value)
 	
 	enemy_body.global_position = global_position
+	if is_intruder:
+		enemy_body.add_to_group("BossIntruder")
+		enemy_body.set_meta("boss_intruder", true)
+		# 实体已落地，后续由实体自身代表乱入；spawn_anim 不再算 pending。
+		remove_from_group("BossIntruder")
+	else:
+		if enemy_body.has_meta("boss_intruder"):
+			enemy_body.remove_meta("boss_intruder")
+		enemy_body.remove_from_group("BossIntruder")
 	# 联机人数缩放：mod 经 ExtensionHooks 注入附加乘数（未注入时保持 1.0，单机零回归）。
 	var stat_scale: Dictionary = {}
 	if ExtensionHooks.enemy_spawn_stat_scale.is_valid():
 		stat_scale = ExtensionHooks.enemy_spawn_stat_scale.call()
 	var hp_final: float = hp_mult * float(stat_scale.get("hp", 1.0))
+	if is_intruder:
+		hp_final *= 0.5
 	var damage_final: float = damage_mult * float(stat_scale.get("damage", 1.0))
 	enemy_body.stats.max_hp_mult = hp_final
 	enemy_body.stats.Enemy_damage_mult = damage_final

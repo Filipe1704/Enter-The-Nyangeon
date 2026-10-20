@@ -1,6 +1,8 @@
 extends Enemy
 class_name EnemyTank
 
+const CLEAR_EXPLOSION := preload("res://scenes/enemies/boss/explosion_anim.tscn")
+
 signal turning_mod
 
 enum State {
@@ -207,6 +209,22 @@ func box_around(now_rotation: float):
 	collision_shape_2d.rotation = now_rotation
 	area_2d.rotation = now_rotation
 	weak_part.rotation = now_rotation
+
+# 坦克类清场：复用 explosion_anim 的爆炸粒子，去掉黑烟与音效；实例化后直接释放。
+func play_clear_death() -> void:
+	if has_meta("clear_death_played"):
+		return
+	if stats != null and stats.hp <= 0:
+		return
+	set_meta("clear_death_played", true)
+	var root := get_tree().get_first_node_in_group("EnemiesRoot")
+	if root == null:
+		return
+	var fx: ExplosionAnim = CLEAR_EXPLOSION.instantiate()
+	root.add_child(fx)
+	fx.global_position = global_position
+	fx.play_explosion_only()
+	get_tree().create_timer(1.2).timeout.connect(fx.queue_free)
 
 func on_dead():
 	collision_shape_2d.set_deferred("disabled",true)

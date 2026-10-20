@@ -16,13 +16,18 @@ static func hp_damage_multipliers(
 	round_boss_hp_curve: Curve,
 	round_damage_curve: Curve,
 	hp_growth_curve: Curve,
-	hujiu: bool = false
+	hujiu: bool = false,
+	hp_growth_curve_override: Curve = null
 ) -> Dictionary:
 	var safe_max: float = maxf(1.0, max_round)
 	var hp_round_x: float = 0.0 if safe_max <= 1.0 else clamp((now_round - 1.0) / (safe_max - 1.0), 0.0, 1.0)
 	var hp_curve: Curve = round_boss_hp_curve if is_boss else round_hp_curve
 	var hp_base: float = hp_curve.sample(hp_round_x) if hp_curve != null else 1.0
-	var hp_growth: float = hp_growth_curve.sample(now_round / safe_max) if hp_growth_curve != null else now_round / (safe_max * 0.5)
+	# 难度专属曲线只覆盖非无尽；无尽继续使用全局曲线，与 INS 保持同一形状。
+	var effective_growth_curve: Curve = hp_growth_curve
+	if not on_endless and hp_growth_curve_override != null:
+		effective_growth_curve = hp_growth_curve_override
+	var hp_growth: float = effective_growth_curve.sample(now_round / safe_max) if effective_growth_curve != null else now_round / (safe_max * 0.5)
 	var hp_lv: float = minf(level_hp, 3.0) if (hujiu and is_boss) else level_hp
 	var hp_mult: float = hp_base * pow(hp_lv, hp_growth) if not on_endless else hp_base * pow(maxf(1.0, hp_lv), hp_growth)
 

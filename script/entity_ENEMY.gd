@@ -1,6 +1,8 @@
 extends CharacterBody2D
 class_name Enemy
 
+const DEATH_ANIM_SCRIPT = preload("res://script/death_anim.gd")
+
 signal is_hurt
 @warning_ignore("unused_signal")
 signal is_dead
@@ -540,6 +542,19 @@ func settle_converted_clear() -> int:
 func on_dead():
 	GameEvents.emit_enemy_dead_position(self.global_position)
 	idle_state.call_deferred()
+
+# 回合清场：复用死亡粒子，但走纯视觉路径，不触发金币/分数/死亡位置/音效。
+func play_clear_death() -> void:
+	if has_meta("clear_death_played"):
+		return
+	if stats != null and stats.hp <= 0:
+		return
+	set_meta("clear_death_played", true)
+	var death_anim := get_node_or_null("DeathAnim")
+	if death_anim != null and death_anim.has_method("on_death_anim"):
+		death_anim.on_death_anim(false)
+		return
+	DEATH_ANIM_SCRIPT.spawn_for_enemy(self, false)
 
 func _on_is_hurt():
 	pass

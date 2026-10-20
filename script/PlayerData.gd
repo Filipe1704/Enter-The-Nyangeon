@@ -47,6 +47,8 @@ var level_hp: float = 1
 var level_damage: float = 1
 var level_score_mult: float = 1
 var level_reward: float = 1
+# 当前难度资源：供非无尽成长曲线覆盖与 Boss 乱入等难度专属配置读取。
+var current_level: Level
 
 var player_cost: int = 0
 var player_max_cost: int = 0

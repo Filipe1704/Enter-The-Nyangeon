@@ -34,6 +34,8 @@ var _saved_round_wait: float = 0.0
 var _saved_round_time_left: float = 0.0
 var _saved_global_time_left: float = 0.0
 var _force_rage_timeout: bool = false
+# 乱入 Boss 在普通计时归零后的 15 秒 FEVER 延长窗口。
+var intruder_fever_active: bool = false
 # 联机客机首轮本地倒计时（对齐联机版）：host 广播 round_end 驱动，客机只本地计时显示
 var client_round_countdown_started: bool = false
 
@@ -182,6 +184,7 @@ func resume_normal_round() -> void:
 	rage_mode = false
 	rage_time = 0
 	boss_round_pending_end = false
+	intruder_fever_active = false
 	_force_rage_timeout = false
 	round_time = _saved_round_time
 	round_timer.wait_time = _saved_round_wait
@@ -216,6 +219,42 @@ func stop_boss_encounter_timer() -> void:
 	_force_rage_timeout = false
 	timer.stop()
 	round_timer.stop()
+
+# 普通计时归零但乱入 Boss 仍存活：延长 15 秒 FEVER，而不是直接结束回合。
+func start_intruder_fever(duration: float = 15.0) -> void:
+	if intruder_fever_active:
+		return
+	intruder_fever_active = true
+	is_boss_round = false
+	boss_encounter_active = true
+	boss_round_pending_end = false
+	rage_mode = false
+	rage_time = 0
+	_force_rage_timeout = false
+	boss_group = get_tree().get_nodes_in_group("BOSS")
+	round_time = maxi(1, int(ceil(duration)))
+	round_timer.wait_time = maxf(1.0, duration)
+	round_timer.start()
+	timer.start()
+	set_font_red()
+	if not _fever_time_handled():
+		GameEvents.emit_fever_time_start()
+
+func _finish_intruder_fever() -> void:
+	if not intruder_fever_active:
+		return
+	intruder_fever_active = false
+	is_boss_round = false
+	boss_encounter_active = false
+	rage_mode = false
+	rage_time = 0
+	timer.stop()
+	round_timer.stop()
+	var manager := get_tree().get_first_node_in_group("EnemyManager")
+	if manager != null and manager.has_method("resolve_boss_intruder_timeout"):
+		await manager.resolve_boss_intruder_timeout()
+	if not _round_end_emit_blocked():
+		GameEvents.emit_round_end()
 
 func replace_with_boss_timer(profile: BossRoundProfile = null) -> void:
 	pause_normal_round()
@@ -254,6 +293,7 @@ func game_over_stop(_player_dead: bool):
 	SoundManager.game_end = true
 	boss_round_pending_end = false
 	boss_encounter_active = false
+	intruder_fever_active = false
 	is_boss_round = false
 	rage_mode = false
 	rage_time = 0
@@ -263,11 +303,32 @@ func game_over_stop(_player_dead: bool):
 	round_timer.stop()
 
 func _on_timer_timeout():
-	
+	if intruder_fever_active:
+		var intruder_manager := get_tree().get_first_node_in_group("EnemyManager")
+		if intruder_manager == null or not intruder_manager.has_method("has_active_boss_intruder") \
+				or not intruder_manager.has_active_boss_intruder():
+			_finish_intruder_fever()
+			return
+		round_time -= 1
+		if round_time <= 0:
+			_finish_intruder_fever()
+			return
+		rage_time += 1
+		if rage_time > 5:
+			rage_time = 0
+			if not _fever_time_handled():
+				boss_group = get_tree().get_nodes_in_group("BOSS")
+				add_rage_buff()
+		return
 	if rage_mode == false:
 		round_time -=1
 		if round_time <= 0:
 			if is_boss_round == false:
+				var intruder_manager := get_tree().get_first_node_in_group("EnemyManager")
+				if intruder_manager != null and intruder_manager.has_method("has_active_boss_intruder") \
+						and intruder_manager.has_active_boss_intruder():
+					start_intruder_fever(15.0)
+					return
 				var controller := _boss_controller()
 				if controller != null and controller.has_method("on_normal_round_timeout") \
 						and controller.has_method("is_encounter_active") and controller.is_encounter_active():
@@ -388,6 +449,7 @@ func _clear_boss_round_pending_end():
 
 func _clear_encounter_state():
 	boss_encounter_active = false
+	intruder_fever_active = false
 	is_boss_round = false
 	rage_mode = false
 	rage_time = 0

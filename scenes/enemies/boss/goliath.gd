@@ -119,6 +119,7 @@ var charge_dir_time: int = 0
 var charge_time: int = 0
 
 var weapon_halted: bool = false
+var _intruder_escaping: bool = false
 
 func _ready():
 	super._ready()
@@ -183,6 +184,7 @@ func idle_state():
 	super.idle_state()
 	_reset_charge_state()
 	_reset_attack_state()
+	_intruder_escaping = false
 	boss_hp.game_ui_visible(false)
 	decision_timer.stop()
 
@@ -191,6 +193,7 @@ func active_state():
 	super.active_state()
 	_reset_charge_state()
 	_reset_attack_state()
+	_intruder_escaping = false
 	weapon_halted = false
 	boss_enter_anim()
 	# 镜像不本地跑决策（AI 由 host 快照驱动）
@@ -234,8 +237,8 @@ func _reset_attack_state():
 
 func boss_enter_anim():
 	enter_anim.play("enter_anim")
-	# 镜像只播动画，不做相机/暂停演出（否则会本地 pause 整棵树）
-	if has_meta("network_remote_enemy"):
+	# 镜像 / 乱入只播动画，不做相机/暂停演出
+	if has_meta("network_remote_enemy") or has_meta("boss_intruder"):
 		return
 	GameEvents.emit_camera_move(camera_marker, true)
 	GameEvents.emit_ui_visible(false)
@@ -253,6 +256,10 @@ func boss_death_anim():
 	# 镜像只播动画，不做相机/暂停演出
 	if has_meta("network_remote_enemy"):
 		return
+	# 乱入：死亡动画照常播放，但不运镜、不暂停；死亡位置立即上报。
+	if has_meta("boss_intruder"):
+		GameEvents.emit_enemy_dead_position(self.global_position)
+		return
 	GameEvents.emit_camera_move(camera_marker, true)
 	GameEvents.emit_ui_visible(false)
 	GameEvents.emit_pause_lock(true)
@@ -263,6 +270,44 @@ func boss_death_anim():
 	get_tree().paused = false
 	GameEvents.emit_pause_lock(false)
 	GameEvents.emit_enemy_dead_position(self.global_position)
+
+# 乱入超时：倒放入场动画后消失，不运镜、不暂停、不结算奖励。
+func boss_intruder_escape() -> void:
+	if is_idle == 1 or _intruder_escaping:
+		return
+	_intruder_escaping = true
+	weapon_halted = true
+	_shoot_cancel = true
+	_shoot_generation += 1
+	_charge_generation += 1
+	_big_gun_generation += 1
+	_big_gun_cancelled = true
+	_next_attack_delay_override = -1.0
+	charge_active = false
+	charge_speed = 0
+	velocity = Vector2.ZERO
+	random_shoot_timer.stop()
+	strafe_shoot_timer.stop()
+	big_gun_shoot_timer.stop()
+	decision_timer.stop()
+	if left_explosion_fx != null:
+		left_explosion_fx.stop()
+	if right_explosion_fx != null:
+		right_explosion_fx.stop()
+	_interrupt_weapons()
+	collision_shape_2d.set_deferred("disabled", true)
+	hurt_box_shape_2d.set_deferred("disabled", true)
+	boss_hp.game_ui_visible(false)
+	set_physics_process(false)
+	enter_anim.play_backwards("enter_anim")
+	await enter_anim.animation_finished
+	PoolManager.erase_pool(pool_id)
+	queue_free()
+
+# FEVER 内击杀：等死亡动画播完再让回合结算，避免截断掉落表现。
+func boss_intruder_wait_death() -> void:
+	if death_anim != null and death_anim.is_playing():
+		await death_anim.animation_finished
 
 func time_count():
 	super.time_count()
@@ -805,7 +850,7 @@ func add_shoot_flash():
 		now_shoot_flash_L.active_state()
 
 func on_dead():
-	if is_idle == 1:
+	if is_idle == 1 or _intruder_escaping:
 		return
 	weapon_halted = true
 	_shoot_cancel = true
@@ -827,7 +872,8 @@ func on_dead():
 	if right_explosion_fx != null:
 		right_explosion_fx.stop()
 	_interrupt_weapons()
-	GameEvents.emit_boss_round_end()
+	if not has_meta("boss_intruder"):
+		GameEvents.emit_boss_round_end()
 	boss_death_anim()
 
 func _coin_drops():
@@ -836,14 +882,16 @@ func _coin_drops():
 		await death_anim.animation_finished
 		queue_free()
 		return
+	var intruder := has_meta("boss_intruder")
 	var coin_box = coins.instantiate()
-	var p_box = pyroxenes.instantiate()
 	coin_box.global_position = self.global_position
-	coin_box.coin_count = stats.Enemy_coin
-	coin_box.coin_quantity = 100
-	p_box.global_position = self.global_position
+	coin_box.coin_count = maxi(1, int(stats.Enemy_coin * (0.3 if intruder else 1.0)))
+	coin_box.coin_quantity = 30 if intruder else 100
 	get_tree().get_first_node_in_group("CoinRoot").add_child(coin_box)
-	get_tree().get_first_node_in_group("CoinRoot").add_child(p_box)
+	if not intruder:
+		var p_box = pyroxenes.instantiate()
+		p_box.global_position = self.global_position
+		get_tree().get_first_node_in_group("CoinRoot").add_child(p_box)
 	await death_anim.animation_finished
 	coin_box.add_coin()
 	PoolManager.erase_pool(pool_id)

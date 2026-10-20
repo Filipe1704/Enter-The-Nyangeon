@@ -2902,3 +2902,21 @@
 - Notes / 说明: Ichika 的 mobu 等召唤物 `SummonedStats.max_hp` 默认为 0，受伤时不扣自身生命而是转给玩家；转伤与玩家直接受伤共用 `take_damage`，仅凭 `source_type` 无法区分（两者都是敌方来源）。必须在 `SummonedHealthComponent` 转发时复制伤害并追加 `GameTags.SUMMON_TRANSFER`，玩家侧据此跳过 `corruption_power` 与连续受伤窗口，否则召唤物挨打也会给玩家积累腐化。转伤不更新 `_last_corruption_hit_msec`，因此不会把两次玩家直接受伤的窗口接起来。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-20
+
+### [Boss] 乱入原生 Boss 必须显式跳过 `boss_round_end` 与运镜/暂停
+- Evidence / 证据: `scenes/enemies/boss/goliath.gd`（`on_dead()` 的 `emit_boss_round_end` 与 `boss_enter_anim`/`boss_death_anim` 的相机/暂停分支）、`scenes/enemies/boss/erosion_tower_group.gd`（`boss_dead()` 与同名演出分支）、`script/spawn_anim.gd`（`is_intruder` → 实体 meta `boss_intruder`）。
+- Notes / 说明: 本体 Goliath / 侵蚀之塔在死亡时会 `emit_boss_round_end()`，乱入若沿用旧路径会触发 `round_timer.rage_mode_end()`，把普通回合的 60s 计时直接停掉；入场/死亡演出还会 `camera_move` + `get_tree().paused`。乱入标记必须在两个 Boss 的入口/死亡流程里统一判断，只跳过相机/暂停与 `boss_round_end`，保留入场、死亡动画与 30% 金币掉落。`erosion_tower_group` 的入场演出是非暂停分支时仍要 `await` 入场动画后调用 `attack_state()`，否则乱入塔不会攻击。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Boss] `erosion_tower_group` 根节点不在 `Enemy` 组，普通清场不会回收
+- Evidence / 证据: `scenes/enemies/boss/erosion_tower_group.tscn:59`（根节点无 `groups`；子塔才是 `BOSS`/`Enemy`）、`scenes/main/main.gd:99-108`（只遍历 `EnemiesRoot` 的直接子节点并筛 `Enemy` 组）。
+- Notes / 说明: 普通 `enemy_clear_unit()` 只处理 `EnemiesRoot` 下**直接**子节点中的 `Enemy` 组；塔组根节点不入组，所以塔组必须在自身死亡/离场时 `queue_free`，或由调用方用显式索引清理。Boss 乱入用组 `"BossIntruder"` 同时登记 `spawn_anim` 与落地实体，`round_end` / `game_over` / FEVER 超时统一 `queue_free`；仅依赖现有清场会留下塔组根节点。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Enemy] 回合清场不能走 `on_dead` / `stats.is_dead`，只能走纯视觉入口
+- Evidence / 证据: `scenes/main/main.gd:enemy_clear_unit()`；`script/entity_ENEMY.gd:play_clear_death()`（`DeathAnim`/`DEATH_ANIM_SCRIPT.spawn_for_enemy`）；`scenes/enemies/enemy_tank.gd:play_clear_death()`（`ExplosionAnim.play_explosion_only()`）；`script/death_anim.gd:on_death_anim(play_sound)`。
+- Notes / 说明: 清场时直接调用 `on_dead()` 或 emit `stats.is_dead` 会触发 `_coin_drops`、`settle_converted_clear`/分数、`emit_enemy_dead_position` 等 gameplay 结算，且坦克类会播专属死亡动画/伤害爆炸。清场必须只调用视觉入口：普通敌人复用 `DeathAnim` 的 `death_gpu`（传 `play_sound=false`），坦克用 `ExplosionAnim.play_explosion_only()`（不启动 `smoke`、不播音效）。`clear_death_played` meta 用于去重（`enemy_clear_unit` 可能被 `round_end`/`round_upgrade` 多次触发）；`ExplosionAnim.play()` 保留黑烟+音效，仅 Goliath 手部使用。清场视觉按一次性实例化 + 约 1.2 秒后 `queue_free`，不入对象池。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20

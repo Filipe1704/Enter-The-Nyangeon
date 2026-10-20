@@ -1,6 +1,8 @@
 extends Node2D
 
 @export var boss_round: bool = false
+# 普通回合中途乱入：复用 Boss 刷怪场景，但不切换回合计时。
+var is_intruder: bool = false
 @export var boss_position: Vector2
 @export var num_mult: float #敌人生成随时间增加的数量
 @export var round_mult: float #敌人生成随回合增加的数量
@@ -54,6 +56,9 @@ func get_level():
 	# 联机人数缩放：mod 经 ExtensionHooks 注入附加数量乘数（未注入时保持 1.0，单机零回归）。
 	if ExtensionHooks.enemy_spawn_count_scale.is_valid():
 		round_mult *= maxf(0.0, float(ExtensionHooks.enemy_spawn_count_scale.call(PlayerData.now_round, max_round)))
+	var growth_override: Curve = null
+	if PlayerData.current_level != null:
+		growth_override = PlayerData.current_level.non_endless_hp_growth_curve
 	var multipliers := EnemyScaling.hp_damage_multipliers(
 		PlayerData.now_round,
 		max_round,
@@ -68,7 +73,8 @@ func get_level():
 		round_boss_hp_curve,
 		round_damage_curve,
 		hp_growth_curve,
-		PlayerData.game_mode.has("hujiu")
+		PlayerData.game_mode.has("hujiu"),
+		growth_override
 	)
 	hp_mult = float(multipliers.get("hp", 1.0))
 	damage_mult = float(multipliers.get("damage", 1.0))
@@ -116,6 +122,9 @@ func boss_spawn():
 		spawn_anim.hp_mult = hp_mult
 		spawn_anim.damage_mult = damage_mult
 		spawn_anim.is_boss = true
+		spawn_anim.is_intruder = is_intruder
+		if is_intruder:
+			spawn_anim.add_to_group("BossIntruder")
 		spawn_anim.active_state()
 		spawn_anim.enemy_spawn_anim(enemy_temp)
 		GameEvents.emit_enemy_spawn()

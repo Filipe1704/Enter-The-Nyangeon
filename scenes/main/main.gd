@@ -102,6 +102,8 @@ func enemy_clear_unit():
 		if enemies.is_in_group("Enemy") and !enemies.is_in_group("EnemyPart"):
 			if enemies.is_in_group("Converted") and enemies.has_method("settle_converted_clear"):
 				total_coin += enemies.settle_converted_clear()
+			if !enemies.is_in_group("BOSS") and enemies.has_method("play_clear_death"):
+				enemies.play_clear_death()
 			PoolManager.erase_pool(enemies.pool_id)
 			enemies.queue_free()
 	if total_coin > 0:
