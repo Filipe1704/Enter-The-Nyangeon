@@ -39,3 +39,4 @@ const CONVERT: String = "convert"  #策反积蓄
 const EXTRA_DAMAGE: String = "extra_damage" #额外伤害请求（发起方防递归用）
 const SPLIT_CHILD: String = "split_child" #分裂产物子弹：不再触发分裂
 const SUMMON_TRANSFER: String = "summon_transfer" #召唤物替玩家承伤后转给玩家的伤害
+const IGNORE_IFRAME: String = "ignore_iframe"

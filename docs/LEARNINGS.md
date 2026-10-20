@@ -563,6 +563,13 @@
 - Notes / 说明: 无敌帧分两档（`script/hurt_box.gd`）：`set_invulnerable(v)` 切 `monitoring`/`contact_invincible`（普通档，挡目标侧检测）；`set_dodge(v)` 在其上再切 `monitorable`（闪避档，连来源侧检测即激光也挡）。**不要**把 `monitorable` 无条件折进普通档——那会让激光也被 i-frame 挡住，破坏「激光无视无敌帧」。新增敌人攻击时按「由谁检测」决定归属：目标 HurtBox 监听的走普通档规则，来源自查询的（`get_overlapping_areas`）走 `monitorable`。同构应用到召唤物：跳跃=`set_dodge`，受击 `invincibility_frames`=`set_invulnerable`，还原由 `HurtAnim` 的 `.:monitoring`/`.:contact_invincible` 轨道负责。
 - Source / 来源: user
 - Date / 日期: 2026-09-28
+- SUPERSEDED: 2026-10-21 玩家侧不再按「检测发起方」自动决定：普通爆炸/接触也吃普通无敌帧，激光改为在 `DamageData.flags` 显式打 `GameTags.IGNORE_IFRAME`；详见下一条。召唤物仍沿用本条 Area2D 检测层语义。
+
+### [Combat] 玩家受击统一无敌帧门控（2026-10-21）
+- Evidence / 证据: `script/game_tags.gd:42` 新增 `IGNORE_IFRAME`；`script/player_health_component.gd:44-60` `_is_iframe_blocked()`、`:65-83` 早退分支、`:111-116` 门控与同步 `contact_invincible`；`scenes/bullet/laser_bullet.gd:76-85` 给激光 `DamageData.flags` 打标记；`script/hurt_box.gd:30-37` 普通档/闪避档、`:90-105` 接触探针。实机 `game_eval`（FakePlayer + Stats + HurtBox）结果 `[990.0, 990.0, 980.0, 980.0, true]`（同帧两爆炸只扣一次、IGNORE_IFRAME 穿透普通档、闪避挡 IGNORE_IFRAME）与 `[false, true, 87.0]`（DOT 后不置 contact，普通命中后置 true）；`tests/test_player_iframe_gate.gd` 7/7 通过。
+- Notes / 说明: 非治疗正伤害在 `hurt_invalid` 之前统一过门控：`hurt_box.monitorable=false`（跳跃/闪避）优先拦截；`IGNORE_IFRAME` 放行普通档；其余按 `hurt_box.contact_invincible` 拦。非 DOT 放行时**同步**置 `contact_invincible=true`，同一物理帧后续接触/爆炸立即被挡；DOT 不置（DOT 只 `start()` 计时器、不调 `_on_invincible_frame()`，置了会永久残留）；被挡时重置 `damage_multiplier`。不要改回查 `invincible_frame.time_left`：DOT 分支会启动计时器但不走 `_on_invincible_frame()`，因此必须看 `contact_invincible`。`HurtBox.set_invulnerable()` 仍用 deferred 切 `monitoring`，避免 Area2D 信号锁内改状态。DOT、治疗、0 伤害击退、友军、倒地、作弊 `is_invincible` 保持原语义。召唤物未接此门控。
+- Source / 来源: user
+- Date / 日期: 2026-10-21
 
 ### [Physics] `Area2D.monitorable=false` 能挡「新建立」的重叠，但**不清除既有重叠**（Rapier2D）
 - Evidence / 证据: `game_eval`（mobu 场景）：目标 HurtBox `monitorable` 置 false 前建立的重叠，观察 6 个物理帧后 `probe.get_overlapping_areas().has(hb)` 仍为 `true`；反过来，在 `monitorable=false` 状态下**先**建好 probe 再等帧，则 `count=0`（不建立）；恢复 true 后 `count=1`。

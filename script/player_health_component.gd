@@ -41,6 +41,24 @@ func _is_friendly_fire(damage_data: HealthChangeData) -> bool:
 	else:
 		return Faction.hostile_to(damage_data.source_type, Faction.PLAYER_SIDE)
 
+func _is_iframe_blocked(damage_data: HealthChangeData) -> bool:
+	if damage_data.is_heal:
+		return false
+	var dmg: DamageData = damage_data as DamageData
+	if dmg == null:
+		return false
+	if dmg.base_damage <= 0:
+		return false
+	if dmg.damage_type.has(GameTags.DOT_DAMAGE):
+		return false
+	if hurt_box == null:
+		return false
+	if not hurt_box.monitorable:
+		return true
+	if dmg.flags.has(GameTags.IGNORE_IFRAME):
+		return false
+	return hurt_box.contact_invincible
+
 func _armor_reduction() -> float:
 	return armor_cap * (1.0 - exp(-float(stats.hurt_resis) / max(0.001, armor_k)))
 
@@ -91,6 +109,11 @@ func take_damage(damage_data: HealthChangeData):
 				i.call(owner, final_damage)
 	
 	else:
+		if _is_iframe_blocked(damage_data):
+			damage_multiplier = 1.0
+			return
+		if hurt_box != null and not damage_data.damage_type.has(GameTags.DOT_DAMAGE):
+			hurt_box.contact_invincible = true
 		if stats.hurt_invalid > 0:
 			stats.hurt_invalid -= 1
 			stats.hurt_invalid_changed.emit()

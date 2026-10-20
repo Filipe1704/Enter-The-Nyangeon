@@ -80,6 +80,7 @@ func apply_damage_data():
 		"direction": Vector2.RIGHT.rotated(global_rotation),
 		"type": GameTags.BULLET_DAMAGE,
 		"source": DamageRouter.source_tag(source_faction),
+		"flags": [GameTags.IGNORE_IFRAME],
 		"node": self,
 	})
 
