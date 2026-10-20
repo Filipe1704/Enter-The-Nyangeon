@@ -2896,3 +2896,9 @@
 - Notes / 说明: `show_behind_parent` 的子节点在父节点自身纹理之前绘制，多个同标志兄弟按声明顺序绘制；因此要让青色临时生命盖住紫色腐化，`Corruption_HP_BAR` 必须设 `show_behind_parent=true` 并排在 `Temporary_HP_BAR2` 之前。此改动只影响本地 HUD 表现，不改 `Stats` 有效上限或腐化数值；联机队友头顶 44×4 小血条按用户要求不调整。极端情况下临时生命会暂时完全盖住紫段，腐化量仍以 `-N` 为准。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-20
+
+### [Combat] 召唤物转伤必须用 flag 与玩家直接受伤区分，否则会误积累腐化
+- Evidence / 证据: `script/summoned_health_component.gd:92-98`（`max_hp <= 0` 的召唤物把伤害转发给 `GameEvents.deal_damage_to_player`）、`scenes/player/ichika/ichika_ps.gd:75-76`（转伤接到玩家 `health_component.take_damage`）、`script/player_health_component.gd:142-145`（腐化积累入口）
+- Notes / 说明: Ichika 的 mobu 等召唤物 `SummonedStats.max_hp` 默认为 0，受伤时不扣自身生命而是转给玩家；转伤与玩家直接受伤共用 `take_damage`，仅凭 `source_type` 无法区分（两者都是敌方来源）。必须在 `SummonedHealthComponent` 转发时复制伤害并追加 `GameTags.SUMMON_TRANSFER`，玩家侧据此跳过 `corruption_power` 与连续受伤窗口，否则召唤物挨打也会给玩家积累腐化。转伤不更新 `_last_corruption_hit_msec`，因此不会把两次玩家直接受伤的窗口接起来。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20

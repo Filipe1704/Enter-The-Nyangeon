@@ -90,12 +90,12 @@ func take_damage(damage_data: HealthChangeData):
 		
 		# 4. 扣血
 		if stats.max_hp <= 0:
-			if transfer_knockback:
-				GameEvents.emit_deal_damage_to_player(damage)
-			else:
-				var forwarded: DamageData = damage.duplicate(true)
+			# 复制一份再打标记，避免污染可能被其他目标复用的原始伤害
+			var forwarded: DamageData = damage.duplicate(true)
+			forwarded.flags.append(GameTags.SUMMON_TRANSFER)
+			if not transfer_knockback:
 				forwarded.knockback_force = 0
-				GameEvents.emit_deal_damage_to_player(forwarded)
+			GameEvents.emit_deal_damage_to_player(forwarded)
 		else:
 			stats.hp -= final_damage
 		

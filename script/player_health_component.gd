@@ -139,10 +139,13 @@ func take_damage(damage_data: HealthChangeData):
 				owner.invincible_frame.start()
 				if !damage_data.damage_type.has(GameTags.DOT_DAMAGE):
 					owner._on_invincible_frame(true)
-			# 词条/攻击附加腐化（不受难度门控，填 corruption_power 即生效）
-			if damage_data.corruption_power > 0:
-				stats.add_corruption(damage_data.corruption_power)
-			_accumulate_corruption_on_hit(actual_hp_loss)
+			# 召唤物替玩家承伤后的转伤不计腐化，也不参与连续受伤窗口
+			var from_summon_transfer: bool = damage_data.flags.has(GameTags.SUMMON_TRANSFER)
+			if not from_summon_transfer:
+				# 词条/攻击附加腐化（不受难度门控，填 corruption_power 即生效）
+				if damage_data.corruption_power > 0:
+					stats.add_corruption(damage_data.corruption_power)
+				_accumulate_corruption_on_hit(actual_hp_loss)
 			stats.is_hurt.emit()
 			damage_taken.emit(final_damage, damage_data)
 			GameEvents.emit_player_is_hurt(owner)
