@@ -86,6 +86,10 @@ func reset_game_support():
 func game_add_support():
 	if game_support == null or game_support.support_id == "null":
 		return
+	# 生成前同步当前支援的 EX 费用：get_card 的 has_card 分支依赖 count_exp，
+	# now_lv 为 0 时不会写 ex_cost，否则开局会停在 0 导致 EX 可无限释放。
+	get_card(game_support)
+	now_cost = 0
 	if game_support.support_pack != null:
 		var ins = game_support.support_pack.instantiate()
 		ins.global_position = Vector2(704, 448)
@@ -179,6 +183,8 @@ func get_card(support_card: SupportCard):
 	else:
 		load_data()
 	count_exp()
+	# has_card 分支的 count_exp 只在 now_lv > 0 时写 ex_cost；未解锁/0 级时也要按卡面值初始化。
+	ex_cost = now_support.ex_cost
 
 func check_upgrade():
 	if now_support.support_id == "null":

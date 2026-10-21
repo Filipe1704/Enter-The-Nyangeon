@@ -478,7 +478,7 @@ func _sanitize_player_state(
 		s_heading = Vector2.ZERO
 	elif s_heading.length_squared() > 1.0:
 		s_heading = s_heading.normalized()
-	return [position, velocity, look_position, shp, s_ammo, s_sprite_y, s_state, s_cstate, s_heading, mhp, sthp, mthp]
+	return [position, velocity, look_position, shp, s_ammo, s_sprite_y, s_state, s_cstate, s_heading, mhp, sthp, mthp, scorr]
 
 
 # 清理某 net_id 的全部登记（重登记/死亡/失效共用）
@@ -4534,21 +4534,6 @@ func _on_first_round_add() -> void:
 	_report_local_name()
 	_schedule_respawn_remotes()
 	_refresh_medkit_mods.call_deferred()
-	# 支援 EX 费用归一化：本体 get_card 的 has_card 分支可能不置 ex_cost（依赖 now_lv>0），
-	# 会让 ex_cost 停在 0 → EX 开局即用且可无限连放。此处延迟到 game_add_support 之后再兜底。
-	_normalize_support_cost.call_deferred()
-
-
-# 修正本机支援 EX 费用：优先按本体语义 get_card(game_support) 同步，再兜底直接写 ex_cost。
-# 仅在 LAN 下由 _on_first_round_add 调用；单机走本体菜单 get_card 路径，不属于本 mod 职责。
-func _normalize_support_cost() -> void:
-	var card = SupportData.game_support
-	if card == null or str(card.support_id) == "null":
-		return
-	SupportData.get_card(card)
-	if SupportData.ex_cost <= 0:
-		SupportData.ex_cost = int(card.ex_cost)
-	SupportData.now_cost = 0
 
 
 # 场景进入后延迟补生远端镜像：本体 test_room.reset_data → reset_clear_unit 会 queue_free

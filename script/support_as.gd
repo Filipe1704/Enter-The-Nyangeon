@@ -33,6 +33,8 @@ func _on_score_owned(_score: int, owner_peer: int) -> void:
 	cost_count(_score)
 
 func cost_count(_score: int) -> void:
+	if SupportData.ex_cost <= 0:
+		return
 	if SupportData.now_cost < SupportData.ex_cost:
 		SupportData.now_cost += 1
 	elif not emit_ready:
@@ -40,10 +42,13 @@ func cost_count(_score: int) -> void:
 		GameEvents.emit_support_ex_ready()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("EX_skill") and SupportData.now_cost >= SupportData.ex_cost:
+	if SupportData.ex_cost > 0 and event.is_action_pressed("EX_skill") \
+			and SupportData.now_cost >= SupportData.ex_cost:
 		skill_active()
 
 func skill_active() -> void:
+	if SupportData.ex_cost <= 0 or SupportData.now_cost < SupportData.ex_cost:
+		return
 	if as_is_active:
 		return
 	as_is_active = true

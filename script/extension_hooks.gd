@@ -137,6 +137,9 @@ var local_player_change_gate: Callable = Callable()
 
 # ---------------- UI ----------------
 
+# 返回按钮按下（接管，无参）：返回 true 表示消费此次返回（如关闭联机覆盖层），
+# 不再触发本体的 Game.pause_press()。未注入时本体行为不变。
+var return_pressed_gate: Callable = Callable()
 var populate_menu_buttons: Callable = Callable()
 # 本体 option 菜单页注入（参数 [menu_box, button_box]）：mod 可追加自定义页与页签按钮。
 # 由 ui/option.gd:_ready 调用；未注入时无任何影响。

@@ -65,6 +65,7 @@ func _ready() -> void:
 	get_tree().root.add_child(_downed_indicator)
 	ExtensionHooks.populate_menu_buttons = Callable(self, "_populate_menu_buttons")
 	ExtensionHooks.populate_option_pages = Callable(self, "_populate_option_pages")
+	ExtensionHooks.return_pressed_gate = Callable(self, "_gate_return_pressed")
 	GameEvents.menu_button.connect(_on_menu_button)
 	_coop.get("character_select_requested").connect(_on_character_select_requested)
 	print("[etn_coop] entry ready: hooks installed; F4 net HUD / F10 host / F11 join 127.0.0.1 / F12 leave")
@@ -156,6 +157,14 @@ func _open_overlay() -> void:
 		var parent: Node = _menu_canvas if _menu_canvas != null else get_tree().root
 		parent.add_child(_overlay)
 	_overlay.call("on_coop_selected")
+
+
+# 本体返回按钮的接管点：联机覆盖层打开时只关闭覆盖层，不触发暂停。
+func _gate_return_pressed() -> bool:
+	if _overlay != null and is_instance_valid(_overlay) and bool(_overlay.get("on_coop")):
+		_overlay.call("out_coop_selected")
+		return true
+	return false
 
 
 func _on_character_select_requested() -> void:

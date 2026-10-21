@@ -140,7 +140,6 @@ func _ready() -> void:
 	_setup_tab_input(option)
 	_setup_tabs_container()
 	_load_banner_texture()
-	_setup_return_button()
 	animation_player.animation_finished.connect(_on_page_anim_finished)
 	_addr_lan_toggle.toggled.connect(_on_lan_addr_toggled)
 	_addr_public_toggle.toggled.connect(_on_public_addr_toggled)
@@ -357,18 +356,6 @@ func _load_banner_texture() -> void:
 	if img.load_png_from_buffer(bytes) != OK:
 		return
 	_banner.texture = ImageTexture.create_from_image(img)
-
-
-func _setup_return_button() -> void:
-	var ret := get_node_or_null("Node2D/return")
-	if ret == null:
-		return
-	# 覆盖本体 return.gd 的 pause_press 行为：仅关闭本覆盖层
-	var cb := Callable(ret, "_on_gui_input")
-	if ret.gui_input.is_connected(cb):
-		ret.gui_input.disconnect(cb)
-	if not ret.pressed.is_connected(out_coop_selected):
-		ret.pressed.connect(out_coop_selected)
 
 
 func _on_page_anim_finished(anim_name: StringName) -> void:

@@ -1,6 +1,8 @@
 extends Button
 
 func _on_pressed() -> void:
+	if ExtensionHooks.intercept_named("return_pressed_gate", []):
+		return
 	Game.pause_press()
 
 func _on_gui_input(event: InputEvent) -> void:
