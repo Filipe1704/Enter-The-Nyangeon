@@ -3095,3 +3095,21 @@
 - Notes / 说明: `SceneTree.create_timer` 默认 `process_always=true`，暂停时仍走表；0.55s 的碎甲碎片/冲击环会在暂停查看或调试断点期间直接 `queue_free`，看起来像没生成。需要随游戏暂停冻结的演出应传 `false`，让计时器继承树的 pause 状态。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-21
+
+### [Coop/Mod] mod pck 内 `.tscn` 的 ext_resource UID 必须与 `.tres` 头部 UID 一致
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/ui/coop_theme.tres:1`（`uid://cq6shkh3j5pwh`）；`ui/coop_menu.tscn:13`（原引用 `uid://0ivk887ius3a`）；`build_coop_mod.ps1` 的 PCKPacker 构建日志出现 `ext_resource, invalid UID ... using text path instead`。
+- Notes / 说明: 编辑器会靠 `.godot/uid_cache.bin` 把旧 UID 解析到路径，所以镜像内看不出来；PCK 不带 UID 缓存，构建/运行时会报警并回退文本路径。同步编辑器生成或改名的 `.tres` 后，若 `.tscn` 仍引用旧 UID，需把引用改成 `.tres` 头部的新 UID（或去掉 `uid` 属性），再重新打包。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Build/Mod] `ModPack` 预设未排除 `mods/*`，会把其他 mod 的旧脚本一起打进当前 mod pck
+- Evidence / 证据: `mod_sdk/ModPack.preset.cfg`（`export_filter="all_resources"`，`exclude_filter` 不含 `mods/*`）；`mod_sdk/build_mod.ps1:4`（默认 `Preset="ModPack"`）与 `:22`（仅 `ModPackReplace` 分支生成 `export_files`）；实测 `user://mods/doom_slayer_izzy/doom_slayer_izzy.pck` 含 `mods/etn_coop/ui/coop_menu.gdc`、`coop_menu.gd.remap` 与旧场景，且 `load_order=100` 使其遮蔽新 etn_coop。
+- Notes / 说明: `build_mod.ps1` 默认走 ModPack 预设时不会限定 `export_files`，`all_resources` 会把工程内 `mods/` 下所有 mod 一并导出；被卷入的旧 `.gdc`/`.remap` 会按 load_order 遮蔽同名新脚本/场景（症状：`PageScroll.mouse_filter` 运行期变 2、扫描点动画与主题颜色丢失）。修复：优先用 `build_local_mod.ps1`（PCKPacker 只打单个 `mods/<id>/`），但它不带 `.godot/imported`，含贴图/音频的 mod 会缺导入产物；需保留导入资源时应走导出预设并显式只导出当前 mod（`export_files`），同时排除 `mods/*`。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-21
+
+### [Coop/UI] return 关闭与支援 EX 初始化已移入本体，mod 不再断开/兜底
+- Evidence / 证据: `script/extension_hooks.gd`（`return_pressed_gate`）；`ui/return.gd:_on_pressed`（先 `intercept_named`）；`script/support_data.gd:get_card/game_add_support`（无条件写 `ex_cost` + 生成前同步/清零）；`script/support_as.gd`（`ex_cost<=0` 时不计费、不 ready、不释放）；`mods/etn_coop/entry/coop_entry.gd:_gate_return_pressed`；`mods/etn_coop/ui/coop_menu.gd`（删除 `_setup_return_button`）；`mods/etn_coop/net/coop_net.gd`（删除 `_normalize_support_cost`）。
+- Notes / 说明: 联机覆盖层打开时返回按钮经 hook 只关闭覆盖层，其它菜单仍走本体 `Game.pause_press`；支援 EX 的 `ex_cost` 由本体在 `get_card`/`game_add_support` 初始化，`ex_cost<=0` 的支援不再充能/释放。`coop_select._ready` 的默认空支援 `get_card` 保留为选人初始化，不是兜底。此后 mod 不再需要断开 `return.gd` 信号或修正 `SupportData`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
