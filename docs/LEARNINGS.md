@@ -2939,3 +2939,22 @@
 - Notes / 说明: 参考实现跑在 640×360 的 SubViewport 上（1 texel = 1 游戏像素）。本项目没有全局 SubViewport，若按 `SCREEN_UV × 物理分辨率` 生成扫描线，720/1080 等非整数倍窗口会出现摩尔纹和错位。改为按 640×360 建虚拟网格：采样用 `(floor(vpix)+0.5)/virtual_size` + `filter_nearest`，荫罩也用同一网格且不随 `warp` 抖动。`hdr_2d=true` 时屏幕纹理为线性色，全程线性运算、不做 sRGB 转换。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-21
+- SUPERSEDED: 2026-10-21 换用 pend00「VHS and CRT monitor effect」后，扫描线与荫罩不再共用同一网格（荫罩频率改为 `resolution.x / 3`），采样也不再吸附虚拟像素中心、不做亮度守恒。见下方两条新结论。
+
+### [Rendering/Shader] VHS/CRT 荫罩频率必须取 `resolution.x / 3`，扫描线才用 `resolution.y`
+- Evidence / 证据: `shaders/crt_filter.gdshader:142`（`grille_res = max(resolution.x / 3.0, 1.0)`）、`shaders/crt_filter.gdshader:145-151`（三通道相位 0 / 1.05 / 2.1）、`shaders/crt_filter.gdshader:161-166`（扫描线直接用 `resolution.y`）；`ui/crt_overlay.gd:_sync_resolution` 把 `resolution` 同步为 640×360。
+- Notes / 说明: 参考 shader 的 `resolution` 同时喂给 pixelate、扫描线、荫罩；它的默认 640×480 是按「物理画面宽/3」选的，直接套 640×360 会让荫罩正弦变成亚像素频率（摩尔纹 + 整体偏色）。拆开后的规则：荫罩用 `resolution.x/3`（一条 RGB 条 = 2 逻辑像素；`sinc = abs(sin)` 使每通道 3 逻辑像素一组），扫描线 / 噪点 / pixelate 仍用 `resolution`。改 `resolution` 时不要动 `/3`。另 `pixelate` 默认关：游戏本身已是像素画，二次吸附只会糊。
+- Source / 来源: code + test + user
+- Date / 日期: 2026-10-21
+
+### [Rendering/Shader] 移植 Godot 3 屏幕 shader 到 Godot 4 的三处必改项
+- Evidence / 证据: `shaders/crt_filter.gdshader:13`（`hint_screen_texture, repeat_disable, filter_nearest`）、原站 (Godot 3) 代码中 `text.r = clamp(0.0, 1.0, r * brightness)` 与 `clamp(vec3(0.0), vec3(1.0), ...)` 的参数顺序；`shaders/crt_filter_material.tres`（`overlay = true`）。
+- Notes / 说明: ① Godot 3 的 `SCREEN_TEXTURE` 在 4.x 要声明为 `uniform sampler2D ... : hint_screen_texture`，否则编译失败；像素画项目用 `filter_nearest`（别照抄 `filter_linear_mipmap`）。② 原帖早期代码把 `clamp` 写成 `(min, max, value)`，在部分驱动上直接输出纯白，必须改成 `(value, min, max)`（帖内作者已修）。③ 叠在全屏 `ColorRect` 上时必须 `overlay = true`，否则读到的是 ColorRect 自己的白色纹理/UV，画面会翻转或全白。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Tooling/Config] 手改 `user://config.ini` 必须写无 BOM 的 UTF-8，否则 `ConfigFile.load` 静默失败
+- Evidence / 证据: `script/Game.gd:315-316`（`config.load(CONFIG_PATH)` 未检查返回值）；实测 PowerShell 5.1 `Set-Content -Encoding UTF8` 写入 BOM 后，`Game.load_config()` 全部退回默认值（`crt_filter` 读成 false）。
+- Notes / 说明: 调试读档/开关时改 `%APPDATA%\Godot\app_userdata\<项目名>\config.ini`，用 `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))`，或先备份再恢复。BOM 存在时 `load` 返回错误但不报错，所有键静默走默认值。
+- Source / 来源: test
+- Date / 日期: 2026-10-21
