@@ -3084,3 +3084,14 @@
 - Notes / 说明: `sprite_outline.gdshader` 在 fragment 直接重写 `COLOR`，会忽略 CanvasItem `modulate`，所以普通描边敌人必须走 shader 的 `corruption_tint` / `corruption_amount`；`modded_sweeper` 的蓝色通道很低，乘法 tint 会变成暗红并接近 `red_sweeper`，必须用 `mix` 向浅紫补蓝。坦克的 `TankGraphics` 没有 shader，用 `sprite_2d.modulate` 的 `original.lerp(浅紫, 0.3)` 让 `tank_body`/`tank_turret` 一起变紫。不要全局改描边 shader 去乘 modulate：子弹/UI 有 `Color(100,1.5,1.5)` 等高亮值，会造成回归；新 uniform 默认 0 不影响其它资源。不要改 `graphics.modulate`（`EnemyTank._hurt_flash()` 占用）；移除 Buff 时恢复 modulate、材质或 shader 参数。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-21
+### [UI] `enemy_mod_box` 与 `ENEMY MOD` 标题是兄弟节点，必须同时隐藏滚动容器
+- Evidence / 证据: `ui/gamemode_button.tscn`（标题/分隔线在 `.../VBoxContainer/VBoxContainer`；`enemy_mod_box` 在平级的 `.../VBoxContainer/ScrollContainer2`）；`ui/gamemode_button.gd:_update_enemy_mod_visibility()`（同时切换 `enemy_mod_section` 与 `enemy_mod_scroll`）。
+- Notes / 说明: 只隐藏标题所在的 `VBoxContainer` 不会隐藏 `ScrollContainer2` 下的敌人词条卡片。未开启 `havoc` 时必须同时隐藏 `enemy_mod_section` 和 `enemy_mod_scroll`；不要再加 `enemy_mod_hint`。`ENEMY MOD` 固定英文、禁用自动翻译，标题显示 `(当前/要求)`；数量不足点击开始时播放标题字体闪红和失败音效。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip/Visual] 暂停中仍需保留的短命演出要用 `create_timer(timeout, false)`
+- Evidence / 证据: `scenes/debuff/armor_break.gd:16`
+- Notes / 说明: `SceneTree.create_timer` 默认 `process_always=true`，暂停时仍走表；0.55s 的碎甲碎片/冲击环会在暂停查看或调试断点期间直接 `queue_free`，看起来像没生成。需要随游戏暂停冻结的演出应传 `false`，让计时器继承树的 pause 状态。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
