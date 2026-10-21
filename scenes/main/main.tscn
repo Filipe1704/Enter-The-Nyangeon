@@ -32,6 +32,7 @@
 [ext_resource type="PackedScene" path="res://scenes/manager/interaction_manager.tscn" id="30_interact"]
 [ext_resource type="PackedScene" path="res://scenes/manager/chip_manager.tscn" id="31_chipmgr"]
 [ext_resource type="PackedScene" path="res://ui/chip_hud.tscn" id="32_chiphud"]
+[ext_resource type="PackedScene" path="res://scenes/manager/field_mod_manager.tscn" id="33_fieldmod"]
 
 [sub_resource type="Environment" id="Environment_gkmcc"]
 background_mode = 3
@@ -306,6 +307,9 @@ y_sort_enabled = true
 [node name="BulletRoot" type="Node2D" parent="YSort" unique_id=1222542489 groups=["BulletRoot"]]
 y_sort_enabled = true
 
+[node name="FieldModRoot" type="Node2D" parent="YSort" groups=["FieldModRoot"]]
+y_sort_enabled = true
+
 [node name="EquipLayer" type="Node2D" parent="." unique_id=1553168985 groups=["EquipLayer"]]
 
 [node name="SELayer" type="Node2D" parent="." unique_id=1871777976 groups=["SELayer"]]
@@ -364,6 +368,8 @@ target_node = NodePath("../../WarringAnim/RaidWarringAnimWest")
 [node name="RoundManager" parent="." unique_id=2143966205 instance=ExtResource("15_jj0k3")]
 
 [node name="ChipManager" parent="." unique_id=209647156 instance=ExtResource("31_chipmgr")]
+
+[node name="FieldModManager" parent="." instance=ExtResource("33_fieldmod")]
 
 [node name="EnemyManager" parent="." unique_id=847629050 node_paths=PackedStringArray("round_manager") instance=ExtResource("16_uuiao")]
 round_manager = NodePath("../RoundManager")

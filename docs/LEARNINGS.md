@@ -3147,3 +3147,9 @@
 - Notes / 说明: 双方 Kei 自动射击时，同一命中点会高频产生 `bullet_smoke_2`，远端正则还会走可复用特效池。若只依赖 0.2s 的 AnimationPlayer method track 调 `idle_state()`，快速重触发/池复用可能让 method track 没机会执行，表现为同一个烟节点常驻命中点、每次命中又播一次。`smoke_anim()` 必须用代次保护并在动画时长后兜底 `idle_state()`；远端 smoke 再加 1s 存活兜底。移除 autoplay，生命周期由调用方显式控制。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-22
+
+### [Mod/Hooks] `intercept_named` / `notify_named` 的槽名必须在 extension_hooks.gd 显式声明
+- Evidence / 证据: `script/extension_hooks.gd:_slot_of()`；`scenes/manager/field_mod_manager.gd`（`field_mod_spawn_gate` / `on_field_mod_started` / `on_field_mod_stopped`）
+- Notes / 说明: 命名钩子不是任意字符串都能用；`_slot_of()` 只接受 `extension_hooks.gd` 中已声明的 `Callable` 字段，未声明会 `push_error` 并返回空 Callable。新增钩子时必须同时补字段，否则单机虽然继续执行（intercept 返回 false），但会刷错误日志。`FieldModManager` 的场地效果仍为 host 权威，`apply_network_round_state()` 不发 `field_chips_changed`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-22

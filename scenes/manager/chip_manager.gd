@@ -5,6 +5,7 @@ const HAVOC_ID := "havoc"
 signal chips_changed(active_chips: Array, counts: Array, cap: int)
 signal chip_assigned(index: int, count: int)
 signal chip_released(index: int, count: int)
+signal field_chips_changed(active_field_chips: Array)
 
 @export_category("Chip selection")
 @export var active_chip_limit: int = 3
@@ -28,6 +29,7 @@ signal chip_released(index: int, count: int)
 
 var _selected_chips: Array[GameMode] = []
 var _active_chips: Array[GameMode] = []
+var _active_field_chips: Array[GameMode] = []
 var _counts: Array[int] = []
 var _weight_state: Dictionary = {}
 var _cap := 0
@@ -35,6 +37,7 @@ var _active_count: int = 0
 var _marked: Dictionary = {}
 var _should_update_weights := false
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _warned_chip_configs: Dictionary = {}
 
 func _ready() -> void:
 	add_to_group("ChipManager")
@@ -47,12 +50,14 @@ func _reset_run() -> void:
 	_weight_state.clear()
 	_selected_chips.clear()
 	_active_chips.clear()
+	_active_field_chips.clear()
 	_counts.clear()
 	_marked.clear()
 	_cap = 0
 	_active_count = 0
 	_should_update_weights = false
 	chips_changed.emit([], [], 0)
+	field_chips_changed.emit([])
 
 func _on_round_end() -> void:
 	if not _should_update_weights:
@@ -65,13 +70,17 @@ func prepare_round() -> void:
 		_update_weights_after_pick(_selected_chips, _active_chips)
 		_should_update_weights = false
 	_selected_chips = _load_selected_chip_modes()
+	for chip in _selected_chips:
+		_warn_chip_config(chip)
 	_active_chips.clear()
+	_active_field_chips.clear()
 	_counts.clear()
 	_marked.clear()
 	_active_count = 0
 	if active_chip_limit <= 0 or _selected_chips.is_empty():
 		_cap = 0
 		chips_changed.emit([], [], 0)
+		field_chips_changed.emit([])
 		return
 	_should_update_weights = _selected_chips.size() > active_chip_limit
 	if _should_update_weights:
@@ -81,11 +90,13 @@ func prepare_round() -> void:
 	else:
 		for chip in _selected_chips:
 			_active_chips.append(chip)
+	_refresh_active_field_chips()
 	_cap = _cap_for_round(maxi(1, int(PlayerData.now_round)))
 	_counts.resize(_active_chips.size())
 	for i in _counts.size():
 		_counts[i] = 0
 	chips_changed.emit(_active_chips.duplicate(), _counts.duplicate(), _cap)
+	field_chips_changed.emit(_active_field_chips.duplicate())
 
 func apply_to_enemy(enemy_body: Node, enemy_card: EnemyCard, is_boss: bool) -> bool:
 	if enemy_body == null or enemy_card == null:
@@ -99,6 +110,8 @@ func apply_to_enemy(enemy_body: Node, enemy_card: EnemyCard, is_boss: bool) -> b
 	var candidate_weights: Array[float] = []
 	for i in _active_chips.size():
 		var chip := _active_chips[i]
+		if chip == null or chip.is_field_chip():
+			continue
 		if is_boss_enemy and not chip.chip_include_boss:
 			continue
 		if not _matches_target(chip, enemy_card):
@@ -187,6 +200,16 @@ func _release_marked(body: Node) -> void:
 func get_active_chips() -> Array:
 	return _active_chips.duplicate()
 
+func get_active_enemy_chips() -> Array:
+	var out: Array = []
+	for chip in _active_chips:
+		if chip != null and not chip.is_field_chip():
+			out.append(chip)
+	return out
+
+func get_active_field_chips() -> Array:
+	return _active_field_chips.duplicate()
+
 func get_chip_counts() -> Array:
 	return _counts.duplicate()
 
@@ -224,6 +247,7 @@ func apply_network_round_state(active_ids: Array, cap: int, counts: Array = []) 
 		_counts.append(int(counts[i]) if i < counts.size() else 0)
 	_active_count = 0
 	_marked.clear()
+	_refresh_active_field_chips()
 	_should_update_weights = _selected_chips.size() > active_chip_limit
 	chips_changed.emit(_active_chips.duplicate(), _counts.duplicate(), _cap)
 
@@ -250,13 +274,48 @@ func _cap_for_round(round_index: int) -> int:
 		0,
 		chip_enemy_cap_max
 	)
-	var extra_count := maxi(0, _selected_chips.size() - maxi(0, active_chip_limit))
+	var extra_count := maxi(0, get_selected_enemy_chip_count() - maxi(0, active_chip_limit))
 	return base + extra_count * maxi(0, chip_enemy_cap_bonus_per_extra)
 
 func get_selected_chip_count() -> int:
 	if not _selected_chips.is_empty():
 		return int(_selected_chips.size())
 	return _load_selected_chip_modes().size()
+
+func get_selected_enemy_chip_count() -> int:
+	var count := 0
+	for chip in _selected_chips:
+		if chip != null and not chip.is_field_chip():
+			count += 1
+	return count
+
+func _refresh_active_field_chips() -> void:
+	_active_field_chips.clear()
+	for chip in _active_chips:
+		if chip != null and chip.is_field_chip():
+			_active_field_chips.append(chip)
+
+func _warn_chip_config(chip: GameMode) -> void:
+	if chip == null or not chip.chip_enabled:
+		return
+	var key := chip.game_mode_id
+	if _warned_chip_configs.has(key):
+		return
+	var message := ""
+	if chip.is_field_chip():
+		if chip.chip_field_scene == null:
+			message = "Field chip '%s' has no chip_field_scene" % key
+		elif not chip.chip_buffs.is_empty():
+			message = "Field chip '%s' should not define chip_buffs" % key
+	else:
+		if chip.chip_buffs.is_empty():
+			message = "Enemy chip '%s' has no chip_buffs" % key
+		elif chip.chip_field_scene != null:
+			message = "Enemy chip '%s' should not define chip_field_scene" % key
+	if message == "":
+		return
+	_warned_chip_configs[key] = true
+	push_warning(message)
 
 func get_score_multiplier() -> float:
 	return 1.0 + maxf(0.0, chip_score_bonus_per_chip) * float(get_selected_chip_count())

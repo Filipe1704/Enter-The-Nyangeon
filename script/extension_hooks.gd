@@ -34,6 +34,7 @@ var enemy_buff_apply_gate: Callable = Callable()
 var round_enemy_spawn_gate: Callable = Callable()
 # 敌人策反：mod 已接管（客机转发 host）则跳过本地 apply_conversion_power（参数 [enemy, power]）
 var enemy_conversion_interceptor: Callable = Callable()
+var field_mod_spawn_gate: Callable = Callable()
 # 伤害归属压制：本次伤害归属他人时，authority 端不发射本地 enemy_*_proc 全局信号（参数 [damage_data]）
 var enemy_proc_owner_suppress: Callable = Callable()
 # 玩家 buff 应用：光环等命中"远端玩家镜像"时，mod 已转交归属端则跳过本地 apply_buff
@@ -105,6 +106,8 @@ var on_enemy_buff_removed: Callable = Callable()
 # 敌人 buff 应用成功（通知，参数 [manager, buff, value, source_id, applier_stats, applier_peer]）
 # 供 mod 在 host 侧把 host 发起的敌人 buff 广播给客机（客机镜像应用）
 var on_enemy_buff_applied: Callable = Callable()
+var on_field_mod_started: Callable = Callable()
+var on_field_mod_stopped: Callable = Callable()
 # 爆炸视觉/音效触发（通知，参数 [position: Vector2, is_big: bool]）：供 mod 广播大/小爆炸表现
 var on_explosion_effect: Callable = Callable()
 # 命中额外音效（通知，参数 [sfx_key: String, position: Vector2]）：如近战 HurtSounds2，供 mod 按来源广播

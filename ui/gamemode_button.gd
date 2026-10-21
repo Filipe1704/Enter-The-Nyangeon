@@ -73,9 +73,22 @@ func _on_mode_selection_changed(id: String, _selected: bool) -> void:
 func is_enemy_mod_visible() -> bool:
 	return enemy_mod_section.visible
 
-func get_selected_enemy_mod_count() -> int:
+func get_selected_mod_count() -> int:
 	var count := 0
 	for mode in _enemy_mods:
+		var card = _cards_by_id.get(mode.game_mode_id)
+		if card != null and card.on_selected:
+			count += 1
+	return count
+
+func get_selected_enemy_mod_count() -> int:
+	return get_selected_mod_count()
+
+func get_selected_field_mod_count() -> int:
+	var count := 0
+	for mode in _enemy_mods:
+		if mode == null or not mode.is_field_chip():
+			continue
 		var card = _cards_by_id.get(mode.game_mode_id)
 		if card != null and card.on_selected:
 			count += 1
