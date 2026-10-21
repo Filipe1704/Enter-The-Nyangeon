@@ -2958,3 +2958,129 @@
 - Notes / 说明: 调试读档/开关时改 `%APPDATA%\Godot\app_userdata\<项目名>\config.ini`，用 `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))`，或先备份再恢复。BOM 存在时 `load` 返回错误但不报错，所有键静默走默认值。
 - Source / 来源: test
 - Date / 日期: 2026-10-21
+### [Chip] 词条 Buff 必须在 `active_state()` 前应用并立即刷新属性
+- Evidence / 证据: `script/spawn_anim.gd:spawn_enemy_body()`（`update_body_ability()` → `ChipManager.apply_to_enemy()` → `active_state()`）；`script/entity_ENEMY.gd:active_state()`（`stats.spawn_hp()`）；`scenes/manager/buff_manager_base.gd:_host_refresh()`（延迟到 `_process` 才 `update_body_ability()`）。
+- Notes / 说明: `active_state()` 会按当前 `stats.max_hp` 回满血，词条的血量 Buff 必须在它之前应用；应用后还要立刻再调一次 `stats.update_body_ability()`，不能只依赖 `BuffManagerBase` 的延迟刷新，否则首帧仍按旧上限回血。Boss 默认由 `chip_include_boss=false` 排除，白名单/标签匹配不能替代该门槛。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [UI/Input] 难度悬停保持与移动端预览必须分开 mouse/focus 与 touch 路径
+- Evidence / 证据: `project.godot:213`（`pointing/emulate_mouse_from_touch=false`）；`ui/level_button.gd`（`mouse_in` / `mouse_out` / `previewed`）；`ui/level_select.gd`（`_on_level_previewed`、`prepare_level_selection`）；`ui/gamemode_button.gd`（自动/手动浩劫标记）。
+- Notes / 说明: 难度展开与焦点解耦：`level_button` 用 `_preview_open` + `open_preview/close_preview` 管状态，`level_select` 只保留一个 `_open_level_button`；焦点移到支援/模式或鼠标移出难度时不收起，展开另一个难度、确认、返回或重新进入时才收起。移动端不会产生 `mouse_entered`/`focus_entered`，必须由第一次 `InputEventScreenTouch` 显式触发 `open_preview()`，第二次触摸才确认。浩劫自动勾选用 `_havoc_auto_selected` 与 `_auto_toggle` 区分来源：只有自动勾选会在悬停其它难度或离开难度页时撤销，手动勾选保留。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip] 硬化外壳是次数盾，扣血前必须在 `HealthComponent` 结算
+- Evidence / 证据: `script/EnemyStats.gd`（`shield_active/shield_max_hits/shield_hits`、`shield_broken`、`reset_shield()`）；`script/health_component.gd:_take_damage_internal()`（扣血前把本次伤害设为 1、耐久 -1、归零时发 `shield_broken`）；`resources/buff/components/shield_component.gd`（10 + 2×回合、封顶 40，破盾移除 Buff）。
+- Notes / 说明: 次数盾必须在 `HealthComponent` 扣 `stats.hp` 前处理，才能让飘字/`damage_taken` 都是 1；不能在 `spawn_hp()` 重置护盾，否则 `spawn_anim` 刚施加的 Buff 会在 `active_state()` 里被清掉。护盾耐久按回合在 `activate()` 时固定，不随敌人存活跨回合成长，也不重生；破盾当击仍只扣 1。`Game.one_hit_kill` 跳过护盾。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip] 同场上限是“存活/生效标记数”，不是每回合生成数
+- Evidence / 证据: `scenes/manager/chip_manager.gd`（`_active_count`、`_marked`；`apply_to_enemy()` 达上限直接返回；`_on_marked_enemy_dead` / `_on_marked_buff_expired` / `_on_marked_enemy_exiting` 调用 `_release_marked()`）；`ui/chip_hud.gd`（计数实时刷新）。
+- Notes / 说明: 词条敌人死亡、被清除，或该词条的全部 Buff 失效（例如硬化外壳破盾）时立即释放 1 个同场名额；后续敌人补位。`prepare_round()` 清零并清空 `_marked`，旧敌人的迟到信号不会误扣新回合。词条改为全局共享池，不再按词条分配固定名额；权重只决定每次新附着选哪个词条，权重更新放到回合结束。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [UI] 词条 HUD 默认不显示计数，CanvasLayer 用 layer=1
+- Evidence / 证据: `ui/chip_hud.tscn`（`layer = 1`、`Root.scale = Vector2(0.5, 0.5)`）；`ui/chip_hud.gd`（`debug_show_counts`、count Label 默认隐藏）；`scenes/player/momoi.tscn`（pause CanvasLayer layer=3）。
+- Notes / 说明: 战斗内词条 HUD 只保留图标，不显示标题和名称；同场计数仍由 `ChipManager.get_chip_counts()` / `chip_assigned` / `chip_released` 提供，仅在 `debug_show_counts=true` 时显示。ChipHud 必须与 `RoundTimer` 同为 layer 1，否则会盖住 layer 3 的 pause 菜单；整体缩放 50% 用 Root 的 scale + 中心 pivot 实现，Root 透明度 0.7，位置贴近 `RoundTimer` 下方。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [VFX] 护盾特效复用 tower `defense_mod` 时的尺寸/定位坑
+- Evidence / 证据: `scenes/debuff/shield_effect.tscn`（复制 `ripple` shader、内外渐变和 `defense_shield_anim`）；`scenes/debuff/shield_effect.gd:fit_to_enemy()`；`resources/buff/components/shield_component.gd:activate/deactivate()`。
+- Notes / 说明: 复制 tower `defense_mod` 时内部 `Node2D` 的 `position` 必须归零，tower 的 `(0,-44)` 是 Boss 专用偏移。护盾特效只随 ShieldComponent 生命周期创建/释放，tower 本体保持原样。`SUPERSEDED: 2026-10-20` 后续统一改为按 `HurtBoxShape2D` 形状最大边 ×1.1 自适应，不再读取 Sprite；原 `AnimatedSprite2D`/`get_rect` 逻辑已删除。
+- SUPERSEDED: 2026-10-21 不能递归 `find_child("HurtBoxShape2D")`：`tester_automaton_shield` 会先命中 `Graphics/Shield`，其它敌人也可能命中最先遍历到的子部件/弱点；必须取 `body.hurt_box_shape_2d` / `HurtBox/HurtBoxShape2D` 本体框，并让特效每帧跟随旋转的 HurtBox。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip] 提交清理时误删词条运行接入：`prepare_round()` 与 `apply_to_enemy()` 必须同时保留
+- Evidence / 证据: `scenes/manager/enemy_manager.gd:round_enemy_spawn_start()`（联机 gate 后 `prepare_round()`）；`script/spawn_anim.gd:spawn_enemy_body()`（`update_body_ability()` 后、`active_state()` 前 `apply_to_enemy()`）；`git show b581a9d` 不含这两处，OpenCode 快照 `399b5cb...` 保留正确版本。
+- Notes / 说明: 2026-10-21 整理 TORMENT 提交时，`Remove-ChipBlock` 脚本把两处词条接入从工作区/暂存区剔除，导致词条选择仍保存但 `_active_chips` 为空、HUD 无图标、敌人无 Buff。分离提交时不要用会改写工作区的脚本剔除功能代码；若必须拆分，只操作 index，提交后检查这两个调用点并跑一次刷怪冒烟。
+- Source / 来源: code + git
+- Date / 日期: 2026-10-21
+
+### [Combat/Chip] 延迟死亡必须在扣血前拦截并锁 1 血，`EnemyStats.hp` setter 会同步触发死亡
+- Evidence / 证据: `script/EnemyStats.gd:86-97`（`v <= 0 && !dead_lock` 时同帧 `is_dead.emit()`、`emit_enemy_dead_score`）；`script/entity_ENEMY.gd:562-564`（`_coin_drops`/`on_dead` deferred）；`script/health_component.gd`（`_fatal_damage_guards` 位于护盾与 `one_hit_kill` 之后、overkill/扣血之前）；`resources/buff/components/frenzy_delay_death_component.gd`
+- Notes / 说明: 不能在 `is_dead` 之后补救（掉落/分数已结算）；守卫只把 `final_damage` 降到 `hp-1`，期间重复致命返回 0 且不续时。4 秒到期用 `take_damage(..., bypass_hook=true, resolved_damage=hp)` 走原生死亡链，保证击杀归属/掉落/击杀类道具一次性结算；`Game.one_hit_kill`、`stats.is_test_target`、`GameTags.EXECUTE_DAMAGE` 跳过拦截。策反/回池/清 Buff 通过 `deactivate()` 注销 guard 并停表。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-21
+
+### [Mod/IZZY] 处决伤害必须带 `GameTags.EXECUTE_DAMAGE` 才能穿透延迟死亡
+- Evidence / 证据: `mods/doom_slayer_izzy/scenes/doom_slayer_izzy_melee.gd:493`、`mods/doom_slayer_izzy/script/glory_manager.gd:135`（`TRUE_DAMAGE + ds_execute + EXECUTE_DAMAGE`）；`mods/doom_slayer_izzy/entry/doom_slayer_izzy_entry.gd:60-68`（待处决只放行 `ds_execute`）；`glory_manager.gd:160-203`（进待处决即 `_settle_on_entry`，清标记时 `_restore_stats`）
+- Notes / 说明: izzy 的 `enemy_damage_interceptor` 仍在 `take_damage` 最开头，优先于狂怒 fatal guard；首次致死命中可能先被 `try_stagger` 标成待处决（60%），这是 hook 顺序决定的抢占。若处决伤害被狂怒 guard 拦下，会出现「处决失败 + 已提前结算后再恢复 + 4 秒真死再结算」的重复分数/金币，因此确认处决优先。两条拦截通道语义不同，不要合并。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-21
+
+### [Chip] 狂怒燃烧条的坐标空间与逐实例材质
+- Evidence / 证据: `scenes/debuff/frenzy_effect.gd:13`（`visual_scale` 默认 0.5）、`:103-122`（`shrink` 统一缩尺寸/间距；effect 根 `position = center`，bar Y 需 `head_top - center.y`）、`:133-172`（`_sprite_bounds` 返回本体局部 Y；`AnimatedSprite2D` 走 `SpriteFrames.get_frame_texture()`）、`scenes/debuff/frenzy_effect.tscn:8-12`（`resource_local_to_scene = true`）
+- Notes / 说明: 特效根在 `HurtBox` 中心，但视觉 sprite 顶部是敌人本体局部坐标；两者混用会让 bar 多偏移一个 `center.y`（`visual_scale=1.0` 时约 20px 而不是 10px，`0.5` 时约 10px 而不是 5px）。`AnimatedSprite2D` 没有 `get_rect()`，直接调用会在运行时报 `Invalid call`，需回退到 `SpriteFrames` 当前帧纹理并按 `centered`/`offset` 还原矩形。`BurnBar` 的 `ShaderMaterial` 必须逐实例（场景 `resource_local_to_scene` + `_ready()` 内 `duplicate()`），否则多个狂怒敌人共享同一个 `progress`。整体缩放用 `visual_scale` 统一缩尺寸与间距，不要直接给特效根加 `scale`：根在 HurtBox 中心，根缩放会把 bar 一起往身体中心拉，破坏头顶位置。
+- SUPERSEDED: 2026-10-21 用户要求统一头顶 VBox；`BurnBar` 不再由 effect 本地定位、不再用 `visual_scale` 缩放，改由 `Enemy.OverheadStack` 底部锚定，条底距 BuffCard 2px。旧「bar 多偏移 center.y」结论仅适用于 fallback 分支。来源：user。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Chip] 狂怒头顶显示统一走 `Enemy.OverheadStack`，透明 padding 不应参与定位
+- Evidence / 证据: `script/entity_ENEMY.gd:616-691`（`_setup_overhead_display` / `add_overhead_item` / `_refresh_overhead_layout`）、`:693-763`（当前动画逐帧 opaque used-rect + 静态缓存）、`:765-788`（HurtBox/CollisionShape 回退）；`scenes/debuff/frenzy_effect.gd:135-145`（`_attach_bar`）、`:147-154`（`_sync_bar_shader_size`）、`:40-46`（`_exit_tree` 摘除 bar）；`scenes/debuff/frenzy_effect.tscn`（`BurnBar` 44×6、`SHRINK_CENTER`、`resource_local_to_scene`）。
+- Notes / 说明: 用户要求所有敌人/Boss 头顶内容统一成 VBox：`BuffBox` 固定最底部，额外内容（狂怒燃烧条/未来状态）自动往上排。`Enemy._ready()` 运行时接管原 `MarginContainer/BuffBox`，不逐场景改 18 个 `.tscn`；`BuffBox` 的 unique name 与 BuffManager 路径保持兼容。布局必须用 `OverheadStack.get_combined_minimum_size()` + `MarginContainer` 50% 缩放，底边 = 可见头顶 - 2px；VBox `separation=4` 在 50% 下视觉为 2px。**不要用整帧顶边**：`sweeper` 帧 64×64 但内容约 26×21、顶部约 25px 透明 padding，会把头顶抬高；应按当前动画帧纹理 `get_used_rect()`（`AtlasTexture` 先裁 region）加 `centered`/`offset`/sprite transform 求最高不透明点，并缓存 used-rect。隐藏的 `BurnBar` 不占 VBox 高度，`begin_burn()` 显示后 VBox 自动向上增长。实测 sweeper：未致命 stack `18×26`；致命后 `44×36`、bar `(309,138,22,3)`、buff `(309,143,22,13)`，卡底到头顶 2px。截图用 `SubViewport` 可避开主菜单遮挡；MCP `game` 截图在暂停+多帧后可能出现残影，以 `SubViewport.get_texture().get_image()` 落盘为准。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
+
+### [Coop/Chip] 狂怒延迟死亡的击杀归属仅保证 host 侧结算
+- Evidence / 证据: `mods/etn_coop/net/coop_net.gd:2236-2264`（客机命中由 `enemy_damage_interceptor` 拦截并上报 host，客机本地不跑扣血）；`mods/etn_coop/net/coop_net.gd:8269`（host 向归属端 `rpc_id(..., "_remote_enemy_proc", ..., killed, score)`）；`:8627`（`_remote_enemy_proc`）
+- Notes / 说明: 延迟死亡期间 host 不死亡、不上报 killed；4 秒后由 host 的 Timer 结算，客机的击杀/得分/EX 充能归属会丢失或记到 host。本次确认只做单机语义，`mods/etn_coop` 不改；联机遇到时按此限制说明，不视为回归。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-21
+
+### [Combat/Chip] 重甲的动态承伤乘区必须用组件除回旧系数，并按命中事件刷新
+- Evidence / 证据: `resources/buff/components/armored_component.gd`（`_target_factor()`、`_apply_factor()`、`UPDATE_EPSILON`）；`script/EnemyStats.gd:172`（`global_hurt_damage = base × global_hurt_damage_mult`）；`script/EnemyStats.gd:74-134`（`hp` setter 的 `hp_change_cd` 10Hz 节流）；`script/health_component.gd:257`、`script/health_component.gd:168`（`damage_taken` 逐击发射）。
+- Notes / 说明: 词条重甲从静态 `modifiers`（×0.7）改为按 `hp/max_hp` 动态系数：`factor = clamp(1.8 - 1.6 × r, 0.2, 1.0)`。`Buff.modifiers` 只能表达常量，动态效果必须走 `component_scene`；改 `global_hurt_damage_mult` 时要用 `mult / old_factor × new_factor`，才能与其它承伤乘区叠加并在移除时还原。只监听 `hp_changed` 不够：它受 `hp_change_cd` 10Hz 节流，同帧多段命中会按旧血量继续吃高减伤；需同时监听 `HealthComponent.damage_taken`（逐击）。系数变化小于 `UPDATE_EPSILON=0.005` 时跳过刷新，避免无意义的 `update_body_ability()`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
+
+### [Chip] 50% 破甲边界不能复用承伤刷新的 `UPDATE_EPSILON`
+- Evidence / 证据: `resources/buff/components/armored_component.gd:64-69`（`crossed` 与 `UPDATE_EPSILON` 判断）、`:81-82`（`_is_broken` / `BREAK_EPSILON`）、`tests/test_armored_component.gd`（1000 HP 下 `502 → 498 → 502`）
+- Notes / 说明: `hp_change_cd` 与 `damage_taken` 都可能让小步跨线只变化约 0.4%，小于 `UPDATE_EPSILON=0.005` 时会被直接跳过，导致 50% 碎甲视觉/音效不触发。阈值类状态必须单独用更小的 `BREAK_EPSILON=0.0001` 比较，并在 `_is_broken` 发生翻转时强制刷新；不要为了碎甲把伤害刷新 epsilon 一并调小，否则每次命中都会 `update_body_ability()`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Chip] `chip_target_tags` 与 `chip_target_enemy_ids` 同时为空 = 普通敌人不限目标
+- Evidence / 证据: `scenes/manager/chip_manager.gd:286-290`（两侧都空直接 `return true`）；`resources/game_mode/chip_armored.tres`（已删除 `chip_target_tags`）
+- Notes / 说明: 需要让某词条对所有普通敌人生效时，把两个目标数组留空即可，不要额外写通配标签。Boss 仍由 `chip_include_boss=false` 独立排除，与目标过滤无关。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-21
+
+### [UI/Chip] HUD 动态创建的 Control 要逐个设 `mouse_filter=IGNORE`，父节点 IGNORE 不会自动穿透子控件
+- Evidence / 证据: `ui/chip_hud.gd:37-72`（`slot_box`、`panel`、`row`、`icon`、`count_label` 全部显式设 `MOUSE_FILTER_IGNORE`）；`ui/chip_hud.tscn` 中 `Root`/`Slots` 原本已是 `mouse_filter=2`
+- Notes / 说明: `Control` 默认 `MOUSE_FILTER_STOP`；只把容器设为 `IGNORE` 时，其上动态 `new()` 的 `PanelContainer`/`HBoxContainer`/`TextureRect`/`Label` 仍会吃掉鼠标事件。纯展示型 HUD 的每个动态控件都要单独设 `IGNORE`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
+
+### [Chip] 死亡触发领域依赖 `is_dead` 同步回调先于 deferred idle/清 Buff
+- Evidence / 证据: `script/EnemyStats.gd:86-97`（`hp<=0` 时同步 emit `is_dead`）、`script/entity_ENEMY.gd:572-574`（`_coin_drops` / `on_dead` deferred）、`script/entity_ENEMY.gd:134`（`idle_state()` 内 `clear_all_buff()`）、`resources/buff/components/corruption_field_component.gd:32-40`（`_on_dead` 同步生成领域）
+- Notes / 说明: 死亡生成型词条必须在 `EnemyStats.is_dead` 的同步回调里读取 `body.global_position` 并生成；`entity_ENEMY.on_dead` 与 `idle_state` 都是 deferred，之后才会清 Buff/回池。若在 `deactivate()` 或回池后再生，位置已被归零且组件可能已断开。`source_refcount` 领域使用独立 `source_id`，离开/闪避/过期只移除自己的来源。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [VFX/Chip] 地面颜料滩挂 `YSort`，根 `z=-1` 放到角色脚下
+- Evidence / 证据: `scenes/main/main.tscn:240-260`（`FloorLayer` 在 `YSort` 前；`YSort/FloorWall`、`SpawnMap`、`Wall` 均 `visible=false`；背景层在 `z=-10/-9`）、`scenes/main/test_room.tscn:173-201` 同结构；`scenes/debuff/corruption_field.tscn`（根 `z_index=-1`，`PaintBase`/`PaintEdge`/`Bubbles` 继承）、`resources/buff/components/corruption_field_component.gd:_spawn_field()`（优先 `PlayerRoot` 父节点 `YSort`，回退 `SELayer`）
+- Notes / 说明: 腐化领域需要显示在角色/敌人脚下时，用 `YSort` + 根 `z_index=-1`：角色和敌人保持 `z=0`，背景在 `z=-10/-9`，颜料滩/气泡位于两者之间。当前战斗场景的地面 TileMap 是 `visible=false`，所以 `z=-1` 不会被地板盖住；如果以后启用可见地面 TileMap，需要再给它单独分层。不要用 `SELayer` 作为常规地面层，它会盖在角色脚上。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Chip] 腐化场 0.4s、攻击附腐化、感染不占同场上限
+- Evidence / 证据: `scenes/debuff/corruption_field.gd`（`corruption_interval=4`、`INFECT_TICKS=10`、`_infect_enemies`）；`script/chip_corruption_rules.gd`；`script/projectile_spawner.gd`、`script/entity_ENEMY.gd`、`scenes/enemies/tank_gun_1.gd`（写 `DamageData.corruption_power`）；`script/player_health_component.gd:169`；`resources/buff/components/corruption_field_component.gd`（`BuffRouter.apply_buff` 传入 carrier）
+- Notes / 说明: 0.4s 在 10Hz 下必须用 4 tick，不是浮点计时；攻击附加腐化只写直接命中（子弹/近战/炮台炮弹/爆炸复制），DOT/场地不写，由玩家受击侧统一应用 `corruption_power`。感染敌人走 `BuffRouter.apply_buff` 直接加同一个 `chip_corruption_buff`，不调用 `ChipManager.apply_to_enemy`，因此不增加 `_active_count`/`_counts`，也不占词条上限；感染持续到死亡，领域过期不清除。`corruption_field_component.activate()` 会调用 `body.create_damage_data()`，确保感染后近战/接触伤害的缓存也刷新。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-21
+
+### [Chip] 计分倍率按选中词条总数，在结算时对最终总分乘一次
+- Evidence / 证据: `scenes/manager/chip_manager.gd:208-214`（`get_selected_chip_count()` 优先 `_selected_chips`，未准备时回退 `_load_selected_chip_modes()`；`get_score_multiplier()`）；`ui/game_over_page.gd:93-105,145`（`_apply_chip_score_bonus()` 在写 `ScoreNum` 前结算）
+- Notes / 说明: 倍率必须按选关页选中的词条总数计算，不能按每回合随机生效的 `_active_chips`，否则选中 >3 时倍率会随抽取浮动。`_selected_chips` 在 `prepare_round()` 中按 `PlayerData.game_mode` 去重加载，客机不准备词条时回退到同一过滤逻辑。结算放在 `time_count_stop()` 写分数/记录之前，对最终总分（击杀 + 金币 - 消费）乘一次，`score <= 0` 不放大，并用 `_chip_score_bonus_applied` 防重复；不要把倍率塞进 `score_defeats_count()`，否则金币/消费扣分不会同步。词条上限额外部分只对超过 `active_chip_limit` 的数量生效，并叠在基础 40 封顶之上。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
+### [Chip/VFX] 腐化载体染色：描边 shader 用 tint uniform，无 shader 用 `sprite_2d.modulate`
+- Evidence / 证据: `shaders/sprite_outline.gdshader`（`corruption_tint` / `corruption_amount`，最终 `mix(COLOR.rgb, tint, amount)`，默认 amount=0）；`resources/buff/components/corruption_field_component.gd:_apply_tint/_clear_tint`（有描边材质时设 uniform，无材质时设 `original.lerp(tint, 0.3)`，并恢复原值/原材质）；`scenes/enemies/lighttank_helmet.tscn:134`（`sprite_2d = Graphics/TankGraphics`）、`:145-164`（`CanvasGroup` 下的 `tank_body`/`tank_turret` 无 shader）；`scenes/enemies/enemy_tank.gd:127,168`（`graphics.modulate` 受击闪白/恢复）
+- Notes / 说明: `sprite_outline.gdshader` 在 fragment 直接重写 `COLOR`，会忽略 CanvasItem `modulate`，所以普通描边敌人必须走 shader 的 `corruption_tint` / `corruption_amount`；`modded_sweeper` 的蓝色通道很低，乘法 tint 会变成暗红并接近 `red_sweeper`，必须用 `mix` 向浅紫补蓝。坦克的 `TankGraphics` 没有 shader，用 `sprite_2d.modulate` 的 `original.lerp(浅紫, 0.3)` 让 `tank_body`/`tank_turret` 一起变紫。不要全局改描边 shader 去乘 modulate：子弹/UI 有 `Color(100,1.5,1.5)` 等高亮值，会造成回归；新 uniform 默认 0 不影响其它资源。不要改 `graphics.modulate`（`EnemyTank._hurt_flash()` 占用）；移除 Buff 时恢复 modulate、材质或 shader 参数。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21

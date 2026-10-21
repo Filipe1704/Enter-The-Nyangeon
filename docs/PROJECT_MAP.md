@@ -38,8 +38,11 @@
 
 - **设置布局（2026-10-16）**：`ui/option.tscn` 保持通用菜单与扩展页容器职责，左栏采用顶部标题 / 像素 × 关闭按钮、独立纵向滚动页签和底部 Esc 提示；共享页签沿用像素字体、原版行高/间距与 `on_select`/`selected` 金色反馈，长标题按原版裁切、不提供 tooltip，溢出显示滚动条。首次自动显示 GAME，再次打开恢复当前页焦点。主菜单和暂停页共用；设置专项入口为 `python tests/run_ui_ux_checks.py --godot <Godot路径> --settings-only`，可追加 `--screenshots` / `--installed-mods`；长标题及再次打开回归见 `_check_settings_navigation_states` 和 `_check_settings`。
 - **统一悬浮提示（2026-10-18）**：`ui/hover_tooltip.tscn` / `hover_tooltip.gd`（每 CanvasLayer 复用一个宿主，全视口唯一的可见浮层）+ `ui/hover_tooltip_binding.gd`（`class_name HoverTooltipBinding`，目标绑定）。已迁移：`upgrade_item_card`、`gamemode_card`、`gamemode_type`、`test_item_card`、`test_enemy_card`、`test_character_card`、`ability_shop_item_card`、`ability_shop_ps_card` 及难度页支援主卡/候选、测试房支援池；卡片原有的 `Node2D/Text` 提示树与 `support_details` 专用浮层均已删除。约定见 `CONVENTIONS.md` §5.1，宿主为何不是 autoload 见 `ARCHITECTURE.md` §6。
-
+- **词条芯片 / 浩劫（2026-10-20）**：难度页 `game_mod_box` 只放普通模式（闪击/无尽/浩劫），`enemy_mod_box` 只放 `chip_enabled=true` 的敌人词条；`havoc` 未勾选时整个 `ENEMY MOD` 区隐藏。`Level.havoc_required/havoc_min_enemy_mods` 控制难度要求（TORMENT 至少 3 个，其它难度开浩劫时至少 1 个）；`ENEMY MOD` 标题固定英文并显示 `(当前/要求)`，条件不足点击开始时标题字体闪红。鼠标/键盘焦点与移动端第一次触摸统一走 `level_button.previewed`，TM 自动勾选浩劫，其它难度仅撤销自动勾选；难度展开与焦点解耦，焦点移到支援/模式时最后难度仍保持展开，只有展开新难度、确认或返回时收起。离开难度页撤销自动勾选。硬化外壳护盾视觉复用 tower `defense_mod`，独立在 `scenes/debuff/shield_effect.tscn`，统一按敌人 HurtBox 最大边 ×1.1 自适应；破盾/死亡释放。HUD 为 `ui/chip_hud.tscn` + `ui/chip_hud.gd`，在顶部居中、贴近回合计时下方只显示本轮生效的 3 个词条图标（不显示标题/名称）；默认不显示同场附着数，`debug_show_counts` 仅调试用。CanvasLayer 与 `RoundTimer` 同为 `layer=1`，Root 缩放 50%、透明度 0.7，避免遮挡 pause 菜单；无词条、Boss 演出/结算时隐藏。计分与上限：每选中 1 个词条，结算总分 +3%（按选中总数，含未抽中的）；选中数超过 3 时每个超出词条 +4 同场词条敌人上限（基础 8~40 之上叠加）。
+- **重甲视觉（2026-10-21）**：`ui/enemy_armor_bar.tscn`（8 段冷钢蓝白头顶条）显示当前减伤强度，满血满条、50% 清空；`scenes/debuff/armor_break.tscn` 提供 12 枚钢片 + 加法冲击环的碎甲演出，音效占位 `SoundManager/SFX/ArmorBreak`。视觉只在本机渲染，不改敌人 sprite material，不显示百分比。
+- **腐化领域（2026-10-21）**：`chip_corruption` 的 `chip_corruption_buff` 监听敌人死亡，在 `YSort`（优先 `PlayerRoot` 父节点，回退 `SELayer`）生成 `scenes/debuff/corruption_field.tscn`（池上限 100，半径 44，持续 8 秒；`PaintBase`/`PaintEdge` 一次性粒子生成随机轮廓的紫色颜料滩 + 青绿气泡，领域根 `z=-1` 位于角色下方）。领域每 0.4 秒给范围内玩家 1% 最大生命腐化并减速 30%；携带该效果的敌人直接命中额外附加 2% 最大生命腐化。领域生成后 1 秒内接触的敌人会直接获得同一 Buff，不占词条同场上限，持续到死亡并可继续传播。跳跃/闪避立即移除减速，离开/过期/回合结束清理。
 - **CRT 滤镜（2026-10-21，2026-10-21 换用 VHS/CRT 版）**：`ui/crt_overlay.tscn` / `crt_overlay.gd`（autoload `CRTOverlay`，`layer=90`，游戏/UI 之上、F3 叠层之下）+ `shaders/crt_filter.gdshader` / `crt_filter_material.tres`。`BackBufferCopy(copy_mode=VIEWPORT)` 先完整拷贝屏幕纹理，再由全屏 `Filter` 采样。实现为 pend00「VHS and CRT monitor effect」（CC0）的 Godot 4 移植：扫描线、荫罩、滚动干扰、噪点、静态噪点、色差、桶形曲率、暗角、VHS 脱色；默认按参考全开。`resolution` 跟随设计分辨率 640×360（扫描线 1:1 逻辑像素），荫罩频率由 shader 取 `resolution.x / 3`，不随窗口缩放。设置项 `Game.crt_filter`（`[game] crt_filter`，默认关）在 GAME 页 DISPLAY 卡片 `RowCrt`，移动端隐藏并强制禁用；关闭时 `BackBufferCopy`/`Filter` 均隐藏。细节调参只改 `crt_filter_material.tres`。
+
 - **存档/安装边界（2026-10-13）**：`script/scene_data_store.gd` 管主档/备份读取与文件替换，`Game.gd` 管元进度赋值；`script/mod_installer.gd` 管 ZIP 暂存/验证/目录交换，`ModManager` 保留公开入口与挂载/注册职责。两者均为 RefCounted helper，不增加 autoload。
 - **独立回归（2026-10-13）**：`tests/run_persistence_checks.py`、`run_mod_install_checks.py`、`run_coop_recovery_checks.py` 与既有 UI / 联机拓展入口使用隔离 user://；`test_relay_limits.py` 为回环服务测试；`check_localization.py` 为源格式防护，`godot_check_output.py` 统一原生错误分类。
 
@@ -107,6 +110,7 @@ test_room.tscn     (Node2D, test_room.gd)  ← 沙盒/测试房（从 menu 进�
 | 启动/单例/事件总线 | `docs/ARCHITECTURE.md` → `script/Game.gd`, `script/GameEvents.gd` |
 | 伤害/治疗/血量 | `docs/SYSTEMS.md` §Combat → `script/damage_data.gd`, `script/health_component.gd` |
 | Buff | `docs/SYSTEMS.md` §Buff → `scenes/manager/buff_manager_base.gd` |
+| 词条芯片 / 同场词条 | `docs/SYSTEMS.md` §6.4 → `scenes/manager/chip_manager.gd`, `ui/chip_hud.gd` |
 | 敌人/玩家/召唤物 | `docs/SYSTEMS.md` §Entities → `script/entity_ENEMY.gd`, `script/player.gd`, `script/summoned.gd` |
 | 数据资源字段 | `docs/SYSTEMS.md` §Resource data model |
 | 命名/层/本地化/输入 | `docs/CONVENTIONS.md` |
