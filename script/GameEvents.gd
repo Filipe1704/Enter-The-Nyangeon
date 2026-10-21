@@ -596,6 +596,11 @@ func emit_round_end():
 		clear_slow()
 		round_end.emit()
 
+func force_emit_round_end():
+	round_switch = false
+	clear_slow()
+	round_end.emit()
+
 func emit_fever_time_start():
 	fever_time_start.emit()
 

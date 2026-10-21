@@ -1992,6 +1992,7 @@
 ### [Support] 支援 EX 开局可用/无 cd 连放：`SupportData.ex_cost` 未初始化（=0）使门槛恒真
 - Evidence / 证据: `script/support_as.gd:43`（`now_cost >= ex_cost` 门槛）、`:58`（`skill_end` 复位 `now_cost=0`）、`:35-40`（`cost_count` 达标发 `support_ex_ready`）；`script/support_data.gd:132-154`（`get_card` 的 `has_card` 分支不直接设 `ex_cost`）、`:184`（`count_exp` 仅在 `now_lv>0` 设 `ex_cost`）、`:59-80`（`game_add_support` 不保证 `ex_cost` 与生成的支援一致）、`:42-49`（`ex_cost`/`now_cost` 定义）；`script/Game.gd:235`（`load_playerdata` 设 `game_support` 不调 `get_card`）；`mods/etn_coop/ui/coop_select.gd:31-33`（默认空支援不调 `get_card`）。修复：`mods/etn_coop/net/coop_net.gd`（`_on_first_round_add` → `_normalize_support_cost`）、`ui/coop_select.gd`（默认空支援补 `get_card`）。
 - Notes / 说明: **现象**（user，配图）：支援 HUD 显示 READY 但充能条为空——`cost_count` 在 `now_cost>=ex_cost` 时发 `support_ex_ready`（`support_card.gd:29` 的 `value=now_cost/ex_cost` 画成 `0/0` 空条），两者同时成立只可能 `ex_cost==0`；此时 `now_cost(0)>=ex_cost(0)` 恒真 → 开局即可放，`skill_end` 又把 `now_cost` 归 0 → 无限连放。**根因**：`SupportData.ex_cost` 只在 `get_card()` 里赋值，而 `get_card` 的 `has_card` 分支靠 `count_exp()`，`count_exp` 又只在 `now_lv>0` 时 `ex_cost=now_support.ex_cost`；一旦「支援场景被生成但 `get_card` 未按本体语义设 ex_cost」（存档 `load_playerdata` 设 `game_support` 不调 get_card、`coop_select` 默认空支援不调 get_card），`ex_cost` 停在默认 0。**联机侧修复（随 mod 分发）**：`CoopNet._on_first_round_add` 末尾 `_normalize_support_cost.call_deferred()`——在 `main.first_round` 的 `game_add_support()` 之后 `get_card(game_support)` 同步 + 兜底 `if ex_cost<=0: ex_cost=game_support.ex_cost` + `now_cost=0`；`coop_select._ready` 默认空支援补 `get_card`。**留档（本体根治，暂不改）**：① `support_data.gd:get_card` 的 `has_card` 分支应无条件 `ex_cost=now_support.ex_cost`，`game_add_support` 生成前调 `get_card(game_support)`；② `support_as.gd` 的 `_unhandled_input`/`skill_active` 加 `ex_cost>0` 门。**关键约束/实测**：`SupportData` 是 autoload 且先于 `ModManager` 加载 → `support_data.gd` **不可**随 mod `replace_files` 覆盖；而 `support_as.gd`（`class_name SupportAS`，子类 `extends SupportAS`）**可**覆盖且作用于子类——实测：临时 pck 覆盖 `res://script/support_as.gd`（加标记方法）后，`serina_as.tscn` 实例 `has_method(marker)==true`、`get_base_script().resource_path==res://script/support_as.gd` 且源码含标记。故将来做本体防御门可经 replace 分发。
+- SUPERSEDED: 2026-10-21 本体已根治：`support_data.get_card` 无条件写 `ex_cost`、`game_add_support` 生成前同步并清零、`support_as` 加 `ex_cost>0` 门控；mod 的 `_normalize_support_cost` 已删除。本条「本体根治暂不改」不再适用。（来源：user + code + test）
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-10
 
@@ -2399,6 +2400,7 @@
 - Date / 日期: 2026-10-14
 - SUPERSEDED: 2026-10-14 用户确认本批变更尚未提交上游，联机协议由 v5 统一调整为 v4；存档格式 v3 及其他版本约定不变。
 - SUPERSEDED: 2026-10-14 用户改定本体发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4），联机 Mod 仍 `0.1.10`；本条回滚结论仅适用于当时。（来源：user）
+- SUPERSEDED: 2026-10-20 用户改定联机 Mod 发布版本为 `0.1.11`，manifest 最低本体版本提升为 `v0.5.1.4`；本条最低版本结论不再适用。（来源：user）
 
 ### [Coop/Version] 尚未提交上游的联机协议变更统一为 v4
 - Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:32`（`PROTOCOL_VERSION = 4`）；上游基线 `78ed5ad` 同字段为 3。
@@ -2880,6 +2882,73 @@
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-19
 
+### [Boss] 乱入原生 Boss 必须显式跳过 `boss_round_end` 与运镜/暂停
+- Evidence / 证据: `scenes/enemies/boss/goliath.gd`（`on_dead()` 的 `emit_boss_round_end` 与 `boss_enter_anim`/`boss_death_anim` 的相机/暂停分支）、`scenes/enemies/boss/erosion_tower_group.gd`（`boss_dead()` 与同名演出分支）、`script/spawn_anim.gd`（`is_intruder` → 实体 meta `boss_intruder`）。
+- Notes / 说明: 本体 Goliath / 侵蚀之塔在死亡时会 `emit_boss_round_end()`，乱入若沿用旧路径会触发 `round_timer.rage_mode_end()`，把普通回合的 60s 计时直接停掉；入场/死亡演出还会 `camera_move` + `get_tree().paused`。乱入标记必须在两个 Boss 的入口/死亡流程里统一判断，只跳过相机/暂停与 `boss_round_end`，保留入场、死亡动画与 30% 金币掉落。`erosion_tower_group` 的入场演出是非暂停分支时仍要 `await` 入场动画后调用 `attack_state()`，否则乱入塔不会攻击。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Boss] `erosion_tower_group` 根节点不在 `Enemy` 组，普通清场不会回收
+- Evidence / 证据: `scenes/enemies/boss/erosion_tower_group.tscn:59`（根节点无 `groups`；子塔才是 `BOSS`/`Enemy`）、`scenes/main/main.gd:99-108`（只遍历 `EnemiesRoot` 的直接子节点并筛 `Enemy` 组）。
+- Notes / 说明: 普通 `enemy_clear_unit()` 只处理 `EnemiesRoot` 下**直接**子节点中的 `Enemy` 组；塔组根节点不入组，所以塔组必须在自身死亡/离场时 `queue_free`，或由调用方用显式索引清理。Boss 乱入用组 `"BossIntruder"` 同时登记 `spawn_anim` 与落地实体，`round_end` / `game_over` / FEVER 超时统一 `queue_free`；仅依赖现有清场会留下塔组根节点。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Enemy] 回合清场不能走 `on_dead` / `stats.is_dead`，只能走纯视觉入口
+- Evidence / 证据: `scenes/main/main.gd:enemy_clear_unit()`；`script/entity_ENEMY.gd:play_clear_death()`（`DeathAnim`/`DEATH_ANIM_SCRIPT.spawn_for_enemy`）；`scenes/enemies/enemy_tank.gd:play_clear_death()`（`ExplosionAnim.play_explosion_only()`）；`script/death_anim.gd:on_death_anim(play_sound)`。
+- Notes / 说明: 清场时直接调用 `on_dead()` 或 emit `stats.is_dead` 会触发 `_coin_drops`、`settle_converted_clear`/分数、`emit_enemy_dead_position` 等 gameplay 结算，且坦克类会播专属死亡动画/伤害爆炸。清场必须只调用视觉入口：普通敌人复用 `DeathAnim` 的 `death_gpu`（传 `play_sound=false`），坦克用 `ExplosionAnim.play_explosion_only()`（不启动 `smoke`、不播音效）。`clear_death_played` meta 用于去重（`enemy_clear_unit` 可能被 `round_end`/`round_upgrade` 多次触发）；`ExplosionAnim.play()` 保留黑烟+音效，仅 Goliath 手部使用。清场视觉按一次性实例化 + 约 1.2 秒后 `queue_free`，不入对象池。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip] 词条 Buff 必须在 `active_state()` 前应用并立即刷新属性
+- Evidence / 证据: `script/spawn_anim.gd:spawn_enemy_body()`（`update_body_ability()` → `ChipManager.apply_to_enemy()` → `active_state()`）；`script/entity_ENEMY.gd:active_state()`（`stats.spawn_hp()`）；`scenes/manager/buff_manager_base.gd:_host_refresh()`（延迟到 `_process` 才 `update_body_ability()`）。
+- Notes / 说明: `active_state()` 会按当前 `stats.max_hp` 回满血，词条的血量 Buff 必须在它之前应用；应用后还要立刻再调一次 `stats.update_body_ability()`，不能只依赖 `BuffManagerBase` 的延迟刷新，否则首帧仍按旧上限回血。Boss 默认由 `chip_include_boss=false` 排除，白名单/标签匹配不能替代该门槛。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [UI/Input] 难度悬停保持与移动端预览必须分开 mouse/focus 与 touch 路径
+- Evidence / 证据: `project.godot:213`（`pointing/emulate_mouse_from_touch=false`）；`ui/level_button.gd`（`mouse_in` / `mouse_out` / `previewed`）；`ui/level_select.gd`（`_on_level_previewed`、`prepare_level_selection`）；`ui/gamemode_button.gd`（自动/手动浩劫标记）。
+- Notes / 说明: 难度展开与焦点解耦：`level_button` 用 `_preview_open` + `open_preview/close_preview` 管状态，`level_select` 只保留一个 `_open_level_button`；焦点移到支援/模式或鼠标移出难度时不收起，展开另一个难度、确认、返回或重新进入时才收起。移动端不会产生 `mouse_entered`/`focus_entered`，必须由第一次 `InputEventScreenTouch` 显式触发 `open_preview()`，第二次触摸才确认。浩劫自动勾选用 `_havoc_auto_selected` 与 `_auto_toggle` 区分来源：只有自动勾选会在悬停其它难度或离开难度页时撤销，手动勾选保留。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [UI] `enemy_mod_box` 与 `ENEMY MOD` 标题是兄弟节点，必须同时隐藏滚动容器
+- Evidence / 证据: `ui/gamemode_button.tscn`（标题/分隔线在 `.../VBoxContainer/VBoxContainer`；`enemy_mod_box` 在平级的 `.../VBoxContainer/ScrollContainer2`）；`ui/gamemode_button.gd:_update_enemy_mod_visibility()`（同时切换 `enemy_mod_section` 与 `enemy_mod_scroll`）。
+- Notes / 说明: 只隐藏标题所在的 `VBoxContainer` 不会隐藏 `ScrollContainer2` 下的敌人词条卡片。未开启 `havoc` 时必须同时隐藏 `enemy_mod_section` 和 `enemy_mod_scroll`；不要再加 `enemy_mod_hint`。`ENEMY MOD` 固定英文、禁用自动翻译，标题显示 `(当前/要求)`；数量不足点击开始时播放标题字体闪红和失败音效。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip] 硬化外壳是次数盾，扣血前必须在 `HealthComponent` 结算
+- Evidence / 证据: `script/EnemyStats.gd`（`shield_active/shield_max_hits/shield_hits`、`shield_broken`、`reset_shield()`）；`script/health_component.gd:_take_damage_internal()`（扣血前把本次伤害设为 1、耐久 -1、归零时发 `shield_broken`）；`resources/buff/components/shield_component.gd`（10 + 2×回合、封顶 40，破盾移除 Buff）。
+- Notes / 说明: 次数盾必须在 `HealthComponent` 扣 `stats.hp` 前处理，才能让飘字/`damage_taken` 都是 1；不能在 `spawn_hp()` 重置护盾，否则 `spawn_anim` 刚施加的 Buff 会在 `active_state()` 里被清掉。护盾耐久按回合在 `activate()` 时固定，不随敌人存活跨回合成长，也不重生；破盾当击仍只扣 1。`Game.one_hit_kill` 跳过护盾。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Chip] 同场上限是“存活/生效标记数”，不是每回合生成数
+- Evidence / 证据: `scenes/manager/chip_manager.gd`（`_active_count`、`_marked`；`apply_to_enemy()` 达上限直接返回；`_on_marked_enemy_dead` / `_on_marked_buff_expired` / `_on_marked_enemy_exiting` 调用 `_release_marked()`）；`ui/chip_hud.gd`（计数实时刷新）。
+- Notes / 说明: 词条敌人死亡、被清除，或该词条的全部 Buff 失效（例如硬化外壳破盾）时立即释放 1 个同场名额；后续敌人补位。`prepare_round()` 清零并清空 `_marked`，旧敌人的迟到信号不会误扣新回合。词条改为全局共享池，不再按词条分配固定名额；权重只决定每次新附着选哪个词条，权重更新放到回合结束。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [UI] 词条 HUD 默认不显示计数，CanvasLayer 用 layer=1
+- Evidence / 证据: `ui/chip_hud.tscn`（`layer = 1`、`Root.scale = Vector2(0.5, 0.5)`）；`ui/chip_hud.gd`（`debug_show_counts`、count Label 默认隐藏）；`scenes/player/momoi.tscn`（pause CanvasLayer layer=3）。
+- Notes / 说明: 战斗内词条 HUD 只保留图标，不显示标题和名称；同场计数仍由 `ChipManager.get_chip_counts()` / `chip_assigned` / `chip_released` 提供，仅在 `debug_show_counts=true` 时显示。ChipHud 必须与 `RoundTimer` 同为 layer 1，否则会盖住 layer 3 的 pause 菜单；整体缩放 50% 用 Root 的 scale + 中心 pivot 实现，Root 透明度 0.7，位置贴近 `RoundTimer` 下方。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [VFX] 护盾特效复用 tower `defense_mod` 时的尺寸/定位坑
+- Evidence / 证据: `scenes/debuff/shield_effect.tscn`（复制 `ripple` shader、内外渐变和 `defense_shield_anim`）；`scenes/debuff/shield_effect.gd:fit_to_enemy()`；`resources/buff/components/shield_component.gd:activate/deactivate()`。
+- Notes / 说明: 复制 tower `defense_mod` 时内部 `Node2D` 的 `position` 必须归零，tower 的 `(0,-44)` 是 Boss 专用偏移。护盾特效只随 ShieldComponent 生命周期创建/释放，tower 本体保持原样。`SUPERSEDED: 2026-10-20` 后续统一改为按 `HurtBoxShape2D` 形状最大边 ×1.1 自适应，不再读取 Sprite；原 `AnimatedSprite2D`/`get_rect` 逻辑已删除。
+- SUPERSEDED: 2026-10-21 不能递归 `find_child("HurtBoxShape2D")`：`tester_automaton_shield` 会先命中 `Graphics/Shield`，其它敌人也可能命中最先遍历到的子部件/弱点；必须取 `body.hurt_box_shape_2d` / `HurtBox/HurtBoxShape2D` 本体框，并让特效每帧跟随旋转的 HurtBox。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-20
+
+### [Coop/Mod] mod pck 内 `.tscn` 的 ext_resource UID 必须与 `.tres` 头部 UID 一致
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/ui/coop_theme.tres:1`（`uid://cq6shkh3j5pwh`）；`ui/coop_menu.tscn:13`（原引用 `uid://0ivk887ius3a`）；`build_coop_mod.ps1` 的 PCKPacker 构建日志出现 `ext_resource, invalid UID ... using text path instead`。
+- Notes / 说明: 编辑器会靠 `.godot/uid_cache.bin` 把旧 UID 解析到路径，所以镜像内看不出来；PCK 不带 UID 缓存，构建/运行时会报警并回退文本路径。同步编辑器生成或改名的 `.tres` 后，若 `.tscn` 仍引用旧 UID，需把引用改成 `.tres` 头部的新 UID（或去掉 `uid` 属性），再重新打包。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
 ### [Combat] 腐化的有效上限必须收口在 `Stats.hp` setter，且 `corruption` 声明在 `hp` 之前
 - Evidence / 证据: `script/Stats.gd`（`corruption` setter、`get_effective_max_hp()`、`hp` setter 的 overflow/clamp）、`script/player_health_component.gd:_accumulate_corruption_on_hit()`、`scenes/item/medical_kit.gd`、`ui/game_ui.tscn`（`Corruption_HP_BAR`）
 - Notes / 说明: 腐化不是直接改 `max_hp`（会被 `PlayerData._recompute_player_ability()` 覆盖），而是独立 `corruption` + 有效上限。治疗/溢出/赋值全部经 `Stats.hp` setter，故只改这一处即可覆盖所有治疗来源；`heal_overflow_to_t_hp` 的溢出基准也必须同步改为有效上限。`@onready` 初始化不经过 setter，但运行期外部赋值会访问 `hp`，因此 `corruption` 必须声明在 `hp` 之前；`max_hp` 被 `PlayerData` 重算后要调 `reclamp_corruption()`，否则腐化可能超过 `max_hp-1`。
@@ -2908,91 +2977,6 @@
 - Evidence / 证据: `script/summoned_health_component.gd:92-98`（`max_hp <= 0` 的召唤物把伤害转发给 `GameEvents.deal_damage_to_player`）、`scenes/player/ichika/ichika_ps.gd:75-76`（转伤接到玩家 `health_component.take_damage`）、`script/player_health_component.gd:142-145`（腐化积累入口）
 - Notes / 说明: Ichika 的 mobu 等召唤物 `SummonedStats.max_hp` 默认为 0，受伤时不扣自身生命而是转给玩家；转伤与玩家直接受伤共用 `take_damage`，仅凭 `source_type` 无法区分（两者都是敌方来源）。必须在 `SummonedHealthComponent` 转发时复制伤害并追加 `GameTags.SUMMON_TRANSFER`，玩家侧据此跳过 `corruption_power` 与连续受伤窗口，否则召唤物挨打也会给玩家积累腐化。转伤不更新 `_last_corruption_hit_msec`，因此不会把两次玩家直接受伤的窗口接起来。
 - Source / 来源: code + test
-- Date / 日期: 2026-10-20
-
-### [Boss] 乱入原生 Boss 必须显式跳过 `boss_round_end` 与运镜/暂停
-- Evidence / 证据: `scenes/enemies/boss/goliath.gd`（`on_dead()` 的 `emit_boss_round_end` 与 `boss_enter_anim`/`boss_death_anim` 的相机/暂停分支）、`scenes/enemies/boss/erosion_tower_group.gd`（`boss_dead()` 与同名演出分支）、`script/spawn_anim.gd`（`is_intruder` → 实体 meta `boss_intruder`）。
-- Notes / 说明: 本体 Goliath / 侵蚀之塔在死亡时会 `emit_boss_round_end()`，乱入若沿用旧路径会触发 `round_timer.rage_mode_end()`，把普通回合的 60s 计时直接停掉；入场/死亡演出还会 `camera_move` + `get_tree().paused`。乱入标记必须在两个 Boss 的入口/死亡流程里统一判断，只跳过相机/暂停与 `boss_round_end`，保留入场、死亡动画与 30% 金币掉落。`erosion_tower_group` 的入场演出是非暂停分支时仍要 `await` 入场动画后调用 `attack_state()`，否则乱入塔不会攻击。
-- Source / 来源: code + test
-- Date / 日期: 2026-10-20
-
-### [Boss] `erosion_tower_group` 根节点不在 `Enemy` 组，普通清场不会回收
-- Evidence / 证据: `scenes/enemies/boss/erosion_tower_group.tscn:59`（根节点无 `groups`；子塔才是 `BOSS`/`Enemy`）、`scenes/main/main.gd:99-108`（只遍历 `EnemiesRoot` 的直接子节点并筛 `Enemy` 组）。
-- Notes / 说明: 普通 `enemy_clear_unit()` 只处理 `EnemiesRoot` 下**直接**子节点中的 `Enemy` 组；塔组根节点不入组，所以塔组必须在自身死亡/离场时 `queue_free`，或由调用方用显式索引清理。Boss 乱入用组 `"BossIntruder"` 同时登记 `spawn_anim` 与落地实体，`round_end` / `game_over` / FEVER 超时统一 `queue_free`；仅依赖现有清场会留下塔组根节点。
-- Source / 来源: code + test
-- Date / 日期: 2026-10-20
-
-### [Enemy] 回合清场不能走 `on_dead` / `stats.is_dead`，只能走纯视觉入口
-- Evidence / 证据: `scenes/main/main.gd:enemy_clear_unit()`；`script/entity_ENEMY.gd:play_clear_death()`（`DeathAnim`/`DEATH_ANIM_SCRIPT.spawn_for_enemy`）；`scenes/enemies/enemy_tank.gd:play_clear_death()`（`ExplosionAnim.play_explosion_only()`）；`script/death_anim.gd:on_death_anim(play_sound)`。
-- Notes / 说明: 清场时直接调用 `on_dead()` 或 emit `stats.is_dead` 会触发 `_coin_drops`、`settle_converted_clear`/分数、`emit_enemy_dead_position` 等 gameplay 结算，且坦克类会播专属死亡动画/伤害爆炸。清场必须只调用视觉入口：普通敌人复用 `DeathAnim` 的 `death_gpu`（传 `play_sound=false`），坦克用 `ExplosionAnim.play_explosion_only()`（不启动 `smoke`、不播音效）。`clear_death_played` meta 用于去重（`enemy_clear_unit` 可能被 `round_end`/`round_upgrade` 多次触发）；`ExplosionAnim.play()` 保留黑烟+音效，仅 Goliath 手部使用。清场视觉按一次性实例化 + 约 1.2 秒后 `queue_free`，不入对象池。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-20
-
-### [Rendering/Shader] 全屏屏幕纹理叠加层必须自带 `BackBufferCopy(copy_mode=VIEWPORT)`
-- Evidence / 证据: `ui/crt_overlay.tscn`（`BackBufferCopy` 排在 `Filter` 之前，`copy_mode=2`）、`shaders/screen_outline.gdshader` / `shaders/shock_wave.gdshader`（游戏中已有的中途屏幕读取）
-- Notes / 说明: 2D 每帧只在**首个** `hint_screen_texture` 使用者处自动拷贝屏幕。描边/冲击波等已在绘制中途读过屏幕，后置的全屏滤镜若不自带 `BackBufferCopy`，只能拿到那一次的半帧画面（实测会错位/重复）。`copy_mode` 必须改成 `VIEWPORT`(2)：默认 `RECT`(1) 只拷贝 `rect`（默认 `(-100,-100,200,200)`）。全屏 ColorRect 还要 `mouse_filter=IGNORE`，否则吞掉所有输入。
-- Source / 来源: code + test
-- Date / 日期: 2026-10-21
-
-### [Rendering/Shader] CRT 扫描线/荫罩按设计分辨率虚拟网格生成，不能按物理像素
-- Evidence / 证据: `shaders/crt_filter.gdshader`（`virtual_size`、`fetch()` 吸附虚拟像素中心、`mask(..., floor(base_uv * virtual_size))`）；`ui/crt_overlay.gd:_sync_virtual_size`（读 `display/window/size/viewport_width/height`）
-- Notes / 说明: 参考实现跑在 640×360 的 SubViewport 上（1 texel = 1 游戏像素）。本项目没有全局 SubViewport，若按 `SCREEN_UV × 物理分辨率` 生成扫描线，720/1080 等非整数倍窗口会出现摩尔纹和错位。改为按 640×360 建虚拟网格：采样用 `(floor(vpix)+0.5)/virtual_size` + `filter_nearest`，荫罩也用同一网格且不随 `warp` 抖动。`hdr_2d=true` 时屏幕纹理为线性色，全程线性运算、不做 sRGB 转换。
-- Source / 来源: code + test
-- Date / 日期: 2026-10-21
-- SUPERSEDED: 2026-10-21 换用 pend00「VHS and CRT monitor effect」后，扫描线与荫罩不再共用同一网格（荫罩频率改为 `resolution.x / 3`），采样也不再吸附虚拟像素中心、不做亮度守恒。见下方两条新结论。
-
-### [Rendering/Shader] VHS/CRT 荫罩频率必须取 `resolution.x / 3`，扫描线才用 `resolution.y`
-- Evidence / 证据: `shaders/crt_filter.gdshader:142`（`grille_res = max(resolution.x / 3.0, 1.0)`）、`shaders/crt_filter.gdshader:145-151`（三通道相位 0 / 1.05 / 2.1）、`shaders/crt_filter.gdshader:161-166`（扫描线直接用 `resolution.y`）；`ui/crt_overlay.gd:_sync_resolution` 把 `resolution` 同步为 640×360。
-- Notes / 说明: 参考 shader 的 `resolution` 同时喂给 pixelate、扫描线、荫罩；它的默认 640×480 是按「物理画面宽/3」选的，直接套 640×360 会让荫罩正弦变成亚像素频率（摩尔纹 + 整体偏色）。拆开后的规则：荫罩用 `resolution.x/3`（一条 RGB 条 = 2 逻辑像素；`sinc = abs(sin)` 使每通道 3 逻辑像素一组），扫描线 / 噪点 / pixelate 仍用 `resolution`。改 `resolution` 时不要动 `/3`。另 `pixelate` 默认关：游戏本身已是像素画，二次吸附只会糊。
-- Source / 来源: code + test + user
-- Date / 日期: 2026-10-21
-
-### [Rendering/Shader] 移植 Godot 3 屏幕 shader 到 Godot 4 的三处必改项
-- Evidence / 证据: `shaders/crt_filter.gdshader:13`（`hint_screen_texture, repeat_disable, filter_nearest`）、原站 (Godot 3) 代码中 `text.r = clamp(0.0, 1.0, r * brightness)` 与 `clamp(vec3(0.0), vec3(1.0), ...)` 的参数顺序；`shaders/crt_filter_material.tres`（`overlay = true`）。
-- Notes / 说明: ① Godot 3 的 `SCREEN_TEXTURE` 在 4.x 要声明为 `uniform sampler2D ... : hint_screen_texture`，否则编译失败；像素画项目用 `filter_nearest`（别照抄 `filter_linear_mipmap`）。② 原帖早期代码把 `clamp` 写成 `(min, max, value)`，在部分驱动上直接输出纯白，必须改成 `(value, min, max)`（帖内作者已修）。③ 叠在全屏 `ColorRect` 上时必须 `overlay = true`，否则读到的是 ColorRect 自己的白色纹理/UV，画面会翻转或全白。
-- Source / 来源: code + test
-- Date / 日期: 2026-10-21
-
-### [Tooling/Config] 手改 `user://config.ini` 必须写无 BOM 的 UTF-8，否则 `ConfigFile.load` 静默失败
-- Evidence / 证据: `script/Game.gd:315-316`（`config.load(CONFIG_PATH)` 未检查返回值）；实测 PowerShell 5.1 `Set-Content -Encoding UTF8` 写入 BOM 后，`Game.load_config()` 全部退回默认值（`crt_filter` 读成 false）。
-- Notes / 说明: 调试读档/开关时改 `%APPDATA%\Godot\app_userdata\<项目名>\config.ini`，用 `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))`，或先备份再恢复。BOM 存在时 `load` 返回错误但不报错，所有键静默走默认值。
-- Source / 来源: test
-- Date / 日期: 2026-10-21
-### [Chip] 词条 Buff 必须在 `active_state()` 前应用并立即刷新属性
-- Evidence / 证据: `script/spawn_anim.gd:spawn_enemy_body()`（`update_body_ability()` → `ChipManager.apply_to_enemy()` → `active_state()`）；`script/entity_ENEMY.gd:active_state()`（`stats.spawn_hp()`）；`scenes/manager/buff_manager_base.gd:_host_refresh()`（延迟到 `_process` 才 `update_body_ability()`）。
-- Notes / 说明: `active_state()` 会按当前 `stats.max_hp` 回满血，词条的血量 Buff 必须在它之前应用；应用后还要立刻再调一次 `stats.update_body_ability()`，不能只依赖 `BuffManagerBase` 的延迟刷新，否则首帧仍按旧上限回血。Boss 默认由 `chip_include_boss=false` 排除，白名单/标签匹配不能替代该门槛。
-- Source / 来源: code + test
-- Date / 日期: 2026-10-20
-
-### [UI/Input] 难度悬停保持与移动端预览必须分开 mouse/focus 与 touch 路径
-- Evidence / 证据: `project.godot:213`（`pointing/emulate_mouse_from_touch=false`）；`ui/level_button.gd`（`mouse_in` / `mouse_out` / `previewed`）；`ui/level_select.gd`（`_on_level_previewed`、`prepare_level_selection`）；`ui/gamemode_button.gd`（自动/手动浩劫标记）。
-- Notes / 说明: 难度展开与焦点解耦：`level_button` 用 `_preview_open` + `open_preview/close_preview` 管状态，`level_select` 只保留一个 `_open_level_button`；焦点移到支援/模式或鼠标移出难度时不收起，展开另一个难度、确认、返回或重新进入时才收起。移动端不会产生 `mouse_entered`/`focus_entered`，必须由第一次 `InputEventScreenTouch` 显式触发 `open_preview()`，第二次触摸才确认。浩劫自动勾选用 `_havoc_auto_selected` 与 `_auto_toggle` 区分来源：只有自动勾选会在悬停其它难度或离开难度页时撤销，手动勾选保留。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-20
-
-### [Chip] 硬化外壳是次数盾，扣血前必须在 `HealthComponent` 结算
-- Evidence / 证据: `script/EnemyStats.gd`（`shield_active/shield_max_hits/shield_hits`、`shield_broken`、`reset_shield()`）；`script/health_component.gd:_take_damage_internal()`（扣血前把本次伤害设为 1、耐久 -1、归零时发 `shield_broken`）；`resources/buff/components/shield_component.gd`（10 + 2×回合、封顶 40，破盾移除 Buff）。
-- Notes / 说明: 次数盾必须在 `HealthComponent` 扣 `stats.hp` 前处理，才能让飘字/`damage_taken` 都是 1；不能在 `spawn_hp()` 重置护盾，否则 `spawn_anim` 刚施加的 Buff 会在 `active_state()` 里被清掉。护盾耐久按回合在 `activate()` 时固定，不随敌人存活跨回合成长，也不重生；破盾当击仍只扣 1。`Game.one_hit_kill` 跳过护盾。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-20
-
-### [Chip] 同场上限是“存活/生效标记数”，不是每回合生成数
-- Evidence / 证据: `scenes/manager/chip_manager.gd`（`_active_count`、`_marked`；`apply_to_enemy()` 达上限直接返回；`_on_marked_enemy_dead` / `_on_marked_buff_expired` / `_on_marked_enemy_exiting` 调用 `_release_marked()`）；`ui/chip_hud.gd`（计数实时刷新）。
-- Notes / 说明: 词条敌人死亡、被清除，或该词条的全部 Buff 失效（例如硬化外壳破盾）时立即释放 1 个同场名额；后续敌人补位。`prepare_round()` 清零并清空 `_marked`，旧敌人的迟到信号不会误扣新回合。词条改为全局共享池，不再按词条分配固定名额；权重只决定每次新附着选哪个词条，权重更新放到回合结束。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-20
-
-### [UI] 词条 HUD 默认不显示计数，CanvasLayer 用 layer=1
-- Evidence / 证据: `ui/chip_hud.tscn`（`layer = 1`、`Root.scale = Vector2(0.5, 0.5)`）；`ui/chip_hud.gd`（`debug_show_counts`、count Label 默认隐藏）；`scenes/player/momoi.tscn`（pause CanvasLayer layer=3）。
-- Notes / 说明: 战斗内词条 HUD 只保留图标，不显示标题和名称；同场计数仍由 `ChipManager.get_chip_counts()` / `chip_assigned` / `chip_released` 提供，仅在 `debug_show_counts=true` 时显示。ChipHud 必须与 `RoundTimer` 同为 layer 1，否则会盖住 layer 3 的 pause 菜单；整体缩放 50% 用 Root 的 scale + 中心 pivot 实现，Root 透明度 0.7，位置贴近 `RoundTimer` 下方。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-20
-
-### [VFX] 护盾特效复用 tower `defense_mod` 时的尺寸/定位坑
-- Evidence / 证据: `scenes/debuff/shield_effect.tscn`（复制 `ripple` shader、内外渐变和 `defense_shield_anim`）；`scenes/debuff/shield_effect.gd:fit_to_enemy()`；`resources/buff/components/shield_component.gd:activate/deactivate()`。
-- Notes / 说明: 复制 tower `defense_mod` 时内部 `Node2D` 的 `position` 必须归零，tower 的 `(0,-44)` 是 Boss 专用偏移。护盾特效只随 ShieldComponent 生命周期创建/释放，tower 本体保持原样。`SUPERSEDED: 2026-10-20` 后续统一改为按 `HurtBoxShape2D` 形状最大边 ×1.1 自适应，不再读取 Sprite；原 `AnimatedSprite2D`/`get_rect` 逻辑已删除。
-- SUPERSEDED: 2026-10-21 不能递归 `find_child("HurtBoxShape2D")`：`tester_automaton_shield` 会先命中 `Graphics/Shield`，其它敌人也可能命中最先遍历到的子部件/弱点；必须取 `body.hurt_box_shape_2d` / `HurtBox/HurtBoxShape2D` 本体框，并让特效每帧跟随旋转的 HurtBox。
-- Source / 来源: user + code + test
 - Date / 日期: 2026-10-20
 
 ### [Chip] 提交清理时误删词条运行接入：`prepare_round()` 与 `apply_to_enemy()` 必须同时保留
@@ -3044,6 +3028,12 @@
 - Source / 来源: code + test
 - Date / 日期: 2026-10-21
 
+### [Chip/Visual] 暂停中仍需保留的短命演出要用 `create_timer(timeout, false)`
+- Evidence / 证据: `scenes/debuff/armor_break.gd:16`
+- Notes / 说明: `SceneTree.create_timer` 默认 `process_always=true`，暂停时仍走表；0.55s 的碎甲碎片/冲击环会在暂停查看或调试断点期间直接 `queue_free`，看起来像没生成。需要随游戏暂停冻结的演出应传 `false`，让计时器继承树的 pause 状态。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
 ### [Chip] `chip_target_tags` 与 `chip_target_enemy_ids` 同时为空 = 普通敌人不限目标
 - Evidence / 证据: `scenes/manager/chip_manager.gd:286-290`（两侧都空直接 `return true`）；`resources/game_mode/chip_armored.tres`（已删除 `chip_target_tags`）
 - Notes / 说明: 需要让某词条对所有普通敌人生效时，把两个目标数组留空即可，不要额外写通配标签。Boss 仍由 `chip_include_boss=false` 独立排除，与目标过滤无关。
@@ -3054,6 +3044,37 @@
 - Evidence / 证据: `ui/chip_hud.gd:37-72`（`slot_box`、`panel`、`row`、`icon`、`count_label` 全部显式设 `MOUSE_FILTER_IGNORE`）；`ui/chip_hud.tscn` 中 `Root`/`Slots` 原本已是 `mouse_filter=2`
 - Notes / 说明: `Control` 默认 `MOUSE_FILTER_STOP`；只把容器设为 `IGNORE` 时，其上动态 `new()` 的 `PanelContainer`/`HBoxContainer`/`TextureRect`/`Label` 仍会吃掉鼠标事件。纯展示型 HUD 的每个动态控件都要单独设 `IGNORE`。
 - Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
+
+### [Rendering/Shader] 全屏屏幕纹理叠加层必须自带 `BackBufferCopy(copy_mode=VIEWPORT)`
+- Evidence / 证据: `ui/crt_overlay.tscn`（`BackBufferCopy` 排在 `Filter` 之前，`copy_mode=2`）、`shaders/screen_outline.gdshader` / `shaders/shock_wave.gdshader`（游戏中已有的中途屏幕读取）
+- Notes / 说明: 2D 每帧只在**首个** `hint_screen_texture` 使用者处自动拷贝屏幕。描边/冲击波等已在绘制中途读过屏幕，后置的全屏滤镜若不自带 `BackBufferCopy`，只能拿到那一次的半帧画面（实测会错位/重复）。`copy_mode` 必须改成 `VIEWPORT`(2)：默认 `RECT`(1) 只拷贝 `rect`（默认 `(-100,-100,200,200)`）。全屏 ColorRect 还要 `mouse_filter=IGNORE`，否则吞掉所有输入。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Rendering/Shader] CRT 扫描线/荫罩按设计分辨率虚拟网格生成，不能按物理像素
+- Evidence / 证据: `shaders/crt_filter.gdshader`（`virtual_size`、`fetch()` 吸附虚拟像素中心、`mask(..., floor(base_uv * virtual_size))`）；`ui/crt_overlay.gd:_sync_virtual_size`（读 `display/window/size/viewport_width/height`）
+- Notes / 说明: 参考实现跑在 640×360 的 SubViewport 上（1 texel = 1 游戏像素）。本项目没有全局 SubViewport，若按 `SCREEN_UV × 物理分辨率` 生成扫描线，720/1080 等非整数倍窗口会出现摩尔纹和错位。改为按 640×360 建虚拟网格：采样用 `(floor(vpix)+0.5)/virtual_size` + `filter_nearest`，荫罩也用同一网格且不随 `warp` 抖动。`hdr_2d=true` 时屏幕纹理为线性色，全程线性运算、不做 sRGB 转换。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+- SUPERSEDED: 2026-10-21 换用 pend00「VHS and CRT monitor effect」后，扫描线与荫罩不再共用同一网格（荫罩频率改为 `resolution.x / 3`），采样也不再吸附虚拟像素中心、不做亮度守恒。见下方两条新结论。
+
+### [Rendering/Shader] VHS/CRT 荫罩频率必须取 `resolution.x / 3`，扫描线才用 `resolution.y`
+- Evidence / 证据: `shaders/crt_filter.gdshader:142`（`grille_res = max(resolution.x / 3.0, 1.0)`）、`shaders/crt_filter.gdshader:145-151`（三通道相位 0 / 1.05 / 2.1）、`shaders/crt_filter.gdshader:161-166`（扫描线直接用 `resolution.y`）；`ui/crt_overlay.gd:_sync_resolution` 把 `resolution` 同步为 640×360。
+- Notes / 说明: 参考 shader 的 `resolution` 同时喂给 pixelate、扫描线、荫罩；它的默认 640×480 是按「物理画面宽/3」选的，直接套 640×360 会让荫罩正弦变成亚像素频率（摩尔纹 + 整体偏色）。拆开后的规则：荫罩用 `resolution.x/3`（一条 RGB 条 = 2 逻辑像素；`sinc = abs(sin)` 使每通道 3 逻辑像素一组），扫描线 / 噪点 / pixelate 仍用 `resolution`。改 `resolution` 时不要动 `/3`。另 `pixelate` 默认关：游戏本身已是像素画，二次吸附只会糊。
+- Source / 来源: code + test + user
+- Date / 日期: 2026-10-21
+
+### [Rendering/Shader] 移植 Godot 3 屏幕 shader 到 Godot 4 的三处必改项
+- Evidence / 证据: `shaders/crt_filter.gdshader:13`（`hint_screen_texture, repeat_disable, filter_nearest`）、原站 (Godot 3) 代码中 `text.r = clamp(0.0, 1.0, r * brightness)` 与 `clamp(vec3(0.0), vec3(1.0), ...)` 的参数顺序；`shaders/crt_filter_material.tres`（`overlay = true`）。
+- Notes / 说明: ① Godot 3 的 `SCREEN_TEXTURE` 在 4.x 要声明为 `uniform sampler2D ... : hint_screen_texture`，否则编译失败；像素画项目用 `filter_nearest`（别照抄 `filter_linear_mipmap`）。② 原帖早期代码把 `clamp` 写成 `(min, max, value)`，在部分驱动上直接输出纯白，必须改成 `(value, min, max)`（帖内作者已修）。③ 叠在全屏 `ColorRect` 上时必须 `overlay = true`，否则读到的是 ColorRect 自己的白色纹理/UV，画面会翻转或全白。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Tooling/Config] 手改 `user://config.ini` 必须写无 BOM 的 UTF-8，否则 `ConfigFile.load` 静默失败
+- Evidence / 证据: `script/Game.gd:315-316`（`config.load(CONFIG_PATH)` 未检查返回值）；实测 PowerShell 5.1 `Set-Content -Encoding UTF8` 写入 BOM 后，`Game.load_config()` 全部退回默认值（`crt_filter` 读成 false）。
+- Notes / 说明: 调试读档/开关时改 `%APPDATA%\Godot\app_userdata\<项目名>\config.ini`，用 `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))`，或先备份再恢复。BOM 存在时 `load` 返回错误但不报错，所有键静默走默认值。
+- Source / 来源: test
 - Date / 日期: 2026-10-21
 
 ### [Chip] 死亡触发领域依赖 `is_dead` 同步回调先于 deferred idle/清 Buff
@@ -3068,6 +3089,17 @@
 - Source / 来源: code + test
 - Date / 日期: 2026-10-21
 
+### [Build/Mod] `ModPack` 预设未排除 `mods/*`，会把其他 mod 的旧脚本一起打进当前 mod pck
+- Evidence / 证据: `mod_sdk/ModPack.preset.cfg`（`export_filter="all_resources"`，`exclude_filter` 不含 `mods/*`）；`mod_sdk/build_mod.ps1:4`（默认 `Preset="ModPack"`）与 `:22`（仅 `ModPackReplace` 分支生成 `export_files`）；实测 `user://mods/doom_slayer_izzy/doom_slayer_izzy.pck` 含 `mods/etn_coop/ui/coop_menu.gdc`、`coop_menu.gd.remap` 与旧场景，且 `load_order=100` 使其遮蔽新 etn_coop。
+- Notes / 说明: `build_mod.ps1` 默认走 ModPack 预设时不会限定 `export_files`，`all_resources` 会把工程内 `mods/` 下所有 mod 一并导出；被卷入的旧 `.gdc`/`.remap` 会按 load_order 遮蔽同名新脚本/场景（症状：`PageScroll.mouse_filter` 运行期变 2、扫描点动画与主题颜色丢失）。修复：优先用 `build_local_mod.ps1`（PCKPacker 只打单个 `mods/<id>/`），但它不带 `.godot/imported`，含贴图/音频的 mod 会缺导入产物；需保留导入资源时应走导出预设并显式只导出当前 mod（`export_files`），同时排除 `mods/*`。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-21
+
+### [Coop/UI] return 关闭与支援 EX 初始化已移入本体，mod 不再断开/兜底
+- Evidence / 证据: `script/extension_hooks.gd`（`return_pressed_gate`）；`ui/return.gd:_on_pressed`（先 `intercept_named`）；`script/support_data.gd:get_card/game_add_support`（无条件写 `ex_cost` + 生成前同步/清零）；`script/support_as.gd`（`ex_cost<=0` 时不计费、不 ready、不释放）；`mods/etn_coop/entry/coop_entry.gd:_gate_return_pressed`；`mods/etn_coop/ui/coop_menu.gd`（删除 `_setup_return_button`）；`mods/etn_coop/net/coop_net.gd`（删除 `_normalize_support_cost`）。
+- Notes / 说明: 联机覆盖层打开时返回按钮经 hook 只关闭覆盖层，其它菜单仍走本体 `Game.pause_press`；支援 EX 的 `ex_cost` 由本体在 `get_card`/`game_add_support` 初始化，`ex_cost<=0` 的支援不再充能/释放。`coop_select._ready` 的默认空支援 `get_card` 保留为选人初始化，不是兜底。此后 mod 不再需要断开 `return.gd` 信号或修正 `SupportData`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-21
 ### [Chip] 腐化场 0.4s、攻击附腐化、感染不占同场上限
 - Evidence / 证据: `scenes/debuff/corruption_field.gd`（`corruption_interval=4`、`INFECT_TICKS=10`、`_infect_enemies`）；`script/chip_corruption_rules.gd`；`script/projectile_spawner.gd`、`script/entity_ENEMY.gd`、`scenes/enemies/tank_gun_1.gd`（写 `DamageData.corruption_power`）；`script/player_health_component.gd:169`；`resources/buff/components/corruption_field_component.gd`（`BuffRouter.apply_buff` 传入 carrier）
 - Notes / 说明: 0.4s 在 10Hz 下必须用 4 tick，不是浮点计时；攻击附加腐化只写直接命中（子弹/近战/炮台炮弹/爆炸复制），DOT/场地不写，由玩家受击侧统一应用 `corruption_power`。感染敌人走 `BuffRouter.apply_buff` 直接加同一个 `chip_corruption_buff`，不调用 `ChipManager.apply_to_enemy`，因此不增加 `_active_count`/`_counts`，也不占词条上限；感染持续到死亡，领域过期不清除。`corruption_field_component.activate()` 会调用 `body.create_damage_data()`，确保感染后近战/接触伤害的缓存也刷新。
@@ -3084,32 +3116,34 @@
 - Notes / 说明: `sprite_outline.gdshader` 在 fragment 直接重写 `COLOR`，会忽略 CanvasItem `modulate`，所以普通描边敌人必须走 shader 的 `corruption_tint` / `corruption_amount`；`modded_sweeper` 的蓝色通道很低，乘法 tint 会变成暗红并接近 `red_sweeper`，必须用 `mix` 向浅紫补蓝。坦克的 `TankGraphics` 没有 shader，用 `sprite_2d.modulate` 的 `original.lerp(浅紫, 0.3)` 让 `tank_body`/`tank_turret` 一起变紫。不要全局改描边 shader 去乘 modulate：子弹/UI 有 `Color(100,1.5,1.5)` 等高亮值，会造成回归；新 uniform 默认 0 不影响其它资源。不要改 `graphics.modulate`（`EnemyTank._hurt_flash()` 占用）；移除 Buff 时恢复 modulate、材质或 shader 参数。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-21
-### [UI] `enemy_mod_box` 与 `ENEMY MOD` 标题是兄弟节点，必须同时隐藏滚动容器
-- Evidence / 证据: `ui/gamemode_button.tscn`（标题/分隔线在 `.../VBoxContainer/VBoxContainer`；`enemy_mod_box` 在平级的 `.../VBoxContainer/ScrollContainer2`）；`ui/gamemode_button.gd:_update_enemy_mod_visibility()`（同时切换 `enemy_mod_section` 与 `enemy_mod_scroll`）。
-- Notes / 说明: 只隐藏标题所在的 `VBoxContainer` 不会隐藏 `ScrollContainer2` 下的敌人词条卡片。未开启 `havoc` 时必须同时隐藏 `enemy_mod_section` 和 `enemy_mod_scroll`；不要再加 `enemy_mod_hint`。`ENEMY MOD` 固定英文、禁用自动翻译，标题显示 `(当前/要求)`；数量不足点击开始时播放标题字体闪红和失败音效。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-20
 
-### [Chip/Visual] 暂停中仍需保留的短命演出要用 `create_timer(timeout, false)`
-- Evidence / 证据: `scenes/debuff/armor_break.gd:16`
-- Notes / 说明: `SceneTree.create_timer` 默认 `process_always=true`，暂停时仍走表；0.55s 的碎甲碎片/冲击环会在暂停查看或调试断点期间直接 `queue_free`，看起来像没生成。需要随游戏暂停冻结的演出应传 `false`，让计时器继承树的 pause 状态。
+### [Coop/Chip] host 词条 Buff 早于 net_id 注册时必须排队补发
+- Evidence / 证据: `script/spawn_anim.gd:spawn_enemy_body()`（词条 Buff 在 `active_state()` 前应用）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_on_enemy_buff_applied()` / `_on_enemy_spawned()` / `_pending_enemy_buff_events`。
+- Notes / 说明: host 的词条 Buff 往往在敌人拿到 `net_id` 前触发，立即广播会被 `body.has_meta("net_id")` 拦掉。必须按 instance_id 缓存，等 `register_enemy_spawn()` 完成后 flush；`chip_id` 随 `_spawn_enemy_remote()` 同步，晚加入路径也要带上。
 - Source / 来源: code + test
-- Date / 日期: 2026-10-21
+- Date / 日期: 2026-10-22
 
-### [Coop/Mod] mod pck 内 `.tscn` 的 ext_resource UID 必须与 `.tres` 头部 UID 一致
-- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/ui/coop_theme.tres:1`（`uid://cq6shkh3j5pwh`）；`ui/coop_menu.tscn:13`（原引用 `uid://0ivk887ius3a`）；`build_coop_mod.ps1` 的 PCKPacker 构建日志出现 `ext_resource, invalid UID ... using text path instead`。
-- Notes / 说明: 编辑器会靠 `.godot/uid_cache.bin` 把旧 UID 解析到路径，所以镜像内看不出来；PCK 不带 UID 缓存，构建/运行时会报警并回退文本路径。同步编辑器生成或改名的 `.tres` 后，若 `.tscn` 仍引用旧 UID，需把引用改成 `.tres` 头部的新 UID（或去掉 `uid` 属性），再重新打包。
+### [Coop/Chip] 客机词条状态以 host active IDs 为准，腐化领域只做 visual-only
+- Evidence / 证据: `scenes/manager/chip_manager.gd:apply_network_round_state()` / `get_network_round_state()`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_remote_chip_round_state()`；`resources/buff/components/corruption_field_component.gd` / `scenes/debuff/corruption_field.gd`（`visual_only`）；`resources/buff/components/frenzy_delay_death_component.gd`（`network_begin_burn/network_finish_burn`）。
+- Notes / 说明: 客机不能本地 `prepare_round()` 抽词条，否则会与 host RNG 不一致；HUD 只接 host 的 active IDs/cap/counts。客机腐化领域使用 `player_only`：只对本地玩家执行 0.4 秒 1% 最大生命腐化与 30% 减速，不感染敌人；场由 host 的 `field_spawned` 广播生成。狂怒燃烧条由 host 的 burn_started/finished 事件驱动本地倒计时。
 - Source / 来源: code + test
-- Date / 日期: 2026-10-20
+- Date / 日期: 2026-10-22
 
-### [Build/Mod] `ModPack` 预设未排除 `mods/*`，会把其他 mod 的旧脚本一起打进当前 mod pck
-- Evidence / 证据: `mod_sdk/ModPack.preset.cfg`（`export_filter="all_resources"`，`exclude_filter` 不含 `mods/*`）；`mod_sdk/build_mod.ps1:4`（默认 `Preset="ModPack"`）与 `:22`（仅 `ModPackReplace` 分支生成 `export_files`）；实测 `user://mods/doom_slayer_izzy/doom_slayer_izzy.pck` 含 `mods/etn_coop/ui/coop_menu.gdc`、`coop_menu.gd.remap` 与旧场景，且 `load_order=100` 使其遮蔽新 etn_coop。
-- Notes / 说明: `build_mod.ps1` 默认走 ModPack 预设时不会限定 `export_files`，`all_resources` 会把工程内 `mods/` 下所有 mod 一并导出；被卷入的旧 `.gdc`/`.remap` 会按 load_order 遮蔽同名新脚本/场景（症状：`PageScroll.mouse_filter` 运行期变 2、扫描点动画与主题颜色丢失）。修复：优先用 `build_local_mod.ps1`（PCKPacker 只打单个 `mods/<id>/`），但它不带 `.godot/imported`，含贴图/音频的 mod 会缺导入产物；需保留导入资源时应走导出预设并显式只导出当前 mod（`export_files`），同时排除 `mods/*`。
-- Source / 来源: code + user
-- Date / 日期: 2026-10-21
 
-### [Coop/UI] return 关闭与支援 EX 初始化已移入本体，mod 不再断开/兜底
-- Evidence / 证据: `script/extension_hooks.gd`（`return_pressed_gate`）；`ui/return.gd:_on_pressed`（先 `intercept_named`）；`script/support_data.gd:get_card/game_add_support`（无条件写 `ex_cost` + 生成前同步/清零）；`script/support_as.gd`（`ex_cost<=0` 时不计费、不 ready、不释放）；`mods/etn_coop/entry/coop_entry.gd:_gate_return_pressed`；`mods/etn_coop/ui/coop_menu.gd`（删除 `_setup_return_button`）；`mods/etn_coop/net/coop_net.gd`（删除 `_normalize_support_cost`）。
-- Notes / 说明: 联机覆盖层打开时返回按钮经 hook 只关闭覆盖层，其它菜单仍走本体 `Game.pause_press`；支援 EX 的 `ex_cost` 由本体在 `get_card`/`game_add_support` 初始化，`ex_cost<=0` 的支援不再充能/释放。`coop_select._ready` 的默认空支援 `get_card` 保留为选人初始化，不是兜底。此后 mod 不再需要断开 `return.gd` 信号或修正 `SupportData`。
-- Source / 来源: user + code + test
-- Date / 日期: 2026-10-21
+### [Coop/Chip] 池化敌人残留旧 net_id 会让后续波次 Buff 广播丢失
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_live_enemy_net_id()`、`_on_enemy_buff_applied()`、`_on_enemy_spawned()`、`_pending_enemy_buff_events`。
+- Notes / 说明: 敌人回池后节点上的 `net_id` meta 可能保留；下一次生成时词条 Buff 在 `register_enemy_spawn()` 前应用，若只检查 `has_meta("net_id")` 会把 Buff 发到已删除的旧镜像，表现为 host 有词条、客机只有首波有。必须校验 `enemy_by_net_id[id] == body`，无效时排队到新 net_id 注册后 flush。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-22
+
+### [Coop/Chip] 客机首回合 round_switch 可能为 false，远程 round_end 必须强制发信号
+- Evidence / 证据: `script/GameEvents.gd:force_emit_round_end()`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd:_remote_round_end()`、`_on_rejoin_settled()`。
+- Notes / 说明: 客机首回合不走 `round_manager.first_round_start()`，`GameEvents.round_switch` 可能仍为 false，普通 `emit_round_end()` 会静默失败，导致客机不执行 `RoundManager._on_round_end()` 和 `main.enemy_clear_unit()`，看不到敌人清场动画。远程 round_end 必须使用强制版本。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-22
+
+### [VFX/Coop] bullet_smoke_2 不能只靠 AnimationPlayer method track 回池
+- Evidence / 证据: `scenes/bullet/bullet_smoke_2.gd`（`smoke_anim()` 代次 + `SMOKE_ANIM_FALLBACK_SEC`）；`scenes/bullet/bullet_smoke_2.tscn`（移除 `AnimationPlayer.autoplay`）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_visual_sync.gd:_schedule_smoke_idle()`；`mods/etn_coop/net/coop_net.gd:_on_any_projectile_hit()`。
+- Notes / 说明: 双方 Kei 自动射击时，同一命中点会高频产生 `bullet_smoke_2`，远端正则还会走可复用特效池。若只依赖 0.2s 的 AnimationPlayer method track 调 `idle_state()`，快速重触发/池复用可能让 method track 没机会执行，表现为同一个烟节点常驻命中点、每次命中又播一次。`smoke_anim()` 必须用代次保护并在动画时长后兜底 `idle_state()`；远端 smoke 再加 1s 存活兜底。移除 autoplay，生命周期由调用方显式控制。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-22

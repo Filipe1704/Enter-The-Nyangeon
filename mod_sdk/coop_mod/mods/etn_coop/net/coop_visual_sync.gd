@@ -8,6 +8,7 @@ extends RefCounted
 
 const MAX_PER_SCENE: int = 180
 const EFFECT_POOL_MAX: int = 24
+const SMOKE_EFFECT_GUARD_SEC: float = 1.0
 # "伤害洞"数值上限（纵深兜底：即使入参异常也不致一击必杀）
 const MAX_DAMAGE_HOLE: int = 100000
 const MAX_KNOCKBACK_HOLE: int = 100000
@@ -218,6 +219,8 @@ func spawn_visual_effect(tree: SceneTree, scene_path: String, position: Vector2,
 	# 可复用特效（有 is_idle，如爆炸/烟）入池复用；否则延时释放
 	if effect.get("is_idle") != null:
 		_track_effect(scene_path, effect)
+		if method_name == "smoke_anim":
+			_schedule_smoke_idle(tree, effect)
 	elif effect_id == "":
 		# 无 effect_id 的一次性特效：安全超时释放；带 id 者等 despawn 广播回收，避免远端早于本地消失
 		_queue_free_after(tree, effect, 6.0)
@@ -249,6 +252,25 @@ func _track_effect(scene_path: String, effect: Node) -> void:
 	var arr: Array = _effect_pool[scene_path]
 	if not arr.has(effect):
 		arr.append(effect)
+
+
+# 烟雾类特效的兜底回收：即使 AnimationPlayer 的 method track 被快速重触发打断，
+# 也不能让同一个 smoke 节点永久停在命中点。用代次防止误伤后来复用后的新动画。
+func _schedule_smoke_idle(tree: SceneTree, effect: Node) -> void:
+	if tree == null or effect == null or not is_instance_valid(effect):
+		return
+	var gen: int = int(effect.get_meta("_coop_smoke_gen", 0)) + 1
+	effect.set_meta("_coop_smoke_gen", gen)
+	var wr: WeakRef = weakref(effect)
+	tree.create_timer(SMOKE_EFFECT_GUARD_SEC).timeout.connect(func():
+		var node = wr.get_ref()
+		if node == null or not is_instance_valid(node):
+			return
+		if int(node.get_meta("_coop_smoke_gen", -1)) != gen:
+			return
+		if node.get("is_idle") != null and int(node.is_idle) == 0:
+			_visual_idle(node)
+	)
 
 
 func _remove_effect_from_gameplay_pools(effect: Node) -> void:

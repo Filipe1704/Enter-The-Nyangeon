@@ -5,10 +5,13 @@ const FIELD_SCENE: PackedScene = preload("res://scenes/debuff/corruption_field.t
 const CORRUPTION_TINT: Color = Color(0.426, 0.178, 1.0, 1.0)
 const CORRUPTION_BLEND: float = 0.3
 
+signal field_spawned(position: Vector2, lifetime: float)
+
 var stats: EnemyStats
 var carrier_buff: Buff = null
 var carrier_value: Array = [1, 1.0, 99999.0]
 var _spawned: bool = false
+var _remote_visual_only: bool = false
 var _dead_cb: Callable = Callable()
 var _visual_target: CanvasItem = null
 var _original_modulate: Color = Color.WHITE
@@ -20,6 +23,7 @@ var _original_amount: float = 0.0
 func activate(_entry: Dictionary) -> void:
 	_disconnect_dead()
 	stats = body.get("stats") as EnemyStats if body != null else null
+	_remote_visual_only = body != null and body.has_meta("network_remote_enemy")
 	carrier_buff = _entry.get("resource", null) as Buff
 	carrier_value = [1, 1.0, maxf(1.0, float(_entry.get("erase_time", 999990)) / 10.0)]
 	_spawned = false
@@ -39,6 +43,7 @@ func deactivate() -> void:
 	stats = null
 	carrier_buff = null
 	_spawned = false
+	_remote_visual_only = false
 
 func _apply_tint() -> void:
 	_clear_tint()
@@ -88,6 +93,8 @@ func _disconnect_dead() -> void:
 func _on_dead() -> void:
 	if _spawned:
 		return
+	if _remote_visual_only:
+		return
 	if body == null or not is_instance_valid(body) or body.is_queued_for_deletion():
 		return
 	if not (body is Node2D):
@@ -120,5 +127,7 @@ func _spawn_field(position: Vector2) -> void:
 	node.global_position = position
 	field.set("carrier_buff", carrier_buff)
 	field.set("carrier_value", carrier_value)
+	field.set("visual_only", _remote_visual_only)
 	if field.has_method("active_state"):
 		field.call("active_state")
+	field_spawned.emit(position, float(field.get("self_life")))

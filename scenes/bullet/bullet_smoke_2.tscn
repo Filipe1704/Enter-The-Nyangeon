@@ -189,4 +189,3 @@ texture = SubResource("GradientTexture2D_e3n5y")
 libraries = {
 "": SubResource("AnimationLibrary_8h2kl")
 }
-autoplay = "new_animation"

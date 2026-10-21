@@ -23,6 +23,8 @@ var affected: Dictionary = {}
 var infected: Dictionary = {}
 var carrier_buff: Buff = null
 var carrier_value: Array = [1, 1.0, 99999]
+var visual_only: bool = false
+var player_only: bool = false
 
 func _ready() -> void:
 	PoolManager.add_pool(pool_id, self)
@@ -39,6 +41,8 @@ func idle_state() -> void:
 	life_time = 0
 	tick_count = 0
 	source_id = ""
+	visual_only = false
+	player_only = false
 	infected.clear()
 	visible = false
 	global_position = Vector2.ZERO
@@ -70,11 +74,12 @@ func time_count() -> void:
 	if is_idle == 1:
 		return
 	tick_count += 1
-	_refresh_players()
-	if tick_count <= INFECT_TICKS:
-		_infect_enemies()
-	if corruption_interval > 0 and tick_count % corruption_interval == 0:
-		_apply_corruption()
+	if not visual_only:
+		_refresh_players()
+		if not player_only and tick_count <= INFECT_TICKS:
+			_infect_enemies()
+		if corruption_interval > 0 and tick_count % corruption_interval == 0:
+			_apply_corruption()
 	life_time -= 1
 	if life_time <= 0:
 		idle_state()

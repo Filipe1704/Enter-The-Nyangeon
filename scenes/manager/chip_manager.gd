@@ -196,6 +196,54 @@ func get_active_count() -> int:
 func get_round_cap() -> int:
 	return _cap
 
+func get_active_chip_ids() -> Array[String]:
+	var out: Array[String] = []
+	for chip in _active_chips:
+		if chip != null:
+			out.append(chip.game_mode_id)
+	return out
+
+func get_network_round_state() -> Dictionary:
+	return {
+		"active_ids": get_active_chip_ids(),
+		"cap": _cap,
+		"counts": _counts.duplicate(),
+	}
+
+func apply_network_round_state(active_ids: Array, cap: int, counts: Array = []) -> void:
+	_selected_chips = _load_selected_chip_modes()
+	var by_id := _chip_mode_lookup()
+	_active_chips.clear()
+	for id in active_ids:
+		var chip = by_id.get(str(id), null)
+		if chip is GameMode and chip.chip_enabled:
+			_active_chips.append(chip)
+	_cap = maxi(0, int(cap))
+	_counts.clear()
+	for i in _active_chips.size():
+		_counts.append(int(counts[i]) if i < counts.size() else 0)
+	_active_count = 0
+	_marked.clear()
+	_should_update_weights = _selected_chips.size() > active_chip_limit
+	chips_changed.emit(_active_chips.duplicate(), _counts.duplicate(), _cap)
+
+func apply_network_counts(counts: Array) -> void:
+	if _active_chips.is_empty():
+		return
+	for i in _counts.size():
+		_counts[i] = maxi(0, int(counts[i])) if i < counts.size() else 0
+	chips_changed.emit(_active_chips.duplicate(), _counts.duplicate(), _cap)
+
+func _chip_mode_lookup() -> Dictionary:
+	var by_id: Dictionary = {}
+	for mode in ModManager.get_base_game_modes():
+		if mode is GameMode:
+			by_id[mode.game_mode_id] = mode
+	for mode in ModManager.get_content("game_modes"):
+		if mode is GameMode:
+			by_id[mode.game_mode_id] = mode
+	return by_id
+
 func _cap_for_round(round_index: int) -> int:
 	var base := clampi(
 		chip_enemy_cap_base + chip_enemy_cap_growth * maxi(0, round_index - 1),

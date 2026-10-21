@@ -665,6 +665,10 @@ var _remote_sfx_last_global_ms: int = -1000000000
 var _replaying_feedback: bool = false
 # 应用"远端镜像 buff"期间置位：让 enemy_buff_apply_gate 放行（避免再次转发）
 var _applying_remote_buff: bool = false
+# host 在敌人注册 net_id 前收到的词条/生成期 Buff，待 _on_enemy_spawned 后补发。
+var _pending_enemy_buff_events: Dictionary = {}
+var _chip_manager: Node = null
+var _chip_bind_retries: int = 0
 
 # ---------------- 网络诊断（HUD 用，对齐联机版） ----------------
 const NET_DIAG_INTERVAL: float = 0.5
@@ -945,7 +949,7 @@ func _on_rejoin_settled() -> void:
 	if _deferred_round_end:
 		_deferred_round_end = false
 		print("[etn_coop] rejoin settled -> release deferred round_end")
-		GameEvents.emit_round_end()
+		GameEvents.force_emit_round_end()
 	_maybe_finish_round_upgrade()
 	_maybe_finish_select()
 
@@ -1272,6 +1276,7 @@ func _accept_peer(id: int) -> void:
 		_send_boss_visual_states_to_peer(id)
 		_send_existing_summons_to_peer(id)
 		_send_existing_medkits_to_peer(id)
+		_send_chip_state_to_peer(id)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2155,6 +2160,15 @@ func _server_apply_enemy_buff(net_id: int, buff_path: String, value: Array, sour
 
 
 # host 发起的敌人 buff（自然或客机转发）→ 广播客机镜像应用
+func _live_enemy_net_id(body: Node) -> int:
+	if body == null or not is_instance_valid(body) or not body.has_meta("net_id"):
+		return -1
+	var net_id := int(body.get_meta("net_id"))
+	if enemy_by_net_id.get(net_id) != body:
+		return -1
+	return net_id
+
+
 func _on_enemy_buff_applied(manager, buff, value, source_id, applier_stats, applier_peer) -> void:
 	if _applying_remote_buff:
 		return
@@ -2168,10 +2182,56 @@ func _on_enemy_buff_applied(manager, buff, value, source_id, applier_stats, appl
 	if str(buff.id) == "converted_buff":
 		return
 	var body = manager.get("body")
-	if body == null or not is_instance_valid(body) or not body.has_meta("net_id"):
+	if body == null or not is_instance_valid(body):
 		return
-	# 归属归一（"最后施加者持有"）：本体调用点不传 peer(0) 时视为 host 本机。
-	# 本体层叠分支仅在 applier_peer!=0 时覆盖，故 host 的 0 夺不回客机归属 → 这里直接改写 entry。
+	if str(buff.id) == "chip_corruption":
+		_bind_corruption_sync(body)
+	if _live_enemy_net_id(body) < 0:
+		_queue_pending_enemy_buff(body, buff, value, source_id, applier_stats, applier_peer)
+		return
+	_broadcast_host_enemy_buff(body, buff, value, source_id, applier_stats, applier_peer)
+
+func _queue_pending_enemy_buff(body: Node, buff: Buff, value: Array, source_id: String, applier_stats: Dictionary, applier_peer: int) -> void:
+	var id := body.get_instance_id()
+	if not _pending_enemy_buff_events.has(id):
+		_pending_enemy_buff_events[id] = []
+	_pending_enemy_buff_events[id].append({
+		"buff": buff,
+		"value": value.duplicate(),
+		"source_id": source_id,
+		"applier_stats": applier_stats.duplicate(),
+		"applier_peer": applier_peer,
+	})
+
+func _flush_pending_enemy_buffs(body: Node) -> void:
+	if body == null or not is_instance_valid(body):
+		return
+	var id := body.get_instance_id()
+	if not _pending_enemy_buff_events.has(id):
+		return
+	var events: Array = _pending_enemy_buff_events[id]
+	_pending_enemy_buff_events.erase(id)
+	for event in events:
+		_broadcast_host_enemy_buff(
+			body,
+			event.get("buff"),
+			event.get("value", []),
+			str(event.get("source_id", "")),
+			event.get("applier_stats", {}),
+			int(event.get("applier_peer", 0))
+		)
+
+func _broadcast_host_enemy_buff(body: Node, buff: Buff, value: Array, source_id: String, applier_stats: Dictionary, applier_peer: int) -> void:
+	if body == null or not is_instance_valid(body) or buff == null:
+		return
+	var net_id := _live_enemy_net_id(body)
+	if net_id < 0:
+		return
+	var manager = body.get("enemy_buff_manager")
+	if manager == null:
+		return
+	# 归属归一化：最后施加者持有（）：本体调用点不带 peer(0) 时视为 host 本机。
+	# 本体层叠分支仅在 applier_peer!=0 时覆盖，故 host 用 0 夺不回客机归属；这里直接改写 entry。
 	# 归属为本机时清空 stats 快照，使 DOT 数值回退本地 player.stats；客机归属沿用其快照（_server_apply_enemy_buff 已写）。
 	var resolved_peer: int = int(applier_peer) if int(applier_peer) != 0 else multiplayer.get_unique_id()
 	var cbs = manager.get("current_buff")
@@ -2181,7 +2241,7 @@ func _on_enemy_buff_applied(manager, buff, value, source_id, applier_stats, appl
 			entry["applier_peer"] = resolved_peer
 			if resolved_peer == multiplayer.get_unique_id():
 				entry["applier_stats"] = {}
-	rpc("_remote_enemy_buff", int(body.get_meta("net_id")), str(buff.resource_path), value, source_id, applier_stats)
+	rpc("_remote_enemy_buff", net_id, str(buff.resource_path), value, source_id, applier_stats)
 
 
 # 客机镜像上应用 buff（仅表现 card；DOT 由本体 _is_remote_mirror 跳过，不结算）
@@ -2210,9 +2270,10 @@ func _remote_enemy_buff(net_id: int, buff_path: String, value: Array, source_id:
 func _on_enemy_buff_removed(body: Node, id: String) -> void:
 	if not is_lan_game or not multiplayer.is_server():
 		return
-	if body == null or not is_instance_valid(body) or not body.has_meta("net_id"):
+	var net_id := _live_enemy_net_id(body)
+	if net_id < 0:
 		return
-	rpc("_remote_enemy_buff_remove", int(body.get_meta("net_id")), id)
+	rpc("_remote_enemy_buff_remove", net_id, id)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2230,6 +2291,85 @@ func _remote_enemy_buff_remove(net_id: int, id: String) -> void:
 	var resource = manager.current_buff[id].get("resource")
 	if resource != null:
 		manager.call("remove_buff", resource)
+
+
+# ---------------- 词条回合状态同步 ----------------
+
+func _bind_chip_sync() -> void:
+	if _chip_manager != null and is_instance_valid(_chip_manager):
+		return
+	_chip_manager = get_tree().get_first_node_in_group("ChipManager")
+	if _chip_manager == null:
+		if _chip_bind_retries < 120:
+			_chip_bind_retries += 1
+			call_deferred("_bind_chip_sync")
+		return
+	_chip_bind_retries = 0
+	if _chip_manager.has_signal("chips_changed"):
+		var state_cb := Callable(self, "_on_chip_state_changed")
+		if not _chip_manager.chips_changed.is_connected(state_cb):
+			_chip_manager.chips_changed.connect(state_cb)
+	if _chip_manager.has_signal("chip_assigned"):
+		var assigned_cb := Callable(self, "_on_chip_counts_changed")
+		if not _chip_manager.chip_assigned.is_connected(assigned_cb):
+			_chip_manager.chip_assigned.connect(assigned_cb)
+	if _chip_manager.has_signal("chip_released"):
+		var released_cb := Callable(self, "_on_chip_counts_changed")
+		if not _chip_manager.chip_released.is_connected(released_cb):
+			_chip_manager.chip_released.connect(released_cb)
+
+func _on_chip_state_changed(_active_chips: Array, _counts: Array, _cap: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	_broadcast_chip_round_state()
+
+func _on_chip_counts_changed(_index: int, _count: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	_broadcast_chip_counts()
+
+func _broadcast_chip_round_state() -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if _chip_manager == null or not is_instance_valid(_chip_manager) or not _chip_manager.has_method("get_network_round_state"):
+		return
+	var state: Dictionary = _chip_manager.call("get_network_round_state")
+	rpc("_remote_chip_round_state", state.get("active_ids", []), int(state.get("cap", 0)), state.get("counts", []))
+
+func _broadcast_chip_counts() -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if _chip_manager == null or not is_instance_valid(_chip_manager) or not _chip_manager.has_method("get_chip_counts"):
+		return
+	rpc("_remote_chip_counts", _chip_manager.call("get_chip_counts"))
+
+func _send_chip_state_to_peer(peer_id: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if _chip_manager == null or not is_instance_valid(_chip_manager) or not _chip_manager.has_method("get_network_round_state"):
+		return
+	var state: Dictionary = _chip_manager.call("get_network_round_state")
+	rpc_id(peer_id, "_remote_chip_round_state", state.get("active_ids", []), int(state.get("cap", 0)), state.get("counts", []))
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_chip_round_state(active_ids: Array, cap: int, counts: Array) -> void:
+	if multiplayer.is_server():
+		return
+	var cm := get_tree().get_first_node_in_group("ChipManager")
+	if cm == null:
+		call_deferred("_remote_chip_round_state", active_ids, cap, counts)
+		return
+	cm.call("apply_network_round_state", active_ids, cap, counts)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_chip_counts(counts: Array) -> void:
+	if multiplayer.is_server():
+		return
+	var cm := get_tree().get_first_node_in_group("ChipManager")
+	if cm == null:
+		call_deferred("_remote_chip_counts", counts)
+		return
+	cm.call("apply_network_counts", counts)
 
 
 # 客户端：敌人受击 → 本地不结算，转交服务端权威处理（返回 true 跳过默认）。
@@ -2502,6 +2642,9 @@ func _on_round_start() -> void:
 	_round_upgrade_cover_ready = false
 	_credited_pyroxenes.clear()
 	_clear_round_visuals()
+	_chip_bind_retries = 0
+	_bind_chip_sync.call_deferred()
+	_broadcast_chip_round_state.call_deferred()
 
 
 # 回合边界清场兜底：释放上一回合残留的远端视觉/特效。
@@ -2952,7 +3095,7 @@ func dev_motion_probe() -> void:
 func _remote_round_end() -> void:
 	if multiplayer.is_server():
 		return
-	GameEvents.emit_round_end()
+	GameEvents.force_emit_round_end()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -3387,6 +3530,116 @@ func _on_enemy_spawned(enemy_body: Node, scene_path: String) -> void:
 	if not is_lan_game or not multiplayer.is_server():
 		return
 	register_enemy_spawn(enemy_body, scene_path)
+	_flush_pending_enemy_buffs(enemy_body)
+	_bind_frenzy_sync(enemy_body)
+	_bind_corruption_sync(enemy_body)
+
+func _bind_frenzy_sync(enemy_body: Node) -> void:
+	if enemy_body == null or not is_instance_valid(enemy_body) or not enemy_body.has_meta("net_id"):
+		return
+	var manager = enemy_body.get("enemy_buff_manager")
+	if manager == null:
+		return
+	var comp = manager.find_child("FrenzyDelayDeathComponent", true, false)
+	if comp == null:
+		return
+	var net_id: int = int(enemy_body.get_meta("net_id"))
+	var start_cb := Callable(self, "_on_host_frenzy_burn_started").bind(net_id)
+	var finish_cb := Callable(self, "_on_host_frenzy_burn_finished").bind(net_id)
+	if comp.has_signal("burn_started") and not comp.burn_started.is_connected(start_cb):
+		comp.burn_started.connect(start_cb)
+	if comp.has_signal("burn_finished") and not comp.burn_finished.is_connected(finish_cb):
+		comp.burn_finished.connect(finish_cb)
+
+func _bind_corruption_sync(enemy_body: Node) -> void:
+	if enemy_body == null or not is_instance_valid(enemy_body):
+		return
+	var manager = enemy_body.get("enemy_buff_manager")
+	if manager == null:
+		return
+	var comp = manager.find_child("CorruptionFieldComponent", true, false)
+	if comp == null or not comp.has_signal("field_spawned"):
+		return
+	var cb := Callable(self, "_on_host_corruption_field_spawned")
+	if not comp.field_spawned.is_connected(cb):
+		comp.field_spawned.connect(cb)
+
+func _on_host_corruption_field_spawned(position: Vector2, lifetime: float) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_corruption_field", position, lifetime)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_corruption_field(position: Vector2, lifetime: float) -> void:
+	if multiplayer.is_server():
+		return
+	var layer: Node = null
+	var player_root: Node = get_tree().get_first_node_in_group("PlayerRoot")
+	if player_root != null:
+		layer = player_root.get_parent()
+	if layer == null:
+		layer = get_tree().get_first_node_in_group("SELayer")
+	if layer == null:
+		return
+	var field: Node = null
+	var pooled: Node = PoolManager.get_pool("corruption_field")
+	if pooled != null and is_instance_valid(pooled) and pooled.is_inside_tree() and int(pooled.get("is_idle")) == 1:
+		field = pooled
+	if field == null:
+		var scene := load("res://scenes/debuff/corruption_field.tscn") as PackedScene
+		if scene == null:
+			return
+		field = scene.instantiate()
+		if field == null:
+			return
+		layer.add_child(field)
+	if not (field is Node2D):
+		return
+	field.set("visual_only", false)
+	field.set("player_only", true)
+	field.set("self_life", maxi(1, int(round(lifetime))))
+	(field as Node2D).global_position = position
+	if field.has_method("active_state"):
+		field.call("active_state")
+
+
+func _on_host_frenzy_burn_started(duration: float, net_id: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_frenzy_burn_started", net_id, duration)
+
+func _on_host_frenzy_burn_finished(net_id: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_frenzy_burn_finished", net_id)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_frenzy_burn_started(net_id: int, duration: float) -> void:
+	if multiplayer.is_server():
+		return
+	var enemy = enemy_by_net_id.get(net_id)
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var manager = enemy.get("enemy_buff_manager")
+	if manager == null:
+		return
+	var comp = manager.find_child("FrenzyDelayDeathComponent", true, false)
+	if comp != null and comp.has_method("network_begin_burn"):
+		comp.call("network_begin_burn", duration)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_frenzy_burn_finished(net_id: int) -> void:
+	if multiplayer.is_server():
+		return
+	var enemy = enemy_by_net_id.get(net_id)
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var manager = enemy.get("enemy_buff_manager")
+	if manager == null:
+		return
+	var comp = manager.find_child("FrenzyDelayDeathComponent", true, false)
+	if comp != null and comp.has_method("network_finish_burn"):
+		comp.call("network_finish_burn")
 
 
 func _on_summoned_spawned(summoned: Node, scene_path: String) -> void:
@@ -4519,6 +4772,9 @@ func _on_first_round_add() -> void:
 		return
 	battle_active = true
 	first_round_emitted = true
+	_chip_bind_retries = 0
+	_bind_chip_sync.call_deferred()
+	_broadcast_chip_round_state.call_deferred()
 	if multiplayer.is_server():
 		player_scene_by_peer[multiplayer.get_unique_id()] = local_player_scene_path
 		rpc("_client_sync_roster", player_scene_by_peer)
@@ -5096,7 +5352,7 @@ func register_enemy_spawn(enemy: Node, scene_path: String) -> void:
 		if not comp.damage_taken.is_connected(dmg_cb):
 			comp.damage_taken.connect(dmg_cb)
 	_connect_enemy_parts(enemy, net_id)
-	rpc("_spawn_enemy_remote", net_id, scene_path, enemy.global_position, max_hp, hp, hp_multiplier, damage_multiplier, _enemy_part_hps(enemy))
+	rpc("_spawn_enemy_remote", net_id, scene_path, enemy.global_position, max_hp, hp, hp_multiplier, damage_multiplier, _enemy_part_hps(enemy), str(enemy.get_meta("chip_id", "")))
 
 
 func _attach_enemy_proxy(enemy: Node, net_id: int, server_owned: bool) -> void:
@@ -5856,7 +6112,7 @@ func _send_existing_enemies_to_peer(peer_id: int) -> void:
 			hp = int(enemy.stats.hp)
 			hp_multiplier = float(enemy.stats.max_hp_mult)
 			damage_multiplier = float(enemy.stats.Enemy_damage_mult)
-		rpc_id(peer_id, "_spawn_enemy_remote", int(net_id), str(enemy_scene_by_net_id[net_id]), enemy.global_position, max_hp, hp, hp_multiplier, damage_multiplier, _enemy_part_hps(enemy))
+		rpc_id(peer_id, "_spawn_enemy_remote", int(net_id), str(enemy_scene_by_net_id[net_id]), enemy.global_position, max_hp, hp, hp_multiplier, damage_multiplier, _enemy_part_hps(enemy), str(enemy.get_meta("chip_id", "")))
 
 
 func _reset_enemy_sync() -> void:
@@ -5867,6 +6123,7 @@ func _reset_enemy_sync() -> void:
 	_snapshot_timer = 0.0
 	_enemy_snap_cache.clear()
 	last_attacker_by_net_id.clear()
+	_pending_enemy_buff_events.clear()
 	net_hits_accepted = 0
 	net_hits_rejected = 0
 
@@ -5917,7 +6174,7 @@ func _health_component_of(node: Node) -> Node:
 func _spawn_enemy_remote(
 	net_id: int, scene_path: String, position: Vector2,
 	max_hp: int = 0, hp: int = 0, hp_multiplier: float = 1.0, damage_multiplier: float = 1.0,
-	part_hps: PackedInt32Array = PackedInt32Array()
+	part_hps: PackedInt32Array = PackedInt32Array(), chip_id: String = ""
 ) -> void:
 	if multiplayer.is_server() or enemy_by_net_id.has(net_id):
 		return
@@ -5928,6 +6185,8 @@ func _spawn_enemy_remote(
 	var enemy: Node = scene.instantiate()
 	root.add_child(enemy)
 	enemy.global_position = position
+	if chip_id != "":
+		enemy.set_meta("chip_id", chip_id)
 	_attach_enemy_proxy(enemy, net_id, false)
 	if enemy.get("stats") != null and enemy.stats != null:
 		enemy.stats.max_hp_mult = hp_multiplier
@@ -8116,7 +8375,8 @@ func _client_scene_ready() -> void:
 		_send_existing_enemies_to_peer(sender)
 		_send_boss_visual_states_to_peer(sender)
 		_send_existing_summons_to_peer(sender)
-		# host 侧也补生远端镜像（覆盖被 reset_clear_unit 清掉的情况）
+		_send_chip_state_to_peer(sender)
+		# host 自己也补远端镜像（覆盖被 reset_clear_unit 清掉的场景）
 		_respawn_remote_players()
 
 

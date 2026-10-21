@@ -2,6 +2,9 @@ extends BuffComponent
 
 const _DEFAULT_EFFECT_SCENE := preload("res://scenes/debuff/frenzy_effect.tscn")
 
+signal burn_started(duration: float)
+signal burn_finished
+
 @export var death_delay: float = 4.0
 @export var effect_scene: PackedScene = _DEFAULT_EFFECT_SCENE
 
@@ -9,6 +12,7 @@ var stats: EnemyStats
 var health: HealthComponent
 var effect: Node2D
 var _pending: bool = false
+var _network_burn_left: float = 0.0
 var _fatal_snapshot: DamageData
 var _timer: Timer
 var _guard := Callable()
@@ -35,6 +39,8 @@ func refresh(_entry: Dictionary) -> void:
 
 func deactivate() -> void:
 	set_process(false)
+	_network_burn_left = 0.0
+	burn_finished.emit()
 	if health != null and is_instance_valid(health) and _guard.is_valid():
 		health.remove_fatal_damage_guard(_guard)
 	_guard = Callable()
@@ -75,9 +81,31 @@ func _on_fatal_damage(final_damage: int, damage_data) -> int:
 	if effect != null and is_instance_valid(effect) and effect.has_method("begin_burn"):
 		effect.begin_burn(death_delay)
 	set_process(true)
+	burn_started.emit(death_delay)
 	return maxi(0, stats.hp - 1)
 
-func _process(_delta: float) -> void:
+func network_begin_burn(duration: float) -> void:
+	if effect == null or not is_instance_valid(effect):
+		_ensure_effect()
+	_network_burn_left = maxf(0.01, duration)
+	if effect != null and is_instance_valid(effect) and effect.has_method("begin_burn"):
+		effect.begin_burn(_network_burn_left)
+	set_process(true)
+
+func network_finish_burn() -> void:
+	_network_burn_left = 0.0
+	if effect != null and is_instance_valid(effect) and effect.has_method("finish_burn"):
+		effect.finish_burn()
+	set_process(false)
+
+func _process(delta: float) -> void:
+	if _network_burn_left > 0.0:
+		_network_burn_left = maxf(0.0, _network_burn_left - delta)
+		if effect != null and is_instance_valid(effect) and effect.has_method("set_burn_progress"):
+			effect.set_burn_progress(_network_burn_left / maxf(0.01, death_delay))
+		if _network_burn_left <= 0.0:
+			network_finish_burn()
+		return
 	if not _pending or _timer == null or not is_instance_valid(_timer):
 		return
 	if effect == null or not is_instance_valid(effect):
@@ -121,7 +149,9 @@ func _on_delay_timeout() -> void:
 	if not _pending:
 		return
 	_pending = false
+	_network_burn_left = 0.0
 	set_process(false)
+	burn_finished.emit()
 	if effect != null and is_instance_valid(effect) and effect.has_method("finish_burn"):
 		effect.finish_burn()
 	if stats == null or not is_instance_valid(stats) or stats.hp <= 0:
