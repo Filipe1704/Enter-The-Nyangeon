@@ -208,6 +208,7 @@ offset_bottom = 332.0
 theme = ExtResource("12_scroll_theme")
 follow_focus = true
 horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
 script = ExtResource("2_43twi")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Node2D/option_button_box" unique_id=1004792157]
