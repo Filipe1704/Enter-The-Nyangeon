@@ -10,7 +10,7 @@
 [ext_resource type="Script" uid="uid://dkwqr377cp5yf" path="res://script/auto_text.gd" id="9_kkiw5"]
 [ext_resource type="Script" uid="uid://cxexg1p6wvaks" path="res://script/ScrollBox.gd" id="9_scroll"]
 [ext_resource type="Theme" uid="uid://hn8wfogubms0" path="res://ui/pixel_scrollbar_theme.tres" id="10_scrolltheme"]
-[ext_resource type="Theme" uid="uid://0ivk887ius3a" path="res://mods/etn_coop/ui/coop_theme.tres" id="11_cooptheme"]
+[ext_resource type="Theme" uid="uid://cq6shkh3j5pwh" path="res://mods/etn_coop/ui/coop_theme.tres" id="11_cooptheme"]
 [ext_resource type="Texture2D" uid="uid://4d4ff0hkjxle" path="res://ui/close_pixel.svg" id="12_tgpav"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_banner"]
