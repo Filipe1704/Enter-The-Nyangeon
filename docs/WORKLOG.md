@@ -374,3 +374,15 @@
 - Files / 涉及文件: `ui/game_ui.tscn`、`docs/CONVENTIONS.md`、`docs/SYSTEMS.md`、`docs/LEARNINGS.md`。
 - Summary / 改动摘要: `Corruption_HP_BAR` 设 `show_behind_parent=true` 并移到 `Temporary_HP_BAR2` 之前，使青色临时生命段覆盖紫色腐化段；不改 `Stats` 有效上限、腐化数值或联机队友头顶小血条。
 - Docs synced / 文档同步: `docs/CONVENTIONS.md` §6、`docs/SYSTEMS.md` §2.4、`docs/LEARNINGS.md` 新增 `[UI] 本地血条层级` 条目。
+
+## 2026-10-21 — 全屏 CRT 滤镜与设置开关
+- Files / 涉及文件: `shaders/crt_filter.gdshader`、`shaders/crt_filter_material.tres`、`ui/crt_overlay.tscn`、`ui/crt_overlay.gd`、`project.godot`（`CRTOverlay` autoload）、`script/Game.gd`、`script/game_option.gd`、`ui/game_option.tscn`、`ETN_localization.csv` 及 `ETN_localization.*.translation`、`docs/ARCHITECTURE.md`、`docs/CONVENTIONS.md`、`docs/PROJECT_MAP.md`、`docs/LEARNINGS.md`
+- Summary / 改动摘要:
+  - `CRTOverlay`（CanvasLayer，`layer=90`）在 `BackBufferCopy(copy_mode=VIEWPORT)` 之后用全屏 `Filter` ColorRect 叠加扫描线/荫罩；关闭时两个节点隐藏，无渲染开销。
+  - 着色器改为屏幕空间采样，扫描线与荫罩按设计分辨率 640×360 建虚拟像素网格（`virtual_size` + 虚拟像素中心采样 + `filter_nearest`），不随窗口缩放；`hdr_2d=true` 下全程线性运算。
+  - 参数调定 `mask_type=1`(Dots)、`mask_brightness=0.9`、`scanline_brightness=1.0`、`min_scanline_thickness=0.7`，开关前后平均亮度比 ≈1.009（不压暗画面）。
+  - 设置页 GAME/DISPLAY 卡片新增整行 `RowCrt` 开关（`%Crt`），写 `Game.crt_filter` 并持久化 `[game] crt_filter`，默认关；移动端隐藏并强制禁用。
+- Reason / 原因: 用户要求按参考 CRT 着色器（亮度守恒版）为游戏加入全屏滤镜，并决定默认关闭、移动端隐藏禁用、只暴露一个开关。
+- Systems / 影响系统: 渲染（2D 屏幕叠加）、设置菜单 GAME 页、`user://config.ini`、本地化。
+- Docs synced / 文档同步: `docs/ARCHITECTURE.md` §1（autoload #16 / config / 移动端隐藏）、`docs/CONVENTIONS.md` §7（着色器计数与屏幕纹理约定）、`docs/PROJECT_MAP.md`（CRT 条目）、`docs/LEARNINGS.md`（两条）。
+- Verified / 验证: 开关切换即时生效并写入 `config.ini`；重启后自动恢复；滤镜开启前后平均亮度比 ≈1.009；`python tests/check_localization.py` 5/5 PASS；`python tests/run_ui_ux_checks.py --godot <Godot路径> --settings-only` 23 项 0 失败。

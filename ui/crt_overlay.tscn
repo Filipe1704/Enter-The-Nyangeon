@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://bndy5k4bqxu23"]
+
+[ext_resource type="Script" uid="uid://d8ycdlg2mxb1" path="res://ui/crt_overlay.gd" id="1_lcrva"]
+[ext_resource type="Material" uid="uid://cs6bm8ho31ig" path="res://shaders/crt_filter_material.tres" id="2_2wtrv"]
+
+[node name="CRTOverlay" type="CanvasLayer" unique_id=1483552891]
+layer = 90
+script = ExtResource("1_lcrva")
+
+[node name="BackBufferCopy" type="BackBufferCopy" parent="." unique_id=1338519471]
+visible = false
+copy_mode = 2
+
+[node name="Filter" type="ColorRect" parent="." unique_id=1267057340]
+visible = false
+material = ExtResource("2_2wtrv")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2

@@ -1,0 +1,16 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cs6bm8ho31ig"]
+
+[ext_resource type="Shader" uid="uid://bt51evqvgehvw" path="res://shaders/crt_filter.gdshader" id="1_ok704"]
+
+[resource]
+shader = ExtResource("1_ok704")
+shader_parameter/virtual_size = Vector2(640, 360)
+shader_parameter/mask_type = 1
+shader_parameter/curve = 0.0
+shader_parameter/sharpness = 0.6666667
+shader_parameter/color_offset = 0.0
+shader_parameter/mask_brightness = 0.9
+shader_parameter/scanline_brightness = 1.0
+shader_parameter/min_scanline_thickness = 0.7
+shader_parameter/aspect = 0.5625
+shader_parameter/wobble_strength = 0.0

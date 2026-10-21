@@ -176,3 +176,12 @@ mod_kind_levels,关卡,Levels,Níveis,Màn chơi
 option_group_display,显示,Display,Exibição,Hiển thị
 option_group_feedback,反馈,Feedback,Feedback,Phản hồi
 option_group_audio,音频,Audio,Áudio,Âm thanh
+chip_hardened_id,硬化外壳,HARDENED SHELL,CASCO ENDURECIDO,VỎ CỨNG
+chip_hardened_description,获得护盾：受到的伤害固定为1，每次伤害消耗1层护盾；护盾层数随回合成长，耗尽后破碎。,"Gain a shield: damage taken is fixed at 1, and each hit consumes 1 shield hit. Shield hits grow with rounds and break when depleted.",Recebe um escudo: o dano recebido é fixado em 1 e cada acerto consome 1 camada do escudo. As camadas crescem com as rodadas e o escudo quebra ao esgotar.,Nhận lá chắn: sát thương nhận vào được cố định ở 1 và mỗi đòn đánh tiêu hao 1 lớp lá chắn. Số lớp tăng theo hiệp và lá chắn vỡ khi hết.
+chip_frenzy_id,狂怒,FRENZY,FRENESI,CUỒNG NỘ
+chip_frenzy_description,被词条影响的敌人伤害提高25%，移动速度提高30%；受到致命伤害后锁定1点生命继续行动，4秒后死亡。,"Enemies affected by this chip deal 25% more damage and move 30% faster. When they take lethal damage, they survive at 1 HP for 4 seconds, then die.","Inimigos afetados por este chip causam 25% mais dano e se movem 30% mais rápido. Ao receber dano letal, sobrevivem com 1 de vida por 4 segundos e então morrem.","Kẻ địch bị ảnh hưởng bởi chip này gây thêm 25% sát thương và di chuyển nhanh hơn 30%. Khi nhận sát thương chí mạng, chúng sống sót với 1 HP trong 4 giây rồi chết."
+chip_armored_id,重甲,ARMORED,BLINDADO,GIÁP NẶNG
+chip_armored_description,被词条影响的远程/精英敌人满血时受到的伤害降低80%，减伤随生命值线性下降，生命值降至50%及以下时不再减伤。,Ranged and elite enemies affected by this chip take 80% less damage at full HP. The reduction decreases linearly with HP and is 0% at 50% HP or below.,Inimigos à distância e de elite afetados por este chip recebem 80% menos dano com a vida cheia. A redução diminui linearmente com a vida e é 0% com 50% de vida ou menos.,Kẻ địch tầm xa và tinh nhuệ bị ảnh hưởng bởi chip này nhận ít hơn 80% sát thương khi đầy máu. Mức giảm giảm tuyến tính theo máu và bằng 0% khi máu từ 50% trở xuống.
+havoc_id,浩劫芯片,HAVOC,CAOS,HỦY DIỆT
+havoc_description,启用后可在下方配置敌人词条。,Enables enemy modifier configuration below.,Permite configurar os modificadores de inimigos abaixo.,Cho phép cấu hình từ khóa kẻ địch bên dưới.
+option_crt_filter,CRT 滤镜,CRT Filter,Filtro CRT,Bộ lọc CRT

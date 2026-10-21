@@ -2927,3 +2927,15 @@
 - Notes / 说明: 清场时直接调用 `on_dead()` 或 emit `stats.is_dead` 会触发 `_coin_drops`、`settle_converted_clear`/分数、`emit_enemy_dead_position` 等 gameplay 结算，且坦克类会播专属死亡动画/伤害爆炸。清场必须只调用视觉入口：普通敌人复用 `DeathAnim` 的 `death_gpu`（传 `play_sound=false`），坦克用 `ExplosionAnim.play_explosion_only()`（不启动 `smoke`、不播音效）。`clear_death_played` meta 用于去重（`enemy_clear_unit` 可能被 `round_end`/`round_upgrade` 多次触发）；`ExplosionAnim.play()` 保留黑烟+音效，仅 Goliath 手部使用。清场视觉按一次性实例化 + 约 1.2 秒后 `queue_free`，不入对象池。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-20
+
+### [Rendering/Shader] 全屏屏幕纹理叠加层必须自带 `BackBufferCopy(copy_mode=VIEWPORT)`
+- Evidence / 证据: `ui/crt_overlay.tscn`（`BackBufferCopy` 排在 `Filter` 之前，`copy_mode=2`）、`shaders/screen_outline.gdshader` / `shaders/shock_wave.gdshader`（游戏中已有的中途屏幕读取）
+- Notes / 说明: 2D 每帧只在**首个** `hint_screen_texture` 使用者处自动拷贝屏幕。描边/冲击波等已在绘制中途读过屏幕，后置的全屏滤镜若不自带 `BackBufferCopy`，只能拿到那一次的半帧画面（实测会错位/重复）。`copy_mode` 必须改成 `VIEWPORT`(2)：默认 `RECT`(1) 只拷贝 `rect`（默认 `(-100,-100,200,200)`）。全屏 ColorRect 还要 `mouse_filter=IGNORE`，否则吞掉所有输入。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21
+
+### [Rendering/Shader] CRT 扫描线/荫罩按设计分辨率虚拟网格生成，不能按物理像素
+- Evidence / 证据: `shaders/crt_filter.gdshader`（`virtual_size`、`fetch()` 吸附虚拟像素中心、`mask(..., floor(base_uv * virtual_size))`）；`ui/crt_overlay.gd:_sync_virtual_size`（读 `display/window/size/viewport_width/height`）
+- Notes / 说明: 参考实现跑在 640×360 的 SubViewport 上（1 texel = 1 游戏像素）。本项目没有全局 SubViewport，若按 `SCREEN_UV × 物理分辨率` 生成扫描线，720/1080 等非整数倍窗口会出现摩尔纹和错位。改为按 640×360 建虚拟网格：采样用 `(floor(vpix)+0.5)/virtual_size` + `filter_nearest`，荫罩也用同一网格且不随 `warp` 抖动。`hdr_2d=true` 时屏幕纹理为线性色，全程线性运算、不做 sRGB 转换。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-21

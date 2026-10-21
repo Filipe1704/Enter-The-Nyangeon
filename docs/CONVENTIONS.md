@@ -137,9 +137,10 @@ layer N = bit `1<<(N-1)`：
 
 ## 7. Shaders / 着色器（`shaders/`）
 
-20 个 `shader_type canvas_item;` + `funcs.gdshaderinc`（共享函数）+ `erotion_shader.tres`。
-代表：`2d_fire`, `circle`, `diamond_based_screen_transition`, `gamecamera`, `group_outline`, `laser_beam`, `motion_screen`/`motion_texture`, `moving_circles`, `range_effects`, `ripple`, `screen_outline`（按设计分辨率计算）, `scrolling_bkgd`/`scrolling_screen`, `shock_wave`/`shock_wave_2`, `sprite_afterimage`, `sprite_blink`, `sprite_outline`, `sprite_shaow`（阴影）。
+22 个 `shader_type canvas_item;` + `funcs.gdshaderinc`（共享函数）+ `erotion_shader.tres`。
+代表：`2d_fire`, `circle`, `crt_filter`（全屏 CRT，虚拟像素网格基于设计分辨率）, `diamond_based_screen_transition`, `gamecamera`, `group_outline`, `laser_beam`, `motion_screen`/`motion_texture`, `moving_circles`, `range_effects`, `ripple`, `screen_outline`（按设计分辨率计算）, `scrolling_bkgd`/`scrolling_screen`, `shock_wave`/`shock_wave_2`, `sprite_afterimage`, `sprite_blink`, `sprite_outline`, `sprite_shaow`（阴影）。
 新增前先看是否可复用 `funcs.gdshaderinc`。
+**读屏幕纹理（`hint_screen_texture`）的 shader**：2D 每帧只在**首个**使用者处自动拷贝屏幕；若在游戏/UI 的绘制中途已有其它 shader 读过屏幕，后置的全屏叠加层必须自己放 `BackBufferCopy`（`copy_mode=VIEWPORT`），否则只能拿到半帧。全屏滤镜叠层用独立 CanvasLayer（`layer=90`），`ColorRect.mouse_filter=IGNORE`。
 
 ## 8. Code conventions / 代码约定（观察所得）
 

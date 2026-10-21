@@ -15,8 +15,10 @@ extends OptionMenu
 @onready var max_fps: HSlider = %MaxFps
 @onready var max_fps_value: Label = %MaxFpsValue
 @onready var physics_interp = %PhysicsInterp
+@onready var crt_filter = %Crt
 @onready var row_display: Control = %RowDisplay
 @onready var row_advanced: Control = %RowAdvanced
+@onready var row_crt: Control = %RowCrt
 @onready var full_screen_label: Control = %FullScreenLabel
 @onready var v_sync_label: Control = %VSyncLabel
 @onready var physics_interp_label: Control = %PhysicsInterpLabel
@@ -26,10 +28,12 @@ func _ready():
 	_bind_toggle(shake, Game.shake_screen, _set_shake)
 	_bind_toggle(v_sync, Game.vsync_mode, _set_vsync, false)
 	_bind_toggle(physics_interp, Game.physics_interp, _set_physics_interp)
+	_bind_toggle(crt_filter, Game.crt_filter, _set_crt_filter)
 	_bind_toggle_label(full_screen, full_screen_label)
 	_bind_toggle_label(shake, shake.get_parent().get_node("Label"))
 	_bind_toggle_label(v_sync, v_sync_label)
 	_bind_toggle_label(physics_interp, physics_interp_label)
+	_bind_toggle_label(crt_filter, crt_filter.get_parent().get_node("Label"))
 	resolutions.item_selected.connect(_on_resolutions_item_selected)
 	damage_freq.value_changed.connect(_on_damage_freq_value_changed)
 	effect_freq.value_changed.connect(_on_effect_freq_value_changed)
@@ -43,6 +47,7 @@ func _ready():
 	if OS.has_feature("mobile"):
 		row_display.hide()
 		row_advanced.hide()
+		row_crt.hide()
 
 func menu_show():
 	super()
@@ -102,6 +107,14 @@ func _set_physics_interp(on: bool) -> void:
 	Game.apply_physics_interp()
 	Game.save_config()
 
+# CRT 屏幕滤镜开关（默认关）：autoload 缺失时（如部分独立测试入口）静默跳过。
+func _set_crt_filter(on: bool) -> void:
+	Game.crt_filter = on
+	var overlay := get_node_or_null("/root/CRTOverlay")
+	if overlay != null:
+		overlay.set_enabled(on)
+	Game.save_config()
+
 func _show_mobile_notice():
 	mobile_notice.notice("option_mobile_only_notice")
 
@@ -115,6 +128,7 @@ func setting_status():
 	shake.set_on(Game.shake_screen, false)
 	v_sync.set_on(Game.vsync_mode, false)
 	physics_interp.set_on(Game.physics_interp, false)
+	crt_filter.set_on(Game.crt_filter, false)
 	damage_freq.set_value_no_signal(Game.damage_text_freq)
 	damage_freq_value.text = _damage_freq_text(Game.damage_text_freq)
 	effect_freq.set_value_no_signal(Game.effect_freq)

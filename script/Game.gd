@@ -40,6 +40,10 @@ var hit_flash_freq: int = 4
 # 迁移期部分视觉仍有错位风险，故默认关，运行期经 SceneTree.physics_interpolation 生效。
 var physics_interp: bool = false
 
+# CRT 屏幕滤镜（设置项，默认关）：autoload CRTOverlay 全屏叠加扫描线/荫罩。
+# 移动端强制禁用；关闭时滤镜节点隐藏，无渲染开销。
+var crt_filter: bool = false
+
 var control_mode: int = 0
 
 var game_language: String
@@ -287,6 +291,7 @@ func save_config():
 	config.set_value("game", "vsync_mode", vsync_mode)
 	config.set_value("game", "max_fps_index", max_fps_index)
 	config.set_value("game", "physics_interp", physics_interp)
+	config.set_value("game", "crt_filter", crt_filter)
 	config.set_value("game", "game_language", game_language)
 	config.set_value("game", "damage_text_freq", damage_text_freq)
 	config.set_value("game", "effect_freq", effect_freq)
@@ -316,6 +321,7 @@ func load_config():
 	vsync_mode = config.get_value("game", "vsync_mode", true)
 	max_fps_index = int(config.get_value("game", "max_fps_index", 1))
 	physics_interp = bool(config.get_value("game", "physics_interp", false))
+	crt_filter = bool(config.get_value("game", "crt_filter", false))
 	game_language = config.get_value("game", "game_language", "zh_CN")
 	damage_text_freq = config.get_value("game", "damage_text_freq", 4)
 	effect_freq = config.get_value("game", "effect_freq", 4)
