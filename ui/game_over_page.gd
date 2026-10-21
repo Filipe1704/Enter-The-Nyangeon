@@ -43,6 +43,8 @@ var is_return_selected: bool = false
 
 var is_win: bool = false
 
+var _chip_score_bonus_applied: bool = false
+
 func _ready():
 	GameEvents.ability_upgrade_added.connect(add_player_up_item_card)
 	GameEvents.round_num_changed.connect(end_round_num)
@@ -88,6 +90,20 @@ func score_defeats_count(body_score):
 	score += round(body_score * PlayerData.level_score_mult)
 	defeats += 1
 
+func _apply_chip_score_bonus() -> void:
+	if _chip_score_bonus_applied:
+		return
+	_chip_score_bonus_applied = true
+	if score <= 0:
+		return
+	var chip_manager := get_tree().get_first_node_in_group("ChipManager")
+	if chip_manager == null or not chip_manager.has_method("get_score_multiplier"):
+		return
+	var multiplier := float(chip_manager.get_score_multiplier())
+	if multiplier <= 1.0:
+		return
+	score = int(round(float(score) * multiplier))
+
 func emit_transition_start():
 	transition_start.emit()
 
@@ -126,6 +142,7 @@ func time_count_stop(player_dead: bool):
 		SoundManager.play_bgm_cut(bgm_cut_win, 1.0)
 	animation_player.play("game_over_in")
 	time_num.text = str(hour) + ":" + str(minute) + ":" + str(second)
+	_apply_chip_score_bonus()
 	score_num.text = str(score)
 	defeats_num.text = str(defeats)
 	coins_num.text = str(coins)

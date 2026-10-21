@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameMode" format=3 uid="uid://x3fjyfrwkayo"]
+
+[ext_resource type="Script" uid="uid://dhb70b327wxvy" path="res://resources/buff/buff.gd" id="1_cjrw6"]
+[ext_resource type="Texture2D" uid="uid://cs41wqbtimcrl" path="res://sprites/item/mission_data_4.png" id="2_g2op6"]
+[ext_resource type="Script" uid="uid://755rf88taw51" path="res://resources/game_mode/game_mode.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+game_mode_name = "havoc"
+game_mode_id = "havoc"
+game_mode_icon = ExtResource("2_g2op6")

@@ -10,3 +10,4 @@ id = "tester_automaton_rl"
 body = ExtResource("1_n23dw")
 icon = ExtResource("2_g6lbb")
 position_y = 52.0
+chip_tags = Array[String](["ranged"])

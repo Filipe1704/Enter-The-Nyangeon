@@ -1,25 +1,29 @@
-[gd_scene load_steps=25 format=3 uid="uid://dmlxiy6dwwoi1"]
+[gd_scene format=3 uid="uid://dmlxiy6dwwoi1"]
 
-[ext_resource type="Shader" path="res://shaders/motion_screen.gdshader" id="1_0xuv1"]
-[ext_resource type="Script" path="res://ui/level_select.gd" id="1_qu4ss"]
+[ext_resource type="Shader" uid="uid://chkj8wgi1ek5d" path="res://shaders/motion_screen.gdshader" id="1_0xuv1"]
+[ext_resource type="Script" uid="uid://7ui8on4yg3i" path="res://ui/level_select.gd" id="1_qu4ss"]
 [ext_resource type="PackedScene" uid="uid://l3f4bjcsqj4j" path="res://ui/level_button.tscn" id="2_i5t1m"]
-[ext_resource type="Shader" path="res://shaders/scrolling_bkgd.gdshader" id="2_xaoky"]
+[ext_resource type="Shader" uid="uid://d3frxix26ovel" path="res://shaders/scrolling_bkgd.gdshader" id="2_xaoky"]
 [ext_resource type="Texture2D" uid="uid://dieipwoadjxoa" path="res://ui/title_picture_2.png" id="3_duyww"]
 [ext_resource type="Resource" uid="uid://e73bh68bpj14" path="res://resources/level/normal.tres" id="4_46yn2"]
 [ext_resource type="Texture2D" uid="uid://jftp1ip2pgwf" path="res://ui/level_select_text.png" id="4_n53j0"]
 [ext_resource type="Resource" uid="uid://bcc6dxp088o4m" path="res://resources/level/hard.tres" id="5_i55qb"]
 [ext_resource type="Resource" uid="uid://b186oosga4op3" path="res://resources/level/extreme.tres" id="6_frnug"]
 [ext_resource type="Resource" uid="uid://ba3flk6iu1lla" path="res://resources/level/insane.tres" id="7_a4c1p"]
-[ext_resource type="Resource" uid="uid://dv4y17hq6vqey" path="res://resources/level/torment.tres" id="11_torment"]
 [ext_resource type="PackedScene" uid="uid://c7svo40h476xs" path="res://ui/gamemode_button.tscn" id="8_v8dv3"]
 [ext_resource type="PackedScene" uid="uid://dwsd13u7soadu" path="res://ui/support_ui/support_select_ui.tscn" id="9_pnmhr"]
 [ext_resource type="PackedScene" uid="uid://16ybq5tjkt1a" path="res://ui/return.tscn" id="10_3m0td"]
+[ext_resource type="Script" uid="uid://755rf88taw51" path="res://resources/game_mode/game_mode.gd" id="10_ytjne"]
+[ext_resource type="Resource" uid="uid://cwvyflq4fpd83" path="res://resources/game_mode/blitzkrieg_mode.tres" id="11_6nsll"]
+[ext_resource type="Resource" uid="uid://dv4y17hq6vqey" path="res://resources/level/torment.tres" id="11_torment"]
+[ext_resource type="Resource" uid="uid://b0rcjdt3s42m3" path="res://resources/game_mode/endless_mode.tres" id="12_08i1h"]
+[ext_resource type="Resource" path="res://resources/game_mode/havoc_mode.tres" id="13_havoc"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_dwb1x"]
 shader = ExtResource("1_0xuv1")
 shader_parameter/f = 1.1
 shader_parameter/v = 5.0
-shader_parameter/grayscale = null
+shader_parameter/grayscale = false
 
 [sub_resource type="Gradient" id="Gradient_1xrme"]
 offsets = PackedFloat32Array(0.0194805, 0.512987)
@@ -532,16 +536,16 @@ tracks/20/keys = {
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_cl44q"]
 _data = {
-"RESET": SubResource("Animation_hqx7s"),
-"select_in": SubResource("Animation_dj357")
+&"RESET": SubResource("Animation_hqx7s"),
+&"select_in": SubResource("Animation_dj357")
 }
 
-[node name="LevelSelect" type="CanvasLayer"]
+[node name="LevelSelect" type="CanvasLayer" unique_id=2074315005]
 layer = 2
 visible = false
 script = ExtResource("1_qu4ss")
 
-[node name="Motion" type="ColorRect" parent="."]
+[node name="Motion" type="ColorRect" parent="." unique_id=1683993521]
 material = SubResource("ShaderMaterial_dwb1x")
 anchors_preset = 15
 anchor_right = 1.0
@@ -551,7 +555,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 1)
 
-[node name="ColorRect" type="ColorRect" parent="."]
+[node name="ColorRect" type="ColorRect" parent="." unique_id=105584758]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -559,10 +563,10 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 0.941176)
 
-[node name="Node2D2" type="Node2D" parent="."]
+[node name="Node2D2" type="Node2D" parent="." unique_id=314929743]
 position = Vector2(320, 0)
 
-[node name="TextureRect6" type="TextureRect" parent="Node2D2"]
+[node name="TextureRect6" type="TextureRect" parent="Node2D2" unique_id=511918399]
 offset_left = -95.0
 offset_top = -16.0
 offset_right = 305.0
@@ -570,7 +574,7 @@ offset_bottom = 44.0
 rotation = 1.5708
 texture = SubResource("GradientTexture2D_bsiu8")
 
-[node name="TextureRect7" type="TextureRect" parent="Node2D2"]
+[node name="TextureRect7" type="TextureRect" parent="Node2D2" unique_id=841969933]
 offset_left = 157.0
 offset_top = -16.0
 offset_right = 557.0
@@ -579,7 +583,7 @@ rotation = 1.5708
 texture = SubResource("GradientTexture2D_bsiu8")
 flip_v = true
 
-[node name="ColorRect" type="ColorRect" parent="Node2D2"]
+[node name="ColorRect" type="ColorRect" parent="Node2D2" unique_id=1088368798]
 offset_left = -104.0
 offset_top = -8.0
 offset_right = 104.0
@@ -588,62 +592,63 @@ pivot_offset = Vector2(104, 188)
 mouse_filter = 2
 color = Color(0.933459, 0.925978, 0.945306, 1)
 
-[node name="Node2D" type="Node2D" parent="Node2D2"]
+[node name="Node2D" type="Node2D" parent="Node2D2" unique_id=889591957]
 position = Vector2(-320, 0)
 
-[node name="Node2D" type="Node2D" parent="Node2D2/Node2D"]
+[node name="Node2D" type="Node2D" parent="Node2D2/Node2D" unique_id=1800304181]
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Node2D2/Node2D/Node2D"]
+[node name="VBoxContainer" type="VBoxContainer" parent="Node2D2/Node2D/Node2D" unique_id=106370163]
 offset_left = 216.0
 offset_right = 424.0
 offset_bottom = 360.0
 alignment = 1
 
-[node name="LevelButton" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
+[node name="LevelButton" parent="Node2D2/Node2D/Node2D/VBoxContainer" unique_id=937862478 node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
 layout_mode = 2
 level = ExtResource("4_46yn2")
 level_select = NodePath("../../../../..")
 
-[node name="LevelButton2" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
+[node name="LevelButton2" parent="Node2D2/Node2D/Node2D/VBoxContainer" unique_id=1064319717 node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
 layout_mode = 2
 level = ExtResource("5_i55qb")
 level_select = NodePath("../../../../..")
 
-[node name="LevelButton3" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
+[node name="LevelButton3" parent="Node2D2/Node2D/Node2D/VBoxContainer" unique_id=977461438 node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
 layout_mode = 2
 level = ExtResource("6_frnug")
 level_select = NodePath("../../../../..")
 
-[node name="LevelButton4" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
+[node name="LevelButton4" parent="Node2D2/Node2D/Node2D/VBoxContainer" unique_id=649647667 node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
 layout_mode = 2
 level = ExtResource("7_a4c1p")
 level_select = NodePath("../../../../..")
 
-[node name="LevelButton5" parent="Node2D2/Node2D/Node2D/VBoxContainer" node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
+[node name="LevelButton5" parent="Node2D2/Node2D/Node2D/VBoxContainer" unique_id=79653024 node_paths=PackedStringArray("level_select") instance=ExtResource("2_i5t1m")]
 layout_mode = 2
 level = ExtResource("11_torment")
 level_select = NodePath("../../../../..")
 
-[node name="gamemode_button" parent="Node2D2" instance=ExtResource("8_v8dv3")]
+[node name="gamemode_button" parent="Node2D2" unique_id=165436680 instance=ExtResource("8_v8dv3")]
 position = Vector2(117, 52)
+gamemode_card = Array[ExtResource("10_ytjne")]([ExtResource("11_6nsll"), ExtResource("12_08i1h"), ExtResource("13_havoc")])
 
-[node name="support_ui" parent="Node2D2" instance=ExtResource("9_pnmhr")]
+[node name="support_ui" parent="Node2D2" unique_id=517777073 instance=ExtResource("9_pnmhr")]
 visible = false
 position = Vector2(-190, 52)
 details_enabled = true
 
-[node name="return" parent="Node2D2" instance=ExtResource("10_3m0td")]
-offset_left = 72.0
-offset_top = 275.0
-offset_right = 98.0
-offset_bottom = 301.0
+[node name="return" parent="Node2D2" unique_id=1451979219 instance=ExtResource("10_3m0td")]
+offset_left = -221.0
+offset_top = 52.0
+offset_right = -195.0
+offset_bottom = 78.0
 
-[node name="Node2D" type="Node2D" parent="."]
+[node name="Node2D" type="Node2D" parent="." unique_id=105938879]
 position = Vector2(320, 168)
 
-[node name="Node2D" type="Node2D" parent="Node2D"]
+[node name="Node2D" type="Node2D" parent="Node2D" unique_id=1512748447]
 
-[node name="TextureRect6" type="TextureRect" parent="Node2D/Node2D"]
+[node name="TextureRect6" type="TextureRect" parent="Node2D/Node2D" unique_id=1731045794]
 offset_left = -396.0
 offset_top = -168.0
 offset_right = 404.0
@@ -651,7 +656,7 @@ offset_bottom = -68.0
 mouse_filter = 2
 texture = SubResource("GradientTexture2D_bsiu8")
 
-[node name="ColorRect2" type="ColorRect" parent="Node2D/Node2D"]
+[node name="ColorRect2" type="ColorRect" parent="Node2D/Node2D" unique_id=622198942]
 offset_left = -396.0
 offset_top = -168.0
 offset_right = 326.0
@@ -659,7 +664,7 @@ offset_bottom = -148.0
 mouse_filter = 2
 color = Color(0.0862745, 0.0862745, 0.0862745, 1)
 
-[node name="TextureRect2" type="TextureRect" parent="Node2D/Node2D"]
+[node name="TextureRect2" type="TextureRect" parent="Node2D/Node2D" unique_id=399215523]
 material = SubResource("ShaderMaterial_jwkm8")
 offset_left = 326.0
 offset_top = -148.0
@@ -671,7 +676,7 @@ mouse_filter = 2
 texture = ExtResource("3_duyww")
 stretch_mode = 1
 
-[node name="TextureRect" type="TextureRect" parent="Node2D/Node2D"]
+[node name="TextureRect" type="TextureRect" parent="Node2D/Node2D" unique_id=851415725]
 material = SubResource("ShaderMaterial_fdo1q")
 offset_left = -396.0
 offset_top = -176.0
@@ -682,9 +687,9 @@ mouse_filter = 2
 texture = ExtResource("4_n53j0")
 stretch_mode = 1
 
-[node name="Node2D2" type="Node2D" parent="Node2D"]
+[node name="Node2D2" type="Node2D" parent="Node2D" unique_id=1430335780]
 
-[node name="TextureRect7" type="TextureRect" parent="Node2D/Node2D2"]
+[node name="TextureRect7" type="TextureRect" parent="Node2D/Node2D2" unique_id=1988690076]
 offset_left = -396.0
 offset_top = 92.0
 offset_right = 404.0
@@ -693,7 +698,7 @@ mouse_filter = 2
 texture = SubResource("GradientTexture2D_bsiu8")
 flip_v = true
 
-[node name="ColorRect3" type="ColorRect" parent="Node2D/Node2D2"]
+[node name="ColorRect3" type="ColorRect" parent="Node2D/Node2D2" unique_id=1385515953]
 offset_left = -396.0
 offset_top = 172.0
 offset_right = 326.0
@@ -701,7 +706,7 @@ offset_bottom = 192.0
 mouse_filter = 2
 color = Color(0.0862745, 0.0862745, 0.0862745, 1)
 
-[node name="TextureRect3" type="TextureRect" parent="Node2D/Node2D2"]
+[node name="TextureRect3" type="TextureRect" parent="Node2D/Node2D2" unique_id=1819614765]
 material = SubResource("ShaderMaterial_tmlhf")
 offset_left = 326.0
 offset_top = 151.0
@@ -714,7 +719,7 @@ texture = ExtResource("3_duyww")
 stretch_mode = 1
 flip_h = true
 
-[node name="TextureRect4" type="TextureRect" parent="Node2D/Node2D2"]
+[node name="TextureRect4" type="TextureRect" parent="Node2D/Node2D2" unique_id=1043212731]
 material = SubResource("ShaderMaterial_wlndm")
 offset_left = -396.0
 offset_top = 164.0
@@ -725,7 +730,5 @@ mouse_filter = 2
 texture = ExtResource("4_n53j0")
 stretch_mode = 1
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-"": SubResource("AnimationLibrary_cl44q")
-}
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=74631278]
+libraries/ = SubResource("AnimationLibrary_cl44q")

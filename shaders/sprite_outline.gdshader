@@ -3,6 +3,8 @@ shader_type canvas_item;
 uniform float outline_width = 1.0;
 uniform vec4 outline_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform float flash_opacity : hint_range(0.0, 1.0, 0.1) = 0.0;
+uniform vec4 corruption_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform float corruption_amount : hint_range(0.0, 1.0, 0.01) = 0.0;
 
 void fragment() {
 	vec2 uv = UV;
@@ -27,4 +29,5 @@ void fragment() {
 	orginal_color.rgb = mix(orginal_color.rgb, outline_color.rgb, flash_opacity);
 
 	COLOR = mix(outline, orginal_color, orginal_color.a);
+	COLOR.rgb = mix(COLOR.rgb, corruption_tint.rgb, corruption_amount);
 }

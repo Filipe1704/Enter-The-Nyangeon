@@ -30,6 +30,8 @@
 [ext_resource type="PackedScene" uid="uid://bkmeo3gxyxogh" path="res://scenes/manager/game_mode_manager.tscn" id="27_d3y8e"]
 [ext_resource type="PackedScene" uid="uid://dfmayiqvenqr8" path="res://ui/cheat_menu.tscn" id="29_jrems"]
 [ext_resource type="PackedScene" path="res://scenes/manager/interaction_manager.tscn" id="30_interact"]
+[ext_resource type="PackedScene" path="res://scenes/manager/chip_manager.tscn" id="31_chipmgr"]
+[ext_resource type="PackedScene" path="res://ui/chip_hud.tscn" id="32_chiphud"]
 
 [sub_resource type="Environment" id="Environment_gkmcc"]
 background_mode = 3
@@ -329,6 +331,8 @@ texture = SubResource("GradientTexture2D_omtf7")
 
 [node name="RoundTimer" parent="." unique_id=1630263965 instance=ExtResource("11_bbjhb")]
 
+[node name="ChipHud" parent="." unique_id=184317819 instance=ExtResource("32_chiphud")]
+
 [node name="BattleRoom" type="Marker2D" parent="." unique_id=54972387 groups=["CenterPosition"]]
 position = Vector2(704, 448)
 
@@ -358,6 +362,8 @@ target_node = NodePath("../../WarringAnim/RaidWarringAnimWest")
 [node name="GameOverPage" parent="." unique_id=1819148588 instance=ExtResource("13_yp7ti")]
 
 [node name="RoundManager" parent="." unique_id=2143966205 instance=ExtResource("15_jj0k3")]
+
+[node name="ChipManager" parent="." unique_id=209647156 instance=ExtResource("31_chipmgr")]
 
 [node name="EnemyManager" parent="." unique_id=847629050 node_paths=PackedStringArray("round_manager") instance=ExtResource("16_uuiao")]
 round_manager = NodePath("../RoundManager")

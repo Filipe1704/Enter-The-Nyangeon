@@ -69,6 +69,9 @@ const MAP := {
 	"knockback_resis_mult": {
 		PLAYER: "knockback_resis_mult",
 	},
+	"max_hp_mult": {
+		ENEMY: "max_hp_mult",
+	},
 }
 
 static func resolve(host_kind: int, key: String) -> String:

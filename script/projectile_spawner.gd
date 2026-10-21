@@ -51,6 +51,13 @@ static func spawn_core(
 	if configure.is_valid():
 		configure.call(node)
 
+	if source_faction == Faction.ENEMY_SIDE:
+		var projectile_damage: Variant = node.get("damage_data")
+		if projectile_damage is DamageData:
+			var corruption: int = ChipCorruptionRules.attack_corruption(owner)
+			if corruption >= 1:
+				projectile_damage.corruption_power = corruption
+
 	node.global_position = position
 	node.global_rotation = rotation
 	if scale != Vector2.ZERO:

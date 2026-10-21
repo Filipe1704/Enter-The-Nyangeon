@@ -10,3 +10,4 @@ id = "menacing_automaton"
 body = ExtResource("1_vyqqx")
 icon = ExtResource("2_7sksu")
 position_y = 52.0
+chip_tags = Array[String](["melee", "elite"])

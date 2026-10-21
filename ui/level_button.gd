@@ -1,5 +1,7 @@
 extends PanelContainer
 
+signal previewed(button: Node)
+
 @export_file("*.tscn") var path: String
 
 @export var level: Level
@@ -14,18 +16,15 @@ var on_selected: bool = false
 
 var on_touch: bool = false
 var _selection_id: int = 0
+var _preview_open: bool = false
 
 func _ready():
 	mouse_entered.connect(mouse_in)
-	mouse_exited.connect(mouse_out)
 	gui_input.connect(level_selected)
 	focus_entered.connect(mouse_in)
-	focus_exited.connect(mouse_out)
 	
 	level_select.level_is_selected.connect(close_mouse)
 	level_select.player_selected.connect(open_mouse)
-	
-	GameEvents.player_card_touch.connect(touch_out)
 	
 	get_level()
 
@@ -48,6 +47,7 @@ func cancel_selection() -> void:
 	timer.stop()
 	on_selected = false
 	on_touch = false
+	_preview_open = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	focus_mode = Control.FOCUS_NONE
 	# 初始化/取消直接恢复默认外观；mouse_out 从高亮首帧开始，会让所有按钮闪亮。
@@ -55,20 +55,27 @@ func cancel_selection() -> void:
 	animation_player.advance(0)
 
 func mouse_in():
-	if on_selected == false:
-		SoundManager.play_sfx("ButtonSounds2")
-		animation_player.play("mouse_in")
+	if on_selected:
+		return
+	if mouse_filter != Control.MOUSE_FILTER_IGNORE and not has_focus():
+		grab_focus()
+		return
+	open_preview()
 
-func mouse_out():
-	if on_selected == false:
-		animation_player.play("mouse_out")
+func open_preview() -> void:
+	if on_selected or _preview_open:
+		return
+	_preview_open = true
+	SoundManager.play_sfx("ButtonSounds2")
+	animation_player.play("mouse_in")
+	previewed.emit(self)
 
-func touch_out():
-	await get_tree().create_timer(0.05).timeout
-	
-	if on_selected == false and on_touch == true:
-		on_touch = false
-		animation_player.play("mouse_out")
+func close_preview() -> void:
+	if on_selected or not _preview_open:
+		return
+	_preview_open = false
+	on_touch = false
+	animation_player.play("mouse_out")
 
 
 func level_selected(event: InputEvent):
@@ -85,40 +92,42 @@ func level_selected(event: InputEvent):
 			if selection_id != _selection_id:
 				return
 			on_touch = true
-			SoundManager.play_sfx("ButtonSounds2")
-			animation_player.play("mouse_in")
+			open_preview()
 		else:
+			if level_select.has_method("prepare_level_selection") and not level_select.prepare_level_selection(level):
+				return
 			SoundManager.play_sfx("ButtonSounds")
 			on_selected = true
 			level_select.level_is_selected.emit()
 			animation_player.play("selected")
 			
-			PlayerData.level_id = level.level_id
-			PlayerData.level_num = level.level_num
-			PlayerData.level_hp = level.level_hp
-			PlayerData.level_damage = level.level_damage
-			PlayerData.level_score_mult = level.level_score_mult
-			PlayerData.level_reward = level.level_reward
-			PlayerData.current_level = level
+			_apply_level()
 			
 			timer.start()
 	
 	if on_selected == false and (event.is_action_pressed("shoot") or event.is_action_pressed("ui_accept")):
 		accept_event()
+		if level_select.has_method("prepare_level_selection") and not level_select.prepare_level_selection(level):
+			return
 		SoundManager.play_sfx("ButtonSounds")
 		on_selected = true
 		level_select.level_is_selected.emit()
 		animation_player.play("selected")
 		
-		PlayerData.level_id = level.level_id
-		PlayerData.level_num = level.level_num
-		PlayerData.level_hp = level.level_hp
-		PlayerData.level_damage = level.level_damage
-		PlayerData.level_score_mult = level.level_score_mult
-		PlayerData.level_reward = level.level_reward
-		PlayerData.current_level = level
+		_apply_level()
 		
 		timer.start()
+
+func _apply_level() -> void:
+	if level == null:
+		return
+	PlayerData.level_id = level.level_id
+	PlayerData.level_num = level.level_num
+	PlayerData.level_hp = level.level_hp
+	PlayerData.level_damage = level.level_damage
+	PlayerData.level_score_mult = level.level_score_mult
+	PlayerData.level_reward = level.level_reward
+	PlayerData.current_level = level
 
 func _on_timer_timeout() -> void:
 	if not on_selected or not level_select.visible:

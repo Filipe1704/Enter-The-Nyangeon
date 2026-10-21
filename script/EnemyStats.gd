@@ -4,6 +4,7 @@ extends Node
 signal hp_changed
 signal hp_hurt
 signal is_dead
+signal shield_broken
 
 @warning_ignore("unused_signal")
 signal update_stats
@@ -58,6 +59,10 @@ var MAX_SPEED_mult: float = 1
 var SPEED_TIME_mult: float = 1
 var ally_damage_mult: float = 1
 var ally_damage_add: int = 0
+
+var shield_active: bool = false
+var shield_max_hits: int = 0
+var shield_hits: int = 0
 
 var hurt_hp = 0
 
@@ -134,6 +139,11 @@ func time_count():
 func spawn_hp():
 	dead_lock = false
 	hp = max_hp
+
+func reset_shield() -> void:
+	shield_active = false
+	shield_max_hits = 0
+	shield_hits = 0
 
 func get_body_base_ability():
 	base_max_hp = max_hp

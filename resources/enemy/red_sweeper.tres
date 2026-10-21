@@ -11,3 +11,4 @@ id = "red_sweeper"
 body = ExtResource("1_0qqc3")
 route = ExtResource("3_route")
 icon = ExtResource("2_yrh84")
+chip_tags = Array[String](["melee", "swarm"])

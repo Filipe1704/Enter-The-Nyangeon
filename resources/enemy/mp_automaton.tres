@@ -10,3 +10,4 @@ id = "mp_automaton"
 body = ExtResource("1_eopnp")
 icon = ExtResource("2_8i0ws")
 position_y = 52.0
+chip_tags = Array[String](["ranged"])

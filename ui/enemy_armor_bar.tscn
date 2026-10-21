@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/enemy_armor_bar.gd" id="1_bar"]
+
+[node name="EnemyArmorBar" type="Control"]
+custom_minimum_size = Vector2(44, 6)
+offset_right = 44.0
+offset_bottom = 6.0
+size_flags_horizontal = 4
+mouse_filter = 2
+script = ExtResource("1_bar")

@@ -7,3 +7,6 @@ class_name EnemyCard
 @export_multiline var description: String
 @export var icon: Texture2D
 @export var position_y: float = 20
+
+@export_category("Chip")
+@export var chip_tags: Array[String] = []

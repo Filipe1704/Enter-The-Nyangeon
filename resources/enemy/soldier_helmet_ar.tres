@@ -10,3 +10,4 @@ id = "soldier_helmet_ar"
 body = ExtResource("1_fmu4e")
 icon = ExtResource("2_b0tw4")
 position_y = 45.0
+chip_tags = Array[String](["ranged"])

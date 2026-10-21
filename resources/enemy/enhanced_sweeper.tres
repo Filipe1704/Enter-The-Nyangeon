@@ -9,3 +9,4 @@ script = ExtResource("2_s8s7u")
 id = "enhanced_sweeper"
 body = ExtResource("1_x03hy")
 icon = ExtResource("2_7xkhs")
+chip_tags = Array[String](["melee", "swarm"])

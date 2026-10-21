@@ -28,3 +28,7 @@ class_name Level
 @export var boss_intrusion_delay_min: float = 10.0
 @export var boss_intrusion_delay_max: float = 25.0
 @export var boss_intrusion_endless: bool = true
+
+@export_group("Havoc")
+@export var havoc_required: bool = false
+@export var havoc_min_enemy_mods: int = 1

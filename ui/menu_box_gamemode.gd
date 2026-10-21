@@ -17,11 +17,11 @@ func add_gamemode_button():
 	var modes: Array[GameMode] = []
 	var seen := {}
 	for n in ModManager.get_base_game_modes():
-		if n != null and not seen.has(n.game_mode_id):
+		if n != null and not n.chip_enabled and not seen.has(n.game_mode_id):
 			seen[n.game_mode_id] = true
 			modes.append(n)
 	for n in ModManager.get_content("game_modes"):
-		if n != null and not seen.has(n.game_mode_id):
+		if n != null and not n.chip_enabled and not seen.has(n.game_mode_id):
 			seen[n.game_mode_id] = true
 			modes.append(n)
 	if modes.is_empty():

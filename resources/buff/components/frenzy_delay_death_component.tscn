@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/buff/components/frenzy_delay_death_component.gd" id="1_frenzy"]
+
+[node name="FrenzyDelayDeathComponent" type="Node"]
+script = ExtResource("1_frenzy")

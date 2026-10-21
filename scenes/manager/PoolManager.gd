@@ -96,6 +96,7 @@ const IDLE_LIMITS := {
 	"summon_level_display": 16,
 	"floor_paint": 20,
 	"enemy_fire_field": 100,
+	"corruption_field": 100,
 	"support_bullet": 60,
 	"stone_bullet": 40,
 	"cannon_bullet_1": 20,

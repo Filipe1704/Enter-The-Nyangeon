@@ -6,7 +6,9 @@ signal player_selected
 @onready var animation_player = $AnimationPlayer
 @onready var level_box: VBoxContainer = $Node2D2/Node2D/Node2D/VBoxContainer
 @onready var support_select = $Node2D2/support_ui
-@onready var mode_box: GridContainer = $Node2D2/gamemode_button/MarginContainer/ScrollContainer/GridContainer
+@onready var mode_panel = $Node2D2/gamemode_button
+@onready var mode_box: GridContainer = $Node2D2/gamemode_button/%game_mod_box
+@onready var enemy_mod_box: GridContainer = $Node2D2/gamemode_button/%enemy_mod_box
 @onready var return_button: Button = $Node2D2/return
 
 const LEVEL_BUTTON := preload("res://ui/level_button.tscn")
@@ -16,13 +18,18 @@ var transition_started: bool = false
 var _keyboard_ready := false
 var _selection_pending := false
 var _last_focus: Dictionary = {}
+var _enemy_mod_visible := false
+var _open_level_button: Node
 
 func _ready():
 	GameEvents.player_card_id.connect(get_player_id)
 	GameEvents.level_select_in.connect(level_menu_in)
 	_inject_mod_levels()
+	_bind_level_previews()
 	level_is_selected.connect(_lock_selection)
 	support_select.cards_changed.connect(_bind_focus_controls)
+	mode_panel.enemy_mod_visibility_changed.connect(_on_enemy_mod_visibility_changed)
+	_enemy_mod_visible = mode_panel.is_enemy_mod_visible()
 	_set_auxiliary_enabled(false)
 	_bind_focus_controls()
 
@@ -30,25 +37,31 @@ func _set_auxiliary_enabled(enabled: bool) -> void:
 	support_select.set_interactive(enabled)
 	for mode in mode_box.get_children():
 		mode.set_interactive(enabled)
+	for mode in enemy_mod_box.get_children():
+		mode.set_interactive(enabled and _enemy_mod_visible)
 	return_button.focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
 	return_button.disabled = not enabled
 
 func _lock_selection() -> void:
 	_selection_pending = true
+	_close_level_preview()
 	_set_auxiliary_enabled(false)
 
 func _groups() -> Array:
-	return [[support_select.main_card], level_box.get_children(), mode_box.get_children(), [return_button]]
+	var enemy_mods: Array = enemy_mod_box.get_children() if _enemy_mod_visible else []
+	return [[support_select.main_card], level_box.get_children(), mode_box.get_children(), enemy_mods, [return_button]]
 
 func _focus_group(control: Control) -> int:
 	if control == null:
 		return 1
 	if support_select.is_ancestor_of(control):
 		return 0
+	if enemy_mod_box.is_ancestor_of(control):
+		return 3
 	if mode_box.is_ancestor_of(control):
 		return 2
 	if control == return_button:
-		return 3
+		return 4
 	return 1
 
 func _create_focus_outline(control: Control) -> Control:
@@ -83,6 +96,7 @@ func _bind_focus_controls() -> void:
 	controls.append_array(support_select.support_box.get_children())
 	controls.append_array(level_box.get_children())
 	controls.append_array(mode_box.get_children())
+	controls.append_array(enemy_mod_box.get_children())
 	for control: Control in controls:
 		if control.is_queued_for_deletion() or control.has_meta("level_focus_outline"):
 			continue
@@ -127,8 +141,13 @@ func _input(event: InputEvent) -> void:
 			support_select.close_list(false)
 			_last_focus[0] = support_select.main_card
 		var direction := -1 if event.is_action_pressed("ui_focus_prev", true) else 1
-		var next := posmod(group + direction, 4)
-		var controls: Array = _groups()[next]
+		var groups := _groups()
+		var next := group
+		for _i in groups.size():
+			next = posmod(next + direction, groups.size())
+			if not (groups[next] as Array).is_empty():
+				break
+		var controls: Array = groups[next]
 		if not controls.is_empty():
 			var target: Control = _last_focus.get(next, controls[0])
 			if not is_instance_valid(target) or not target.is_visible_in_tree() or target.focus_mode == Control.FOCUS_NONE:
@@ -153,10 +172,13 @@ func _input(event: InputEvent) -> void:
 	var controls: Array = _groups()[group]
 	if group == 0:
 		controls = support_select.support_box.get_children() if support_select.list_open else []
-	if (group != 2 and horizontal) or controls.is_empty():
+	if (group != 2 and group != 3 and horizontal) or controls.is_empty():
 		return
-	if group == 2 and not horizontal:
-		step *= mode_box.columns
+	if not horizontal:
+		if group == 2:
+			step *= mode_box.columns
+		elif group == 3:
+			step *= enemy_mod_box.columns
 	var index := controls.find(focused)
 	_move_focus(controls[clampi(index + step, 0, controls.size() - 1)])
 
@@ -167,6 +189,9 @@ func _handle_back() -> void:
 		support_select.close_list()
 		return
 	_keyboard_ready = false
+	_close_level_preview()
+	mode_panel.release_auto_havoc()
+	mode_panel.clear_enemy_mod_requirement()
 	_set_auxiliary_enabled(false)
 	for button in level_box.get_children():
 		button.cancel_selection()
@@ -183,6 +208,77 @@ func _inject_mod_levels() -> void:
 		ins.level_select = self
 		level_box.add_child(ins)
 
+func _bind_level_previews() -> void:
+	for button in level_box.get_children():
+		if button.has_signal("previewed") and not button.is_connected("previewed", _on_level_previewed):
+			button.connect("previewed", _on_level_previewed)
+
+func _on_level_previewed(button: Node) -> void:
+	if not _keyboard_ready or _selection_pending or button == null:
+		return
+	var level: Level = button.get("level")
+	if level == null:
+		return
+	if _open_level_button != null and _open_level_button != button:
+		if is_instance_valid(_open_level_button) and _open_level_button.has_method("close_preview"):
+			_open_level_button.close_preview()
+	_open_level_button = button
+	if level.havoc_required:
+		if not PlayerData.game_mode.has(GameMode.HAVOC_ID):
+			mode_panel.ensure_mode_selected(GameMode.HAVOC_ID, true, true)
+	elif mode_panel.is_havoc_auto_selected():
+		mode_panel.ensure_mode_selected(GameMode.HAVOC_ID, false, true)
+	if PlayerData.game_mode.has(GameMode.HAVOC_ID):
+		mode_panel.set_enemy_mod_requirement(maxi(1, level.havoc_min_enemy_mods))
+	else:
+		mode_panel.clear_enemy_mod_requirement()
+
+func _close_level_preview() -> void:
+	if _open_level_button != null and is_instance_valid(_open_level_button):
+		if _open_level_button.has_method("close_preview"):
+			_open_level_button.close_preview()
+	_open_level_button = null
+
+func _on_enemy_mod_visibility_changed(visible: bool) -> void:
+	_enemy_mod_visible = visible
+	_set_auxiliary_enabled(_keyboard_ready)
+	if visible:
+		return
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused == null or not enemy_mod_box.is_ancestor_of(focused):
+		return
+	var fallback: Control = _last_focus.get(2, null)
+	if not is_instance_valid(fallback) or not fallback.is_visible_in_tree() or fallback.focus_mode == Control.FOCUS_NONE:
+		fallback = null
+	if fallback == null and mode_box.get_child_count() > 0:
+		fallback = mode_box.get_child(mode_box.get_child_count() - 1)
+	if fallback != null:
+		_move_focus(fallback)
+
+func prepare_level_selection(level: Level) -> bool:
+	if level == null:
+		return true
+	if not level.havoc_required and mode_panel.is_havoc_auto_selected():
+		mode_panel.ensure_mode_selected(GameMode.HAVOC_ID, false, true)
+	if level.havoc_required and not PlayerData.game_mode.has(GameMode.HAVOC_ID):
+		mode_panel.ensure_mode_selected(GameMode.HAVOC_ID, true, true)
+	if not PlayerData.game_mode.has(GameMode.HAVOC_ID):
+		if level.havoc_required:
+			mode_panel.play_enemy_mod_warning()
+			SoundManager.play_sfx("UISounds2")
+			return false
+		mode_panel.clear_enemy_mod_requirement()
+		return true
+	var min_mods := maxi(1, level.havoc_min_enemy_mods)
+	mode_panel.set_enemy_mod_requirement(min_mods)
+	if mode_panel.get_selected_enemy_mod_count() < min_mods:
+		mode_panel.play_enemy_mod_warning()
+		SoundManager.play_sfx("UISounds2")
+		return false
+	mode_panel.clear_enemy_mod_requirement()
+	mode_panel.confirm_havoc_auto_selection()
+	return true
+
 func _unhandled_input(event):
 	if visible and event.is_action_pressed("pause"):
 		get_viewport().set_input_as_handled()
@@ -196,6 +292,9 @@ func emit_player_selected():
 
 func level_menu_in():
 	_keyboard_ready = false
+	_close_level_preview()
+	mode_panel.release_auto_havoc()
+	mode_panel.clear_enemy_mod_requirement()
 	_selection_pending = false
 	_last_focus.clear()
 	_set_auxiliary_enabled(false)

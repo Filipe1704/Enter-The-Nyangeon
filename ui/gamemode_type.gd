@@ -1,5 +1,7 @@
 extends PanelContainer
 
+signal selection_changed(game_mode_id: String, selected: bool)
+
 @export var gamemode_card: GameMode
 @export var gamemode_conflicting: Array[String]
 
@@ -94,6 +96,7 @@ func add_game_mode():
 		PlayerData.game_mode.append(game_mode)
 		GameEvents.emit_gamemode_conflicting(gamemode_conflicting)
 		Game.save_playerdata()
+		selection_changed.emit(game_mode, true)
 	animation_player.play("full_anim")
 	await animation_player.animation_finished
 	if sequence != _change_sequence:
@@ -113,6 +116,7 @@ func erase_game_mode():
 	if PlayerData.game_mode.has(game_mode):
 		PlayerData.game_mode.erase(game_mode)
 		Game.save_playerdata()
+		selection_changed.emit(game_mode, false)
 	animation_player.play_backwards("full_anim")
 	await animation_player.animation_finished
 	if sequence != _change_sequence:

@@ -1,0 +1,30 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/chip_hud.gd" id="1_chiphud"]
+
+[node name="ChipHud" type="CanvasLayer"]
+layer = 1
+script = ExtResource("1_chiphud")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -146.0
+offset_top = 38.0
+offset_right = 146.0
+offset_bottom = 62.0
+grow_horizontal = 2
+scale = Vector2(0.5, 0.5)
+pivot_offset = Vector2(146, 12)
+modulate = Color(1, 1, 1, 0.7)
+mouse_filter = 2
+
+[node name="Slots" type="HBoxContainer" parent="Root"]
+layout_mode = 0
+offset_right = 292.0
+offset_bottom = 24.0
+theme_override_constants/separation = 3
+alignment = 1
+mouse_filter = 2

@@ -131,6 +131,10 @@ func spawn_enemy_body(enemy: EnemyCard):
 	enemy_body.stats.Enemy_bullet_damage_mult = damage_final
 	enemy_body.stats.Enemy_coin *= coin_mult
 	enemy_body.stats.update_body_ability()
+	var chip_manager := get_tree().get_first_node_in_group("ChipManager")
+	if chip_manager != null and chip_manager.has_method("apply_to_enemy"):
+		if chip_manager.apply_to_enemy(enemy_body, enemy, is_boss):
+			enemy_body.stats.update_body_ability()
 	enemy_body.active_state()
 	# 已登记为活跃，释放预占（pending -> active，净值不变）
 	_release_claim()

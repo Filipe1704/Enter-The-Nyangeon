@@ -174,6 +174,9 @@ func round_enemy_spawn_start():
 	# 联机：客机不本地刷怪（敌人由 host 权威 + 镜像）
 	if ExtensionHooks.intercept_named("round_enemy_spawn_gate", []):
 		return
+	var chip_manager := get_tree().get_first_node_in_group("ChipManager")
+	if chip_manager != null and chip_manager.has_method("prepare_round"):
+		chip_manager.prepare_round()
 	var boss_controller := get_tree().get_first_node_in_group("BossRoundController")
 	if boss_controller != null and boss_controller.has_method("plan_for_round"):
 		var plan: Dictionary = boss_controller.plan_for_round(

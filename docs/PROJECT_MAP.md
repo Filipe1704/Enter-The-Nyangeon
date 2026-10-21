@@ -62,7 +62,7 @@
 - `scenes/enemies/`：敌人场景/脚本 + `boss/`（14）+ `enemies_spawn/`（55，波次生成器）。
 - `scenes/update_item/`：**最大子目录（约 396 文件）**，一件道具一个脚本，多为 `EquipItem` 子类。
 - `scenes/item/`：地图拾取物（`coin`, `pyroxenes`, `medical_kit`, `coin_box`, `game_tv`, `vending_machine`…）；**长按拾取物通用基类 `hold_pickup_item.gd`**（`class_name HoldPickupItem`，helper 脚本，无同名场景）。
-- `scenes/manager/`：单例式管理器场景（`round_manager`, `enemy_manager`, `upgrade_manager`, `pick_item_manager`, `sound_manager`, `*_buff_manager`, `interaction_manager`, `summoned_manager`…）。
+- `scenes/manager/`：单例式管理器场景（`round_manager`, `enemy_manager`, `chip_manager`, `upgrade_manager`, `pick_item_manager`, `sound_manager`, `*_buff_manager`, `interaction_manager`, `summoned_manager`…）。
 - `resources/<type>/`：`<type>.gd` 定义 `class_name`，每个 `.tres` 一条记录，`id` 通常等于文件名（见 `ARCHITECTURE.md` §Resource data model）。
 
 ## 5. Main flow scenes / 主流程场景

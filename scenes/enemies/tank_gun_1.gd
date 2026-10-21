@@ -47,6 +47,10 @@ func add_tank_bullet():
 		
 		var shoot_p = target.global_position + Vector2(randf_range(-shoot_offeset,shoot_offeset),randf_range(-shoot_offeset,shoot_offeset))
 		tank_bullet_ins.setup(shoot_p, DamageRouter.scaled_damage(source_faction, stats.Enemy_bullet_damage * stats.bullet_damage_mult, self), stats.Enemy_Knockback, explosion_range, source_faction)
+		if source_faction == Faction.ENEMY_SIDE:
+			var corruption: int = ChipCorruptionRules.attack_corruption(body)
+			if corruption > 0:
+				tank_bullet_ins.damage_data.corruption_power = corruption
 		tank_bullet_ins.shoot_bullet_num = shoot_bullet_num
 		tank_bullet_ins.active_state()
 

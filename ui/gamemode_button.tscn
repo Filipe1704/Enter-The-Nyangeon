@@ -1,23 +1,64 @@
-[gd_scene load_steps=5 format=3 uid="uid://c7svo40h476xs"]
+[gd_scene format=3 uid="uid://c7svo40h476xs"]
 
-[ext_resource type="Script" path="res://ui/gamemode_button.gd" id="1_ry6c0"]
-[ext_resource type="Script" path="res://resources/game_mode/game_mode.gd" id="2_gy71h"]
+[ext_resource type="Script" uid="uid://dat34k7r16lwu" path="res://ui/gamemode_button.gd" id="1_ry6c0"]
+[ext_resource type="Script" uid="uid://755rf88taw51" path="res://resources/game_mode/game_mode.gd" id="2_gy71h"]
 [ext_resource type="Resource" uid="uid://cwvyflq4fpd83" path="res://resources/game_mode/blitzkrieg_mode.tres" id="3_ucoqv"]
 [ext_resource type="Resource" uid="uid://b0rcjdt3s42m3" path="res://resources/game_mode/endless_mode.tres" id="4_2qhuv"]
+[ext_resource type="Resource" path="res://resources/game_mode/havoc_mode.tres" id="4_havoc"]
+[ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="5_gj5yh"]
+[ext_resource type="Theme" uid="uid://hn8wfogubms0" path="res://ui/pixel_scrollbar_theme.tres" id="5_y47hx"]
 
-[node name="gamemode_button" type="Node2D"]
+[node name="gamemode_button" type="Node2D" unique_id=1405035326]
 script = ExtResource("1_ry6c0")
-gamemode_card = Array[ExtResource("2_gy71h")]([ExtResource("3_ucoqv"), ExtResource("4_2qhuv")])
+gamemode_card = Array[ExtResource("2_gy71h")]([ExtResource("3_ucoqv"), ExtResource("4_2qhuv"), ExtResource("4_havoc")])
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
-offset_right = 143.0
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=2072463095]
+offset_right = 194.0
 offset_bottom = 287.0
 
-[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer" unique_id=171947641]
 layout_mode = 2
-horizontal_scroll_mode = 3
-vertical_scroll_mode = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 0
 
-[node name="GridContainer" type="GridContainer" parent="MarginContainer/ScrollContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer" unique_id=1113003324]
+custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
-columns = 3
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/ScrollContainer/VBoxContainer" unique_id=331070798]
+custom_minimum_size = Vector2(0, 128)
+layout_mode = 2
+theme = ExtResource("5_y47hx")
+
+[node name="game_mod_box" type="GridContainer" parent="MarginContainer/ScrollContainer/VBoxContainer/ScrollContainer" unique_id=1870640693]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 4
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer/VBoxContainer" unique_id=1705064250]
+layout_mode = 2
+theme_override_constants/separation = -3
+
+[node name="Label" type="Label" parent="MarginContainer/ScrollContainer/VBoxContainer/VBoxContainer" unique_id=1124461076]
+auto_translate_mode = 2
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7162962, 0.7162962, 0.7162962, 1)
+theme_override_fonts/font = ExtResource("5_gj5yh")
+theme_override_font_sizes/font_size = 10
+text = "ENEMY MOD"
+
+[node name="Divider" type="ColorRect" parent="MarginContainer/ScrollContainer/VBoxContainer/VBoxContainer" unique_id=1986784963]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.7176471, 0.7176471, 0.7176471, 1)
+
+[node name="ScrollContainer2" type="ScrollContainer" parent="MarginContainer/ScrollContainer/VBoxContainer" unique_id=146902792]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+theme = ExtResource("5_y47hx")
+
+[node name="enemy_mod_box" type="GridContainer" parent="MarginContainer/ScrollContainer/VBoxContainer/ScrollContainer2" unique_id=1626042050]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 4

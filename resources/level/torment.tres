@@ -23,3 +23,5 @@ level_reward = 36.0
 non_endless_hp_growth_curve = SubResource("Curve_torment_hp_growth")
 boss_intrusion_enabled = true
 boss_intrusion_scenes = Array[PackedScene]([ExtResource("2_goliath"), ExtResource("3_tower")])
+havoc_required = true
+havoc_min_enemy_mods = 3

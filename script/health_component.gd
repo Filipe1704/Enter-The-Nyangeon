@@ -16,6 +16,14 @@ var on_hit_effects : Array = []       # 受到伤害时触发的效果
 
 var _hit_depth: int = 0                     # 结算重入深度：0 = 不在伤害结算中
 var _pending_extra : Array[DamageData] = []  # 本次结算结束后要追加的额外伤害队列
+var _fatal_damage_guards: Array[Callable] = []  # 致命伤害拦截：返回缩减后的伤害
+
+func add_fatal_damage_guard(guard: Callable) -> void:
+	if guard.is_valid() and not _fatal_damage_guards.has(guard):
+		_fatal_damage_guards.append(guard)
+
+func remove_fatal_damage_guard(guard: Callable) -> void:
+	_fatal_damage_guards.erase(guard)
 
 func _ready():
 	hurt_box.hit_received.connect(take_damage)
@@ -130,6 +138,24 @@ func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: boo
 			if Game.one_hit_kill and stats.hp > 0 \
 					and Faction.of_entity(owner) == Faction.ENEMY_SIDE:
 				final_damage = stats.hp
+
+			if stats.shield_active and final_damage > 0 and not Game.one_hit_kill:
+				stats.shield_hits -= 1
+				final_damage = 1
+				if stats.shield_hits <= 0:
+					stats.shield_active = false
+					stats.shield_broken.emit()
+
+			# 致命伤害拦截：扣血前允许组件把致命伤害降为非致命（如延迟死亡）
+			if final_damage >= stats.hp and stats.hp > 0 \
+					and not Game.one_hit_kill and not stats.is_test_target \
+					and not damage_data.flags.has(GameTags.EXECUTE_DAMAGE):
+				for guard in _fatal_damage_guards.duplicate():
+					if not guard.is_valid():
+						continue
+					final_damage = maxi(0, int(guard.call(final_damage, damage_data)))
+					if final_damage < stats.hp:
+						break
 			
 			# 4. 扣血
 			if final_damage > stats.hp:
@@ -146,14 +172,15 @@ func _take_damage_internal(damage_data: HealthChangeData, suppress_feedback: boo
 				if PoolManager.hit_flash_allowed(owner): # 受击闪白频率独立设置
 					owner._hurt_flash()
 			
-			if not damage_data.on_damage_dealt.is_empty():
+			if final_damage > 0 and not damage_data.on_damage_dealt.is_empty():
 				for i in damage_data.on_damage_dealt:
 					i.call(owner, final_damage)
 			
 
 			# 5. 触发命中效果（施加状态、击退）
-			for effect in on_hit_effects:
-				effect.trigger(damage_data)
+			if final_damage > 0:
+				for effect in on_hit_effects:
+					effect.trigger(damage_data)
 			
 			# 死亡判断
 			if stats.hp <= 0:

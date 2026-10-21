@@ -1,9 +1,10 @@
-[gd_scene load_steps=16 format=3 uid="uid://xkb476kh0k68"]
+[gd_scene format=3 uid="uid://xkb476kh0k68"]
 
-[ext_resource type="Script" path="res://ui/gamemode_type.gd" id="1_n6tyh"]
+[ext_resource type="Script" uid="uid://b8g08fctjifwv" path="res://ui/gamemode_type.gd" id="1_n6tyh"]
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="1_t6rmu"]
 [ext_resource type="Resource" uid="uid://cwvyflq4fpd83" path="res://resources/game_mode/blitzkrieg_mode.tres" id="2_c45oc"]
 [ext_resource type="Texture2D" uid="uid://c1rawvvpiqgix" path="res://sprites/item/mission_data_1.png" id="2_ffacl"]
+
 [sub_resource type="Gradient" id="Gradient_6wln4"]
 offsets = PackedFloat32Array(0)
 colors = PackedColorArray(0.191, 0.191, 0.191, 1)
@@ -131,24 +132,25 @@ tracks/1/keys = {
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_rrqi5"]
 _data = {
-"RESET": SubResource("Animation_hjvs7"),
-"full_anim": SubResource("Animation_uik2a"),
-"full_select": SubResource("Animation_ikpsx"),
-"select_anim": SubResource("Animation_2p1vx")
+&"RESET": SubResource("Animation_hjvs7"),
+&"full_anim": SubResource("Animation_uik2a"),
+&"full_select": SubResource("Animation_ikpsx"),
+&"select_anim": SubResource("Animation_2p1vx")
 }
 
-[node name="gamemode_type" type="PanelContainer"]
+[node name="gamemode_type" type="PanelContainer" unique_id=1998549958]
 modulate = Color(0.533037, 0.533037, 0.533037, 1)
 custom_minimum_size = Vector2(45, 68)
 theme = SubResource("Theme_aonsi")
 script = ExtResource("1_n6tyh")
 gamemode_card = ExtResource("2_c45oc")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=683293050]
 layout_mode = 2
 theme_override_constants/separation = 0
+alignment = 1
 
-[node name="Label" type="Label" parent="VBoxContainer"]
+[node name="Label" type="Label" parent="VBoxContainer" unique_id=1769071842]
 layout_mode = 2
 theme_override_colors/font_shadow_color = Color(0.0646965, 0.0646965, 0.0646965, 1)
 theme_override_colors/font_outline_color = Color(0.0627451, 0.0627451, 0.0627451, 1)
@@ -161,20 +163,21 @@ theme_override_font_sizes/font_size = 9
 text = "Blitzkrieg"
 horizontal_alignment = 1
 
-[node name="TextureRect" type="TextureRect" parent="VBoxContainer"]
+[node name="TextureRect" type="TextureRect" parent="VBoxContainer" unique_id=2136208431]
+custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 texture = ExtResource("2_ffacl")
 stretch_mode = 3
 
-[node name="TextureRect2" type="TextureRect" parent="VBoxContainer"]
+[node name="TextureRect2" type="TextureRect" parent="VBoxContainer" unique_id=271653759]
 layout_mode = 2
 texture = SubResource("GradientTexture2D_8jwlv")
 stretch_mode = 3
 
-[node name="ColorRect" type="ColorRect" parent="VBoxContainer/TextureRect2"]
+[node name="ColorRect" type="ColorRect" parent="VBoxContainer/TextureRect2" unique_id=1505797956]
 clip_children = 1
 custom_minimum_size = Vector2(14, 14)
-layout_mode = 2
+layout_mode = 0
 offset_left = 12.0
 offset_top = 2.0
 offset_right = 26.0
@@ -182,7 +185,7 @@ offset_bottom = 16.0
 mouse_filter = 2
 color = Color(0.815686, 0.701961, 0.0235294, 1)
 
-[node name="ColorRect" type="ColorRect" parent="VBoxContainer/TextureRect2/ColorRect"]
+[node name="ColorRect" type="ColorRect" parent="VBoxContainer/TextureRect2/ColorRect" unique_id=350945228]
 layout_mode = 0
 offset_left = -8.0
 offset_top = 8.0
@@ -192,8 +195,5 @@ rotation = 0.785398
 mouse_filter = 2
 color = Color(0.815686, 0.701961, 0.0235294, 1)
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-"": SubResource("AnimationLibrary_rrqi5")
-}
-
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=48896303]
+libraries/ = SubResource("AnimationLibrary_rrqi5")

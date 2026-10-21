@@ -1,0 +1,132 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/debuff/shield_effect.gd" id="1_script"]
+[ext_resource type="Shader" path="res://shaders/ripple.gdshader" id="2_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_shield"]
+shader = ExtResource("2_shader")
+shader_parameter/color = Color(0, 0, 0, 1)
+shader_parameter/num_cells = 15.0
+shader_parameter/speed = 1.2
+shader_parameter/smoothness = 1.0
+shader_parameter/angle = 45.0
+shader_parameter/size = 0.255
+
+[sub_resource type="Gradient" id="Gradient_outer"]
+offsets = PackedFloat32Array(0.0714286, 0.707792, 1)
+colors = PackedColorArray(8, 8, 1, 1, 0.881454, 0.701093, 0, 1, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_outer"]
+gradient = SubResource("Gradient_outer")
+width = 192
+height = 192
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0.1)
+metadata/_snap_enabled = true
+
+[sub_resource type="Gradient" id="Gradient_inner"]
+interpolation_mode = 1
+offsets = PackedFloat32Array(0, 0.948052, 0.967532)
+colors = PackedColorArray(1, 1, 1, 0, 1, 0.973367, 0.452808, 0.676, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_inner"]
+gradient = SubResource("Gradient_inner")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0.123853)
+
+[sub_resource type="Animation" id="Animation_reset"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Node2D/TextureRect2:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [Color(1, 1, 1, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath(".:visible")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_shield"]
+resource_name = "defense_shield_anim"
+length = 1.0
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Node2D/TextureRect2:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.5, 1),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 1), Color(1, 1, 1, 0.2), Color(1, 1, 1, 1)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath(".:visible")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [true]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_shield"]
+_data = {
+&"RESET": SubResource("Animation_reset"),
+&"defense_shield_anim": SubResource("Animation_shield")
+}
+
+[node name="ShieldEffect" type="Node2D"]
+z_index = 1
+script = ExtResource("1_script")
+
+[node name="Node2D" type="Node2D" parent="."]
+scale = Vector2(0.9, 0.9)
+
+[node name="TextureRect" type="TextureRect" parent="Node2D"]
+material = SubResource("ShaderMaterial_shield")
+offset_left = -96.0
+offset_top = -96.0
+offset_right = 96.0
+offset_bottom = 96.0
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_outer")
+
+[node name="TextureRect2" type="TextureRect" parent="Node2D"]
+modulate = Color(1, 1, 1, 0)
+offset_left = -95.6667
+offset_top = -95.6667
+offset_right = 96.3333
+offset_bottom = 96.3333
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_inner")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+"": SubResource("AnimationLibrary_shield")
+}
+autoplay = "defense_shield_anim"

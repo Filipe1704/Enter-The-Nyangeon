@@ -77,12 +77,21 @@ const CONVERTED_BUFF_DURATION := 3.0 #策反buff持续时间（秒）
 const CONVERT_BREAK_RATIO := 0.1 #破条真实伤害 = 10% max_hp
 const CONVERT_TINT := Color(0.003, 13.636, 16.472) #策反描边色（亮蓝）
 const CONVERT_OUTLINE_WIDTH := 1.0 #策反时强制描边宽度
+const OVERHEAD_GAP := 2.0
+const OVERHEAD_SEPARATION := 4.0
+const OVERHEAD_FALLBACK_TOP := -16.0
 
 enum ConvertResult { NONE, CONVERTED, BREAK }
 
 var convert_gauge: int = 0 #策反进度
 
 var _outline_base: Dictionary = {} #各描边材质的初始 width/color，策反结束后恢复用
+
+var overhead_margin: MarginContainer
+var overhead_stack: VBoxContainer
+var _overhead_buff_box: Control
+var _overhead_layout_queued := false
+static var _texture_used_rect_cache: Dictionary = {}
 
 func _ready():
 	player = PlayerRef.resolve(self)
@@ -95,6 +104,7 @@ func _ready():
 		stats.is_dead.connect(_on_enemy_stats_is_dead)
 	if enemy_buff_manager != null and not enemy_buff_manager.buff_expired.is_connected(_on_buff_expired):
 		enemy_buff_manager.buff_expired.connect(_on_buff_expired)
+	_setup_overhead_display()
 	PoolManager.add_pool(pool_id, self)
 
 func _exit_tree() -> void:
@@ -171,6 +181,10 @@ func create_damage_data():
 		cfg["damage"] = stats.Enemy_damage
 		cfg["source"] = GameTags.ENEMY
 	damage_data = DamageData.fill(damage_data, cfg)
+	if faction != Faction.PLAYER_SIDE:
+		var corruption: int = ChipCorruptionRules.attack_corruption(self)
+		if corruption >= 1:
+			damage_data.corruption_power = corruption
 
 func move(delta: float, acceleration_local: float ,MAX_SPEED: float ) -> void:
 	
@@ -602,3 +616,177 @@ func apply_soft_collision():
 		if dist <= 0:
 			continue
 		i.velocity += (stats.weigth / total) * (dir / dist) * SOFT_COLLISION_FORCE / max(0.5, dist)
+
+func _setup_overhead_display() -> void:
+	overhead_margin = get_node_or_null("MarginContainer") as MarginContainer
+	if overhead_margin == null:
+		return
+	var buff_box := overhead_margin.find_child("BuffBox", true, false) as Control
+	if buff_box == null:
+		return
+	overhead_stack = overhead_margin.get_node_or_null("OverheadStack") as VBoxContainer
+	if overhead_stack == null:
+		overhead_stack = VBoxContainer.new()
+		overhead_stack.name = "OverheadStack"
+		overhead_margin.add_child(overhead_stack)
+	overhead_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overhead_stack.alignment = BoxContainer.ALIGNMENT_BEGIN
+	overhead_stack.add_theme_constant_override("separation", int(OVERHEAD_SEPARATION))
+	if buff_box.get_parent() != overhead_stack:
+		buff_box.reparent(overhead_stack)
+	_overhead_buff_box = buff_box
+	overhead_stack.move_child(buff_box, overhead_stack.get_child_count() - 1)
+	overhead_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not overhead_stack.minimum_size_changed.is_connected(_queue_overhead_layout):
+		overhead_stack.minimum_size_changed.connect(_queue_overhead_layout)
+	if not overhead_stack.resized.is_connected(_queue_overhead_layout):
+		overhead_stack.resized.connect(_queue_overhead_layout)
+	var sprite := sprite_2d
+	if sprite != null and is_instance_valid(sprite):
+		if sprite.has_signal("animation_changed") and not sprite.animation_changed.is_connected(_queue_overhead_layout):
+			sprite.animation_changed.connect(_queue_overhead_layout)
+		if sprite.has_signal("frame_changed") and not sprite.frame_changed.is_connected(_queue_overhead_layout):
+			sprite.frame_changed.connect(_queue_overhead_layout)
+	_queue_overhead_layout()
+
+func add_overhead_item(item: Control) -> bool:
+	if overhead_stack == null or not is_instance_valid(overhead_stack) or item == null or not is_instance_valid(item):
+		return false
+	if item.get_parent() != overhead_stack:
+		item.reparent(overhead_stack)
+	item.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var buff_index := overhead_stack.get_children().find(_overhead_buff_box)
+	if buff_index >= 0:
+		overhead_stack.move_child(item, buff_index)
+	_queue_overhead_layout()
+	return true
+
+func remove_overhead_item(item: Control) -> void:
+	if item == null or not is_instance_valid(item):
+		return
+	if overhead_stack != null and is_instance_valid(overhead_stack) and item.get_parent() == overhead_stack:
+		overhead_stack.remove_child(item)
+	_queue_overhead_layout()
+
+func _queue_overhead_layout() -> void:
+	if _overhead_layout_queued:
+		return
+	_overhead_layout_queued = true
+	_refresh_overhead_layout.call_deferred()
+
+func _refresh_overhead_layout() -> void:
+	_overhead_layout_queued = false
+	if overhead_margin == null or overhead_stack == null:
+		return
+	if not is_instance_valid(overhead_margin) or not is_instance_valid(overhead_stack):
+		return
+	var content_size := overhead_stack.get_combined_minimum_size()
+	overhead_margin.size = content_size
+	var scale_x := absf(overhead_margin.scale.x)
+	var scale_y := absf(overhead_margin.scale.y)
+	if scale_x <= 0.0:
+		scale_x = 0.5
+	if scale_y <= 0.0:
+		scale_y = 0.5
+	var head_y := get_visible_head_local_y()
+	overhead_margin.position = Vector2(
+		-content_size.x * scale_x * 0.5,
+		head_y - OVERHEAD_GAP - content_size.y * scale_y
+	)
+
+func get_visible_head_local_y() -> float:
+	var fallback := _hurt_box_top_local()
+	var sprite := sprite_2d as Node2D
+	if sprite == null or not is_instance_valid(sprite) or not sprite.visible:
+		return fallback
+	var frames = sprite.get("sprite_frames")
+	if frames is SpriteFrames:
+		var animation: StringName = sprite.get("animation")
+		var frame_count := (frames as SpriteFrames).get_frame_count(animation)
+		var min_top := INF
+		for i in frame_count:
+			var texture: Texture2D = (frames as SpriteFrames).get_frame_texture(animation, i)
+			min_top = minf(min_top, _frame_visible_top_global(sprite, texture))
+		if min_top < INF:
+			return to_local(Vector2(global_position.x, min_top)).y
+	else:
+		var texture = sprite.get("texture")
+		if texture is Texture2D:
+			var top_global := _frame_visible_top_global(sprite, texture)
+			if top_global < INF:
+				return to_local(Vector2(global_position.x, top_global)).y
+	return fallback
+
+func _frame_visible_top_global(sprite: Node2D, texture: Texture2D) -> float:
+	var rect := _texture_visible_rect_local(sprite, texture)
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return INF
+	var xf := sprite.global_transform
+	var p0 := xf * rect.position
+	var p1 := xf * (rect.position + Vector2(rect.size.x, 0.0))
+	var p2 := xf * (rect.position + Vector2(0.0, rect.size.y))
+	var p3 := xf * rect.end
+	return minf(minf(p0.y, p1.y), minf(p2.y, p3.y))
+
+func _texture_visible_rect_local(sprite: Node2D, texture: Texture2D) -> Rect2:
+	if texture == null:
+		return Rect2()
+	var used := _texture_used_rect(texture)
+	if used.size.x <= 0 or used.size.y <= 0:
+		return Rect2()
+	var pos := -texture.get_size() * 0.5
+	var centered = sprite.get("centered")
+	if centered is bool and not centered:
+		pos = Vector2.ZERO
+	var offset = sprite.get("offset")
+	if offset is Vector2:
+		pos += offset
+	return Rect2(pos + Vector2(used.position), Vector2(used.size))
+
+static func _texture_used_rect(texture: Texture2D) -> Rect2i:
+	if texture == null:
+		return Rect2i()
+	var key := texture.get_instance_id()
+	if _texture_used_rect_cache.has(key):
+		return _texture_used_rect_cache[key]
+	var used := Rect2i()
+	var image := texture.get_image()
+	if image != null:
+		var texture_size := Vector2i(texture.get_size())
+		if image.get_width() != texture_size.x or image.get_height() != texture_size.y:
+			if texture is AtlasTexture:
+				var atlas := (texture as AtlasTexture).atlas
+				if atlas != null:
+					var region := Rect2i((texture as AtlasTexture).region)
+					var image_rect := Rect2i(Vector2i.ZERO, image.get_size())
+					region = region.intersection(image_rect)
+					if region.size.x > 0 and region.size.y > 0:
+						image = image.get_region(region)
+		used = image.get_used_rect()
+	_texture_used_rect_cache[key] = used
+	return used
+
+func _hurt_box_top_local() -> float:
+	var shape_node: Node = hurt_box_shape_2d
+	if shape_node == null:
+		shape_node = collision_shape_2d
+	if shape_node == null or not is_instance_valid(shape_node) or not (shape_node is Node2D):
+		return OVERHEAD_FALLBACK_TOP
+	var shape = shape_node.get("shape")
+	if shape == null:
+		return OVERHEAD_FALLBACK_TOP
+	var size := Vector2.ZERO
+	if shape is RectangleShape2D:
+		size = (shape as RectangleShape2D).size
+	elif shape is CircleShape2D:
+		var radius := (shape as CircleShape2D).radius
+		size = Vector2(radius * 2.0, radius * 2.0)
+	elif shape is CapsuleShape2D:
+		var capsule := shape as CapsuleShape2D
+		size = Vector2(capsule.radius * 2.0, capsule.height)
+	if size == Vector2.ZERO:
+		return OVERHEAD_FALLBACK_TOP
+	var scale_factor := (shape_node as Node2D).global_transform.get_scale().abs()
+	size *= scale_factor
+	var center := to_local((shape_node as Node2D).global_position)
+	return center.y - size.y * 0.5

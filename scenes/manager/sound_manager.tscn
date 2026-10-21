@@ -417,6 +417,12 @@ volume_db = -8.0
 pitch_scale = 2.5
 bus = &"SFX"
 
+[node name="ArmorBreak" type="AudioStreamPlayer" parent="SFX"]
+stream = ExtResource("21_phc8b")
+volume_db = -6.0
+pitch_scale = 1.55
+bus = &"SFX"
+
 [node name="CannonSounds1" type="AudioStreamPlayer" parent="SFX" unique_id=1145385167]
 stream = ExtResource("22_sppuy")
 volume_db = 4.0
