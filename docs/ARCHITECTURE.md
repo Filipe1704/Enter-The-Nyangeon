@@ -7,7 +7,7 @@
 
 ## 1. Autoload singletons / 全局单例
 
-Declared in `project.godot:25-42`. **Order = `_ready()` order** (relevant: `Game` touches `SupportData`, declared later).
+Declared in `project.godot:25-43`. **Order = `_ready()` order** (relevant: `Game` touches `SupportData`, declared later).
 
 | # | Autoload | Source | Type | Responsibility / 职责 |
 |---|---|---|---|---|
@@ -21,6 +21,7 @@ Declared in `project.godot:25-42`. **Order = `_ready()` order** (relevant: `Game
 | 9 | `ExtraDamage` | `script/extra_damage_manager.gd` | `Node` | 额外伤害延迟投递（避免在本次结算内递归）。 |
 | — | `_mcp_game_helper` | `addons/godot_ai/runtime/game_helper.gd` | `Node` | 编辑器 MCP 辅助，非游戏逻辑。 |
 | 11 | `MapBounds` | `script/map_bounds.gd` | `Node` | 出界回位安全网：把越界的玩家/敌人/召唤物拉回地图内最近点（§1.9、`SYSTEMS.md` §6.3）。 |
+| — | `MapChunks` | `script/map_chunks.gd` | `Node` | 全图 cells + 可变尺寸分块服务：基于 `MapBounds` 的真实可走 hull，按 `chunk_size` 缓存 `MapChunkGrid`，提供选块/cell 预留/坐标换算；`SpawnMap` 仅作为刷怪安全区元数据（`SYSTEMS.md` §6.5）。 |
 | 12 | `LocaleFont` | `script/locale_font.gd` | `Node` | 按语言切换 UI 字体：越南语把像素字替换为 Roboto（其余语言不变）；详见 §1.10、`CONVENTIONS.md` §6。 |
 | 13 | `ModManager` | `script/mod_manager.gd` | `Node` | Mod 包挂载/内容发现/注册表/id 治理/zip 导入；详见 §1.11、`CONVENTIONS.md` §10。 |
 | 13 | `CoinManager` | `scenes/manager/coin_manager.gd` | `Node` | 金币掉落/合并：池上限 `COIN_POOL_CAP=150`，满额时新掉落并入最近活跃金币；活跃集 `_active`（`instance_id→Node`）由 `coin.gd` 登记/注销。详见 §1.6、`SYSTEMS.md` §8。 |

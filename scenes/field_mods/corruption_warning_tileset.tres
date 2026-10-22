@@ -1,0 +1,14 @@
+[gd_resource type="TileSet" format=3 uid="uid://chr3l7iximoqv"]
+
+[ext_resource type="Texture2D" uid="uid://c5rygkqgnwi6j" path="res://sprites/tile_map/tile_map.png" id="1_tex"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_corruption_warning"]
+texture = ExtResource("1_tex")
+texture_region_size = Vector2i(64, 64)
+0:0/0 = 0
+0:0/0/texture_origin = Vector2i(0, -16)
+
+[resource]
+tile_shape = 1
+tile_size = Vector2i(64, 32)
+sources/0 = SubResource("TileSetAtlasSource_corruption_warning")

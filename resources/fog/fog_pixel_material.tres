@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://ihvrjoee6vie"]
+
+[ext_resource type="Shader" uid="uid://qgxr66tcxixv" path="res://shaders/particle_fog_pixel.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" uid="uid://c043ayv34auts" path="res://resources/noise/fog_noise.tres" id="2_noise"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/noise_tex = ExtResource("2_noise")
+shader_parameter/noise_scale = 4.0
+shader_parameter/noise_scroll = Vector2(0.03, -0.02)
+shader_parameter/uv_warp = 0.06
+shader_parameter/dissolve = 0.2
+shader_parameter/dither_strength = 0.6
+shader_parameter/alpha_levels = 4

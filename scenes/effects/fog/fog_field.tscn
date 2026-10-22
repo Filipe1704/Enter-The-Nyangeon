@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://mgscod5gjpgf"]
+
+[ext_resource type="Script" uid="uid://dukwrcmwe5whf" path="res://scenes/effects/fog/fog_field.gd" id="1_script"]
+
+[node name="FogField" type="Node2D" unique_id=773863663]
+script = ExtResource("1_script")

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="FogSettings" format=3 uid="uid://dnmuavvbi1135"]
+
+[ext_resource type="Script" uid="uid://7ivs1n0pwjrp" path="res://resources/fog/fog_settings.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://c043ayv34auts" path="res://resources/noise/fog_noise.tres" id="2_texture"]
+[ext_resource type="Material" uid="uid://ihvrjoee6vie" path="res://resources/fog/fog_pixel_material.tres" id="3_material"]
+
+[resource]
+script = ExtResource("1_script")
+texture = ExtResource("2_texture")
+color = Color(0.6870313, 0.4147729, 1, 0.9019608)
+amount = 15
+scale_min = 10.0
+scale_max = 20.0
+drift_speed = Vector2(10, 0)
+turbulence = 35.0
+spread = 55.0
+alpha_min = 0.8
+alpha_max = 1.0
+size_min_px = 220.0
+size_max_px = 320.0
+fog_material = ExtResource("3_material")
+alpha_levels = 3
+dither_strength = 0.6
+z_index = 1
+release_time = 0.6
+dissipate_time = 2.0

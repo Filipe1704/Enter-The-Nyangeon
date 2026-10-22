@@ -16,6 +16,7 @@ const RAY_LEN := 4000.0 # 从地图中心向外的射线长度，需覆盖整张
 var _tilemap: Node = null
 var _hull := PackedVector2Array()
 var _outer_hull := PackedVector2Array() # _hull 外扩 OUT_MARGIN，用于触发判定
+var _boundary_source: StringName = &""
 var _center := Vector2.ZERO
 var _tick: int = 0
 var _erode_cache: Dictionary = {} # ceil(半径/4) -> 内缩后的多边形（落点用）
@@ -70,6 +71,20 @@ func _is_out(pos: Vector2) -> bool:
 func ensure_ready() -> void:
 	if _hull.size() < 3:
 		_ensure_hull()
+
+func get_walkable_polygon() -> PackedVector2Array:
+	ensure_ready()
+	return _hull.duplicate()
+
+func is_inside_walkable(pos: Vector2) -> bool:
+	ensure_ready()
+	if _hull.size() < 3:
+		return false
+	return _point_in_polygon(pos, _hull)
+
+func get_boundary_source() -> StringName:
+	ensure_ready()
+	return _boundary_source
 
 func nearest_inside(pos: Vector2, radius: float = 0.0) -> Vector2:
 	var poly := _poly_for_radius(radius)
@@ -163,13 +178,19 @@ func _ensure_hull() -> void:
 	_tilemap = tree.get_first_node_in_group("Map")
 	_hull = PackedVector2Array()
 	_outer_hull = PackedVector2Array()
+	_boundary_source = &""
 	_erode_cache.clear()
 	if _tilemap == null or not is_instance_valid(_tilemap):
 		return
 	var fallback := _spawnmap_hull()
 	var center := _get_center(tree, fallback)
 	var hits := _raycast_walls(tree, center)
-	_hull = _diamond_from_hits(hits) if hits.size() == 4 else fallback
+	if hits.size() == 4:
+		_hull = _diamond_from_hits(hits)
+		_boundary_source = &"walls"
+	else:
+		_hull = fallback
+		_boundary_source = &"spawnmap" if _hull.size() >= 3 else &""
 	if _hull.size() < 3:
 		return
 	_center = Vector2.ZERO

@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://hm2icn5vh15g"]
+
+[ext_resource type="Script" uid="uid://bn4pfgni4npqu" path="res://scenes/field_mods/corruption_spread.gd" id="1_script"]
+[ext_resource type="TileSet" uid="uid://chr3l7iximoqv" path="res://scenes/field_mods/corruption_warning_tileset.tres" id="2_tileset"]
+[ext_resource type="Material" path="res://scenes/field_mods/corruption_warning_material.tres" id="3_material"]
+[ext_resource type="Resource" uid="uid://dnmuavvbi1135" path="res://resources/fog/poison_fog_settings.tres" id="4_settings"]
+
+[node name="CorruptionSpread" type="Node2D" unique_id=936793925]
+script = ExtResource("1_script")
+fog_settings = ExtResource("4_settings")
+fog_density = 2.4
+
+[node name="WarningLayer" type="TileMapLayer" parent="." unique_id=1124953855]
+z_index = -1
+material = ExtResource("3_material")
+tile_set = ExtResource("2_tileset")

@@ -3153,3 +3153,33 @@
 - Notes / 说明: 命名钩子不是任意字符串都能用；`_slot_of()` 只接受 `extension_hooks.gd` 中已声明的 `Callable` 字段，未声明会 `push_error` 并返回空 Callable。新增钩子时必须同时补字段，否则单机虽然继续执行（intercept 返回 false），但会刷错误日志。`FieldModManager` 的场地效果仍为 host 权威，`apply_network_round_state()` 不发 `field_chips_changed`。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-22
+
+### [Map/Chunks] SpawnMap 是刷怪安全区，不是整张可走地图
+- Evidence / 证据: `scenes/main/main.tscn:263`（`SpawnMap`）、`script/map_bounds.gd:get_walkable_polygon/get_boundary_source`、`script/map_chunks.gd`、`scenes/field_mods/terrain_field_effect.gd`
+- Notes / 说明: 用户确认 `SpawnMap` 比实际可走地图小一圈，只用于防止刷怪超出地图；地形分块必须使用 `FloorWall` 射线得到的 `MapBounds` 真实 hull。当前地图实测 `SpawnMap` 为 625 cells，全图 hull 为 729 cells（外圈 104 cells）；`TERRAIN_INSET_PX=20` 会把外圈全部裁掉，不能用于全图分块，当前用 8px。不要把地形写进 `SpawnMap`，也不要改它的 used cells；overlay 使用独立 `TileMapLayer`。`MapBounds` 回退 `spawnmap` 时地形只能覆盖安全区，必须告警。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-22
+
+### [Map/Chunks] 分块尺寸按词条配置；腐化蔓延固定 4×4 并按边缘侧轮转
+- Evidence / 证据: `script/map_chunks.gd:get_grid()`、`script/map_chunk_grid.gd`、`scenes/field_mods/corruption_spread.gd`、`scenes/field_mods/corruption_warning_tileset.tres`
+- Notes / 说明: `MapChunks` 不再写死 4×4，按 `chunk_size` 缓存 `MapChunkGrid`；`chip_corruption_spread` 明确使用 `4×4`，以菱形四条斜边各建**整条边**的侧区。`ratio` 表示**可走面积比例**，不是地图宽度：20% 起、每 3 回合 +5%、40% 封顶；块中心到所选边距离作为排序依据，沿边投影在两端之间才归入该侧区，按距离层累加到最接近 `全图可走 cells × ratio`。整块量化会带来约一个距离层的误差（首波实测 17.1%–23.0%）。**SUPERSEDED 2026-10-22**：每波改用 `_collect_cells_by_depth()` 按 `cell 中心到边距离 <= _best_depth` 二次筛选，`_band_cells` 变 cell 级，轮廓从 128×64 块级阶梯降为 64×32 菱形齿（同层块内约 17%~22% 外缘 cell 被裁掉，面积略小于块级）；`_chunks` 仍保留整块，仅用于 `_spawn_fog()` 撒点。原描述：每波把该距离层内全部块的 cells 汇成毒雾区，换边时重算目标面积，只按起始侧轮转，四侧轮完重洗但不重置比例。按设计**不做连通性/避让校验**，允许压缩玩家行动空间。视觉不再使用 `corruption_field`：预警用紫色 `WarningLayer`，生效由可复用 `FogField` 在 `YSort` 下为每块生成 `FogCloud` 粒子毒雾（`FogSettings` 控制参数，`density` 为总倍率）；玩家在 band cells 内每 tick 刷新减速，每 0.4 秒累积腐化。激活时播放一次 `CorruptionSpawn`。**2026-10-22 机制调整**：新增 5 秒间隔（`interval_ticks=50`，`Phase.IDLE`），雾延长到 10 秒（`active_ticks=100`），每次腐化 1% → 3%（满打约 75% max_hp）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-22
+
+### [VFX/Fog] `smoke_sprite_1.png` 是空心烟环，不能当浓雾纹理
+- Evidence / 证据: `sprites/particle/smoke_sprite_1.png`（1536×128、12 帧、128×128/帧，逐帧 alpha 均值 7–11，f10–f11 全透明）；旧 `resources/fog/poison_fog_settings.tres` 的 `scale_min/max=2.0/4.0` + `amount=6`
+- Notes / 说明: 该图中心空洞、边缘稀疏，单帧 alpha 极低；放大 2–4 倍且只放 6 朵时得到的是「几团模糊半透明方块」而非雾。像素风雾气改用 `NoiseTexture2D`（`resources/noise/fog_noise.tres`）同时作粒子纹理与 shader 噪声源，在 fragment 里乘径向衰减再做 Bayer 抖动 + alpha 量化，才消除 quad 方形边界。`NoiseTexture2D` 作粒子纹理时需 `texture_filter=NEAREST` 才出像素块；`GPUParticles2D` 的 `material` 若为共享 `ShaderMaterial`，用 `set_instance_shader_parameter()` 给每朵不同 `seed_offset`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-22
+
+### [Tooling] `editor_screenshot` 传 `max_resolution=1280` 会 transport failed
+- Evidence / 证据: 1280×720 窗口项目下连续两次 `godot-ai_editor_screenshot(max_resolution=1280)` 返回 transport error；`960` 正常
+- Notes / 说明: 用 960 或更小；2x 整数缩放项目在缩略图里像素块会变模糊，像素级判定需另想办法。`project_run` 后要等约 2 秒让 game helper 变 live 再截图；`game_eval` 在游戏窗口后台化时返回 `EVAL_GAME_NOT_READY`（主循环未推进），需聚焦窗口或重启游戏。
+- Source / 来源: test
+- Date / 日期: 2026-10-22
+
+### [VFX/Fog] `FogField.emit_points` 的 `emitter_spacing` 是发射盒尺寸，不是点间距
+- Evidence / 证据: `scenes/effects/fog/fog_field.gd:47-52`（`_spawn_cloud` 的 size 直接用 `emitter_spacing`）；`scenes/field_mods/corruption_spread.gd:276-280`（每块只传一个 `chunk.world_center`）；`scenes/main/main.tscn:77`（`tile_size = 64×32`）；`script/map_chunk_grid.gd:36`
+- Notes / 说明: 腐化蔓延用 4×4 chunk，相邻块中心间距约 `128×64` px；每块只 `emit_points` 一个点、发射盒 = `fog_emitter_spacing`（默认 64），粒子中心只覆盖块中心 ±32，靠 `size_min/max_px` 补缝。180~260px 时水平方向两边各覆盖约 58px，合计 116 < 128 → 出现**竖向缝隙**；`emit_rect` 路径因间距 80 且整片连续，不出现此问题。修法：`size_min_px/size_max_px` 提到 `220/320` 即可，`amount`/`dissolve`/falloff 不动可保留团块感。注意把 `fog_emitter_spacing` 调大只是放大发射盒，会把同样的粒子摊薄，需同时提高 `fog_density`。`tests/fog_tuner.gd` 的「块布局 emit_points」开关按 `block_x/block_y`（默认 128×64）撒点，可不用等回合就复现。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-22

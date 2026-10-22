@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://p2jrtqdylaxf"]
+
+[ext_resource type="Script" uid="uid://t8bgsdmqfcbm" path="res://scenes/effects/fog/fog_cloud.gd" id="1_script"]
+
+[node name="FogCloud" type="GPUParticles2D" unique_id=729464805]
+emitting = false
+amount = 1
+lifetime = 5.0
+preprocess = 2.0
+script = ExtResource("1_script")

@@ -306,6 +306,12 @@ stream = ExtResource("6_3x7h5")
 volume_db = 2.0
 bus = &"SFX"
 
+[node name="CorruptionSpawn" type="AudioStreamPlayer" parent="SFX"]
+stream = ExtResource("4_4kyom")
+volume_db = -10.0
+pitch_scale = 0.75
+bus = &"SFX"
+
 [node name="GunSounds3" type="AudioStreamPlayer" parent="SFX" unique_id=1670236268]
 stream = ExtResource("5_bi6s0")
 volume_db = -2.0

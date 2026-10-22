@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/terrain_warning.gdshader" id="1_shader"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/tint = Color(0.9, 0.35, 1, 1)
+shader_parameter/pulse_speed = 6.283185
+shader_parameter/alpha_min = 0.3
+shader_parameter/alpha_max = 0.8
