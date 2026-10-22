@@ -6,6 +6,10 @@ const FOG_FIELD_SCENE: PackedScene = preload("res://scenes/effects/fog/fog_field
 
 enum Phase { IDLE, WARNING, ACTIVE }
 
+signal wave_started(cells: PackedVector2Array, fog_points: PackedVector2Array)
+signal wave_activated(cells: PackedVector2Array, fog_points: PackedVector2Array)
+signal wave_ended
+
 @export_group("Side region")
 @export var min_walkable_ratio: float = 0.0
 
@@ -47,6 +51,8 @@ var _rng := RandomNumberGenerator.new()
 var _side_order: Array[int] = []
 var _last_side := -1
 var _current_side := -1
+var is_remote := false
+var _remote_fog_points: PackedVector2Array = []
 var _source_id := ""
 
 func on_start() -> void:
@@ -63,6 +69,9 @@ func on_start() -> void:
 	if not MapChunks.ensure_ready():
 		push_warning("CorruptionSpreadEffect: MapChunks is not ready")
 		finish()
+		return
+	if is_remote:
+		_start_interval()
 		return
 	_grid = MapChunks.get_grid(CHUNK_SIZE)
 	if _grid == null:
@@ -102,12 +111,13 @@ func on_stop() -> void:
 	_side_order.clear()
 	_last_side = -1
 	_current_side = -1
+	_remote_fog_points.clear()
 	_grid = null
 
 func on_tick() -> void:
 	_phase_ticks += 1
 	if _phase == Phase.IDLE:
-		if _phase_ticks >= maxi(1, interval_ticks):
+		if not is_remote and _phase_ticks >= maxi(1, interval_ticks):
 			_begin_wave()
 	elif _phase == Phase.WARNING:
 		if _phase_ticks >= maxi(1, warning_ticks):
@@ -267,6 +277,8 @@ func _start_warning() -> void:
 	warning_layer.visible = true
 	_phase = Phase.WARNING
 	_phase_ticks = 0
+	if not is_remote:
+		wave_started.emit(_pack_band_cells(), _pack_fog_points())
 
 func _activate_wave() -> void:
 	_clear_warning()
@@ -278,6 +290,8 @@ func _activate_wave() -> void:
 	_phase = Phase.ACTIVE
 	_phase_ticks = 0
 	SoundManager.play_sfx("CorruptionSpawn")
+	if not is_remote:
+		wave_activated.emit(_pack_band_cells(), _pack_fog_points())
 
 func _spawn_fog() -> void:
 	var parent := _fog_parent()
@@ -292,11 +306,60 @@ func _spawn_fog() -> void:
 	field.density = fog_density
 	field.emitter_spacing = fog_emitter_spacing
 	var points: Array[Vector2] = []
-	for chunk in _chunks:
-		if chunk != null:
-			points.append(chunk.world_center)
+	if not _remote_fog_points.is_empty():
+		for p in _remote_fog_points:
+			points.append(p)
+	else:
+		for chunk in _chunks:
+			if chunk != null:
+				points.append(chunk.world_center)
 	field.emit_points(points)
 	_fog_field = field
+
+func _pack_band_cells() -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for cell in _band_cells:
+		out.append(Vector2(cell.x, cell.y))
+	return out
+
+func _pack_fog_points() -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if not _remote_fog_points.is_empty():
+		out.append_array(_remote_fog_points)
+		return out
+	for chunk in _chunks:
+		if chunk != null:
+			out.append(chunk.world_center)
+	return out
+
+func get_network_state() -> Dictionary:
+	if _phase == Phase.IDLE or _band_cells.is_empty():
+		return {}
+	return {
+		"cells": _pack_band_cells(),
+		"points": _pack_fog_points(),
+		"phase": int(_phase),
+		"phase_ticks": _phase_ticks,
+	}
+
+func apply_remote_wave(cells: PackedVector2Array, fog_points: PackedVector2Array, phase: int = Phase.WARNING, phase_ticks: int = 0) -> void:
+	_band_cells.clear()
+	_band_cell_set.clear()
+	for v in cells:
+		var cell := Vector2i(int(v.x), int(v.y))
+		_band_cells.append(cell)
+		_band_cell_set[cell] = true
+	_remote_fog_points = fog_points.duplicate()
+	var target_phase := clampi(int(phase), int(Phase.IDLE), int(Phase.ACTIVE))
+	if target_phase == Phase.IDLE:
+		_start_interval()
+		return
+	if target_phase == Phase.ACTIVE:
+		_start_warning()
+		_activate_wave()
+	else:
+		_start_warning()
+	_phase_ticks = maxi(0, phase_ticks)
 
 func _fog_parent() -> Node:
 	var field_root := get_tree().get_first_node_in_group("FieldModRoot")
@@ -307,6 +370,9 @@ func _fog_parent() -> Node:
 func _start_interval() -> void:
 	_clear_warning()
 	_clear_fog()
+	_band_cells.clear()
+	_band_cell_set.clear()
+	_remote_fog_points.clear()
 	_phase = Phase.IDLE
 	_phase_ticks = 0
 
@@ -322,6 +388,8 @@ func _finish_wave() -> void:
 	_clear_affected_players()
 	_clear_fog()
 	_start_interval()
+	if not is_remote:
+		wave_ended.emit()
 
 func _clear_warning() -> void:
 	if warning_layer == null:

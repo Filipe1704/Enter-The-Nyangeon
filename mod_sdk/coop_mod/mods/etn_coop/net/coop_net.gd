@@ -24,6 +24,7 @@ const LanDiscoveryScript := preload("res://mods/etn_coop/net/coop_lan_discovery.
 const UpnpScript := preload("res://mods/etn_coop/net/coop_upnp.gd")
 const RoomFont := preload("res://fonts/BoutiqueBitmap7x7_1.7.ttf")
 const PAUSE_ROOM_OFFSET_Y: float = 40.0
+const FIELD_NET_DEBUG: bool = false
 
 const DEFAULT_PLAYER_SCENE: String = "res://scenes/player/momoi/momoi.tscn"
 const LOBBY_SCENE: String = "res://scenes/main/test_room.tscn"
@@ -669,6 +670,10 @@ var _applying_remote_buff: bool = false
 var _pending_enemy_buff_events: Dictionary = {}
 var _chip_manager: Node = null
 var _chip_bind_retries: int = 0
+var _field_manager: Node = null
+var _field_bind_retries: int = 0
+var _field_effect: Node = null
+var _field_client_effect: Node = null
 
 # ---------------- 网络诊断（HUD 用，对齐联机版） ----------------
 const NET_DIAG_INTERVAL: float = 0.5
@@ -1277,6 +1282,7 @@ func _accept_peer(id: int) -> void:
 		_send_existing_summons_to_peer(id)
 		_send_existing_medkits_to_peer(id)
 		_send_chip_state_to_peer(id)
+		_send_field_state_to_peer(id)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -1869,6 +1875,8 @@ func install_hooks() -> void:
 	ExtensionHooks.local_player_change_gate = Callable(self, "_gate_local_player_change")
 	ExtensionHooks.pause_visibility = Callable(self, "_on_pause_visibility")
 	ExtensionHooks.is_lan_session = Callable(self, "_is_lan_session")
+	ExtensionHooks.on_field_mod_started = Callable(self, "_on_field_mod_started")
+	ExtensionHooks.on_field_mod_stopped = Callable(self, "_on_field_mod_stopped")
 
 	GameEvents.first_round_add.connect(_on_first_round_add)
 	GameEvents.round_start.connect(_on_round_start)
@@ -1879,6 +1887,10 @@ func install_hooks() -> void:
 	GameEvents.ability_upgrade_added.connect(_on_local_ability_upgrade_added)
 	GameEvents.player_is_hurt.connect(_on_local_player_hurt)
 	GameEvents.game_over.connect(_on_game_over_hide_motion)
+	GameEvents.round_end.connect(_clear_field_effect)
+	GameEvents.round_upgrade.connect(_clear_field_effect)
+	GameEvents.test_room_reset.connect(_clear_field_effect)
+	GameEvents.game_over.connect(_on_field_game_over)
 	GameEvents.player_projectile_hit.connect(_on_any_projectile_hit)
 	GameEvents.player_gun_shoot.connect(_on_local_gun_shoot)
 	GameEvents.boss_round_start.connect(_on_boss_round_start)
@@ -2318,6 +2330,162 @@ func _bind_chip_sync() -> void:
 		if not _chip_manager.chip_released.is_connected(released_cb):
 			_chip_manager.chip_released.connect(released_cb)
 
+func _bind_field_sync() -> void:
+	if _field_manager != null and is_instance_valid(_field_manager):
+		return
+	_field_manager = get_tree().get_first_node_in_group("FieldModManager")
+	if _field_manager == null:
+		if _field_bind_retries < 600:
+			_field_bind_retries += 1
+			call_deferred("_bind_field_sync")
+		return
+	_field_bind_retries = 0
+	if _field_manager.has_signal("field_mod_started"):
+		var started_cb := Callable(self, "_on_field_mod_started")
+		if not _field_manager.field_mod_started.is_connected(started_cb):
+			_field_manager.field_mod_started.connect(started_cb)
+	if _field_manager.has_signal("field_mod_stopped"):
+		var stopped_cb := Callable(self, "_on_field_mod_stopped")
+		if not _field_manager.field_mod_stopped.is_connected(stopped_cb):
+			_field_manager.field_mod_stopped.connect(stopped_cb)
+	if _field_manager.has_method("get_active_effects"):
+		for effect in _field_manager.call("get_active_effects"):
+			_attach_field_effect(effect)
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] bind manager=%s" % str(_field_manager.name))
+
+func _on_field_mod_started(_chip, effect) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	_attach_field_effect(effect)
+
+func _attach_field_effect(effect) -> void:
+	if effect == null or not is_instance_valid(effect) or not effect.has_signal("wave_started"):
+		if FIELD_NET_DEBUG:
+			print("[etn_coop][field] skip effect=%s reason=invalid-or-no-wave" % str(effect))
+		return
+	_field_effect = effect
+	var started_cb := Callable(self, "_on_host_field_wave")
+	if not effect.wave_started.is_connected(started_cb):
+		effect.wave_started.connect(started_cb)
+	var activated_cb := Callable(self, "_on_host_field_activated")
+	if effect.has_signal("wave_activated") and not effect.wave_activated.is_connected(activated_cb):
+		effect.wave_activated.connect(activated_cb)
+	var ended_cb := Callable(self, "_on_host_field_ended")
+	if effect.has_signal("wave_ended") and not effect.wave_ended.is_connected(ended_cb):
+		effect.wave_ended.connect(ended_cb)
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] attach effect=%s activated=%s ended=%s" % [
+			str(effect.name),
+			str(effect.has_signal("wave_activated")),
+			str(effect.has_signal("wave_ended")),
+		])
+
+func _on_field_mod_stopped(_chip, effect) -> void:
+	if effect == null or effect != _field_effect:
+		return
+	_field_effect = null
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] detach effect=%s" % str(effect))
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_field_stop")
+
+func _on_host_field_wave(cells: PackedVector2Array, fog_points: PackedVector2Array) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] wave warning cells=%d points=%d" % [cells.size(), fog_points.size()])
+	rpc("_remote_field_wave", cells, fog_points, 1, 0)
+
+func _on_host_field_activated(cells: PackedVector2Array, fog_points: PackedVector2Array) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] wave active cells=%d points=%d" % [cells.size(), fog_points.size()])
+	rpc("_remote_field_wave", cells, fog_points, 2, 0)
+
+func _on_host_field_ended() -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] wave ended")
+	rpc("_remote_field_wave", PackedVector2Array(), PackedVector2Array(), 0, 0)
+
+func _send_field_state_to_peer(peer_id: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if _field_effect == null or not is_instance_valid(_field_effect) or not _field_effect.has_method("get_network_state"):
+		return
+	var state: Dictionary = _field_effect.call("get_network_state")
+	if state.is_empty():
+		return
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] send state peer=%d phase=%d" % [peer_id, int(state["phase"])])
+	rpc_id(peer_id, "_remote_field_wave", state["cells"], state["points"], int(state["phase"]), int(state["phase_ticks"]))
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_field_wave(cells: PackedVector2Array, fog_points: PackedVector2Array, phase: int, phase_ticks: int) -> void:
+	if multiplayer.is_server():
+		return
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] recv wave cells=%d points=%d phase=%d ticks=%d" % [cells.size(), fog_points.size(), phase, phase_ticks])
+	if _field_client_effect == null or not is_instance_valid(_field_client_effect):
+		var scene := load("res://scenes/field_mods/corruption_spread.tscn") as PackedScene
+		if scene == null:
+			if FIELD_NET_DEBUG:
+				print("[etn_coop][field] recv abort reason=scene")
+			return
+		var root := get_tree().get_first_node_in_group("FieldModRoot")
+		if root == null:
+			root = get_tree().current_scene
+		if root == null:
+			if FIELD_NET_DEBUG:
+				print("[etn_coop][field] recv abort reason=root")
+			return
+		_field_client_effect = scene.instantiate()
+		if not _field_client_effect.has_method("apply_remote_wave"):
+			if FIELD_NET_DEBUG:
+				print("[etn_coop][field] recv abort reason=no-apply_remote_wave")
+			_field_client_effect.queue_free()
+			_field_client_effect = null
+			return
+		_field_client_effect.set("is_remote", true)
+		root.add_child(_field_client_effect)
+		_field_client_effect.call("start", null)
+		if FIELD_NET_DEBUG:
+			print("[etn_coop][field] recv create effect=%s active=%s" % [str(_field_client_effect.name), str(_field_client_effect.get("active"))])
+	_field_client_effect.call("apply_remote_wave", cells, fog_points, phase, phase_ticks)
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] recv applied phase=%d band=%d fog=%s" % [
+			int(_field_client_effect.get("_phase")),
+			(_field_client_effect.get("_band_cells") as Array).size(),
+			str(_field_client_effect.get("_fog_field") != null),
+		])
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_field_stop() -> void:
+	if multiplayer.is_server():
+		return
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] recv stop")
+	_clear_field_effect()
+
+func _clear_field_effect() -> void:
+	if _field_client_effect == null or not is_instance_valid(_field_client_effect):
+		_field_client_effect = null
+		return
+	var effect := _field_client_effect
+	_field_client_effect = null
+	if FIELD_NET_DEBUG:
+		print("[etn_coop][field] clear effect=%s" % str(effect.name))
+	if effect.has_method("stop"):
+		effect.call("stop")
+	effect.queue_free()
+
+func _on_field_game_over(_player_dead: bool) -> void:
+	_clear_field_effect()
+
 func _on_chip_state_changed(_active_chips: Array, _counts: Array, _cap: int) -> void:
 	if not is_lan_game or not multiplayer.is_server():
 		return
@@ -2644,6 +2812,8 @@ func _on_round_start() -> void:
 	_clear_round_visuals()
 	_chip_bind_retries = 0
 	_bind_chip_sync.call_deferred()
+	_field_bind_retries = 0
+	_bind_field_sync.call_deferred()
 	_broadcast_chip_round_state.call_deferred()
 
 
@@ -8376,6 +8546,7 @@ func _client_scene_ready() -> void:
 		_send_boss_visual_states_to_peer(sender)
 		_send_existing_summons_to_peer(sender)
 		_send_chip_state_to_peer(sender)
+		_send_field_state_to_peer(sender)
 		# host 自己也补远端镜像（覆盖被 reset_clear_unit 清掉的场景）
 		_respawn_remote_players()
 
