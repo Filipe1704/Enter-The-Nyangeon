@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://755rf88taw51" path="res://resources/game_mode/game_mode.gd" id="2_gy71h"]
 [ext_resource type="Resource" uid="uid://cwvyflq4fpd83" path="res://resources/game_mode/blitzkrieg_mode.tres" id="3_ucoqv"]
 [ext_resource type="Resource" uid="uid://b0rcjdt3s42m3" path="res://resources/game_mode/endless_mode.tres" id="4_2qhuv"]
-[ext_resource type="Resource" path="res://resources/game_mode/havoc_mode.tres" id="4_havoc"]
+[ext_resource type="Resource" uid="uid://x3fjyfrwkayo" path="res://resources/game_mode/havoc_mode.tres" id="4_havoc"]
 [ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="5_gj5yh"]
 [ext_resource type="Theme" uid="uid://hn8wfogubms0" path="res://ui/pixel_scrollbar_theme.tres" id="5_y47hx"]
 
@@ -26,7 +26,7 @@ custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/ScrollContainer/VBoxContainer" unique_id=331070798]
-custom_minimum_size = Vector2(0, 128)
+custom_minimum_size = Vector2(0, 110)
 layout_mode = 2
 theme = ExtResource("5_y47hx")
 
