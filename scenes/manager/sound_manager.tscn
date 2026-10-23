@@ -306,7 +306,7 @@ stream = ExtResource("6_3x7h5")
 volume_db = 2.0
 bus = &"SFX"
 
-[node name="CorruptionSpawn" type="AudioStreamPlayer" parent="SFX"]
+[node name="CorruptionSpawn" type="AudioStreamPlayer" parent="SFX" unique_id=227522940]
 stream = ExtResource("4_4kyom")
 volume_db = -10.0
 pitch_scale = 0.75
@@ -423,7 +423,7 @@ volume_db = -8.0
 pitch_scale = 2.5
 bus = &"SFX"
 
-[node name="ArmorBreak" type="AudioStreamPlayer" parent="SFX"]
+[node name="ArmorBreak" type="AudioStreamPlayer" parent="SFX" unique_id=751217686]
 stream = ExtResource("21_phc8b")
 volume_db = -6.0
 pitch_scale = 1.55
