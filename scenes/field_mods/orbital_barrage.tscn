@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://bmnn5bjqadale"]
 
-[ext_resource type="Script" path="res://scenes/field_mods/orbital_barrage.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://grpffs6je0p" path="res://scenes/field_mods/orbital_barrage.gd" id="1_script"]
 
-[node name="OrbitalBarrage" type="Node2D"]
+[node name="OrbitalBarrage" type="Node2D" unique_id=1967354661]
 script = ExtResource("1_script")

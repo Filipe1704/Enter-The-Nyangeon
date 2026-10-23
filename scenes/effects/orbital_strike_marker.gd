@@ -1,7 +1,7 @@
 class_name OrbitalStrikeMarker
 extends Node2D
 
-@export var beam_height: float = 240
+@export var beam_height: float = 200
 @export var countdown_seconds: float = 4.0
 @export var title_text: String = "380MM ORBITAL BARRAGE"
 

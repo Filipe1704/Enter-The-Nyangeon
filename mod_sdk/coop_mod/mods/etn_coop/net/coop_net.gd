@@ -674,6 +674,8 @@ var _field_manager: Node = null
 var _field_bind_retries: int = 0
 var _field_effect: Node = null
 var _field_client_effect: Node = null
+var _orbital_effect: Node = null
+var _orbital_client_effect: Node = null
 
 # ---------------- 网络诊断（HUD 用，对齐联机版） ----------------
 const NET_DIAG_INTERVAL: float = 0.5
@@ -1283,6 +1285,7 @@ func _accept_peer(id: int) -> void:
 		_send_existing_medkits_to_peer(id)
 		_send_chip_state_to_peer(id)
 		_send_field_state_to_peer(id)
+		_send_orbital_state_to_peer(id)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -1890,6 +1893,9 @@ func install_hooks() -> void:
 	GameEvents.round_end.connect(_clear_field_effect)
 	GameEvents.round_upgrade.connect(_clear_field_effect)
 	GameEvents.test_room_reset.connect(_clear_field_effect)
+	GameEvents.round_end.connect(_clear_orbital_client_effect)
+	GameEvents.round_upgrade.connect(_clear_orbital_client_effect)
+	GameEvents.test_room_reset.connect(_clear_orbital_client_effect)
 	GameEvents.game_over.connect(_on_field_game_over)
 	GameEvents.player_projectile_hit.connect(_on_any_projectile_hit)
 	GameEvents.player_gun_shoot.connect(_on_local_gun_shoot)
@@ -2358,6 +2364,7 @@ func _on_field_mod_started(_chip, effect) -> void:
 	if not is_lan_game or not multiplayer.is_server():
 		return
 	_attach_field_effect(effect)
+	_attach_orbital_effect(effect)
 
 func _attach_field_effect(effect) -> void:
 	if effect == null or not is_instance_valid(effect) or not effect.has_signal("wave_started"):
@@ -2381,15 +2388,40 @@ func _attach_field_effect(effect) -> void:
 			str(effect.has_signal("wave_ended")),
 		])
 
-func _on_field_mod_stopped(_chip, effect) -> void:
-	if effect == null or effect != _field_effect:
+func _attach_orbital_effect(effect) -> void:
+	if effect == null or not is_instance_valid(effect) or not effect.has_signal("strike_marker_spawned"):
 		return
-	_field_effect = null
+	_orbital_effect = effect
+	var marker_cb := Callable(self, "_on_host_orbital_marker")
+	if not effect.strike_marker_spawned.is_connected(marker_cb):
+		effect.strike_marker_spawned.connect(marker_cb)
+	var detonate_cb := Callable(self, "_on_host_orbital_marker_detonated")
+	if effect.has_signal("strike_marker_detonated") and not effect.strike_marker_detonated.is_connected(detonate_cb):
+		effect.strike_marker_detonated.connect(detonate_cb)
+	var blast_cb := Callable(self, "_on_host_orbital_blast")
+	if effect.has_signal("strike_blast_fired") and not effect.strike_blast_fired.is_connected(blast_cb):
+		effect.strike_blast_fired.connect(blast_cb)
+	var ended_cb := Callable(self, "_on_host_orbital_wave_ended")
+	if effect.has_signal("strike_wave_ended") and not effect.strike_wave_ended.is_connected(ended_cb):
+		effect.strike_wave_ended.connect(ended_cb)
+
+func _on_field_mod_stopped(_chip, effect) -> void:
+	var was_field: bool = effect != null and effect == _field_effect
+	var was_orbital: bool = effect != null and effect == _orbital_effect
+	if not was_field and not was_orbital:
+		return
+	if was_field:
+		_field_effect = null
+	if was_orbital:
+		_orbital_effect = null
 	if FIELD_NET_DEBUG:
-		print("[etn_coop][field] detach effect=%s" % str(effect))
+		print("[etn_coop][field] detach effect=%s orbital=%s" % [str(effect), was_orbital])
 	if not is_lan_game or not multiplayer.is_server():
 		return
-	rpc("_remote_field_stop")
+	if was_field:
+		rpc("_remote_field_stop")
+	if was_orbital:
+		rpc("_remote_orbital_clear")
 
 func _on_host_field_wave(cells: PackedVector2Array, fog_points: PackedVector2Array) -> void:
 	if not is_lan_game or not multiplayer.is_server():
@@ -2411,6 +2443,139 @@ func _on_host_field_ended() -> void:
 	if FIELD_NET_DEBUG:
 		print("[etn_coop][field] wave ended")
 	rpc("_remote_field_wave", PackedVector2Array(), PackedVector2Array(), 0, 0)
+
+func _on_host_orbital_marker(id: int, point: Vector2, warning_seconds: float) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_orbital_marker", id, point, warning_seconds)
+
+func _on_host_orbital_marker_detonated(id: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_orbital_marker_done", id)
+
+func _on_host_orbital_blast(point: Vector2, radius: float, damage_ratio: float) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_orbital_blast", point, radius)
+	for peer_id in player_by_peer_id.keys():
+		if int(peer_id) == multiplayer.get_unique_id():
+			continue
+		var proxy = player_by_peer_id.get(peer_id)
+		if proxy == null or not is_instance_valid(proxy) or proxy.get("is_downed") == true:
+			continue
+		var stats = proxy.get("stats")
+		if stats == null or stats.hp <= 0:
+			continue
+		var body := proxy as Node2D
+		if body == null or body.global_position.distance_squared_to(point) > radius * radius:
+			continue
+		var amount := maxi(1, roundi(float(stats.max_hp) * damage_ratio))
+		rpc_id(int(peer_id), "_remote_orbital_damage", amount, point)
+
+func _on_host_orbital_wave_ended() -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	rpc("_remote_orbital_wave_ended")
+
+func _send_orbital_state_to_peer(peer_id: int) -> void:
+	if not is_lan_game or not multiplayer.is_server():
+		return
+	if _orbital_effect == null or not is_instance_valid(_orbital_effect):
+		return
+	if not _orbital_effect.has_method("get_orbital_network_state"):
+		return
+	var state: Dictionary = _orbital_effect.call("get_orbital_network_state")
+	if state.is_empty():
+		return
+	rpc_id(peer_id, "_remote_orbital_state", state.get("markers", []))
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_marker(id: int, point: Vector2, warning_seconds: float) -> void:
+	if multiplayer.is_server():
+		return
+	var effect := _get_or_create_orbital_client_effect()
+	if effect != null:
+		effect.call("add_marker", id, point, warning_seconds)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_marker_done(id: int) -> void:
+	if multiplayer.is_server():
+		return
+	if _orbital_client_effect != null and is_instance_valid(_orbital_client_effect):
+		_orbital_client_effect.call("marker_detonated", id)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_blast(point: Vector2, radius: float) -> void:
+	if multiplayer.is_server():
+		return
+	var effect := _get_or_create_orbital_client_effect()
+	if effect != null:
+		effect.call("spawn_blast", point, radius)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_damage(amount: int, center: Vector2) -> void:
+	if multiplayer.is_server():
+		return
+	var player := get_local_player()
+	if player == null or not is_instance_valid(player) or player.get("is_downed") == true:
+		return
+	var health = player.get("health_component")
+	if health == null or not health.has_method("take_damage"):
+		return
+	var data := DamageData.make({
+		"damage": maxi(1, amount),
+		"type": GameTags.EXPLOSION_DAMAGE,
+		"source": GameTags.NEUTRAL,
+		"flags": GameTags.TRUE_DAMAGE,
+		"node": player,
+		"center": center,
+	})
+	health.call("take_damage", data)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_state(markers: Array) -> void:
+	if multiplayer.is_server():
+		return
+	var effect := _get_or_create_orbital_client_effect()
+	if effect != null:
+		effect.call("apply_state", markers)
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_wave_ended() -> void:
+	if multiplayer.is_server():
+		return
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_orbital_clear() -> void:
+	if multiplayer.is_server():
+		return
+	_clear_orbital_client_effect()
+
+func _get_or_create_orbital_client_effect() -> Node:
+	if _orbital_client_effect != null and is_instance_valid(_orbital_client_effect):
+		return _orbital_client_effect
+	var scene := load("res://scenes/effects/orbital_barrage_remote.tscn") as PackedScene
+	if scene == null:
+		return null
+	var root := get_tree().get_first_node_in_group("SELayer")
+	if root == null:
+		root = get_tree().current_scene
+	if root == null:
+		return null
+	_orbital_client_effect = scene.instantiate()
+	root.add_child(_orbital_client_effect)
+	return _orbital_client_effect
+
+func _clear_orbital_client_effect() -> void:
+	if _orbital_client_effect == null or not is_instance_valid(_orbital_client_effect):
+		_orbital_client_effect = null
+		return
+	var effect := _orbital_client_effect
+	_orbital_client_effect = null
+	if effect.has_method("clear"):
+		effect.call("clear")
+	effect.queue_free()
 
 func _send_field_state_to_peer(peer_id: int) -> void:
 	if not is_lan_game or not multiplayer.is_server():
@@ -2485,6 +2650,7 @@ func _clear_field_effect() -> void:
 
 func _on_field_game_over(_player_dead: bool) -> void:
 	_clear_field_effect()
+	_clear_orbital_client_effect()
 
 func _on_chip_state_changed(_active_chips: Array, _counts: Array, _cap: int) -> void:
 	if not is_lan_game or not multiplayer.is_server():
@@ -8547,6 +8713,7 @@ func _client_scene_ready() -> void:
 		_send_existing_summons_to_peer(sender)
 		_send_chip_state_to_peer(sender)
 		_send_field_state_to_peer(sender)
+		_send_orbital_state_to_peer(sender)
 		# host 自己也补远端镜像（覆盖被 reset_clear_unit 清掉的场景）
 		_respawn_remote_players()
 

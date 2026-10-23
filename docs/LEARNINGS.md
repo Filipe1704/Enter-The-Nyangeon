@@ -3273,3 +3273,15 @@
 - Notes / 说明: `coin_box` 默认落点在 `30~120` 内且不 clamp；索尼克 360° 且 `80~260`，可能落到墙外。`clamp_to_walkable=true` 时每枚最多重采样 `target_attempts=8`，最终用 `nearest_inside(world, 16)` 兜底；默认关闭，避免改变旧掉落。
 - Source / 来源: code
 - Date / 日期: 2026-10-23
+
+### [Coop/Field] 场地伤害的“房主结算”是房主计算、客机落地
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（`_on_host_orbital_blast`、`_remote_orbital_damage`）；`scenes/field_mods/orbital_barrage.gd`（`strike_blast_fired`）；`script/player_health_component.gd`（`TRUE_DAMAGE`）
+- Notes / 说明: 玩家 HP 由各客户端本地权威，房主不能直接改远端玩家的 `Stats.hp`。轨道炮击采用房主用远端玩家代理位置/同步 `max_hp` 计算命中与 10% 真伤，再定向 RPC 给客机，客机用本地 `PlayerHealthComponent` 应用；客机视觉层绝不自行扫描范围或调用 `_apply_damage()`。不要再把“房主结算”误解为房主直接扣远端 HP。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-23
+
+### [Coop/Field] 取活玩家不能只扫 `"Player"` 组
+- Evidence / 证据: `scenes/field_mods/orbital_barrage.gd:_alive_players()`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（远端镜像加入 `"RemotePlayer"` 组，`_remote_player_down_changed()` 同步 `is_downed`）
+- Notes / 说明: 房主本地玩家在 `"Player"`，客机玩家在房主侧只是 `"RemotePlayer"` 代理。只扫 `"Player"` 会让轨道炮击永远锁房主；房主倒地后列表为空，落点回退随机 cell。场地取点必须同时扫描两个组、按 `instance_id` 去重，并过滤 `is_downed`/`hp<=0`；这样房主死后才会转火存活客机，所有玩家都倒地才允许随机兜底。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-23
