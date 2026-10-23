@@ -1,0 +1,38 @@
+[gd_scene format=3 uid="uid://djgwb3gjbv4fk"]
+
+[ext_resource type="Script" uid="uid://h12sxgcd44kl" path="res://scenes/effects/goliath_cannon_particles.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://ccv20w8histyb" path="res://sprites/particle/explosion_0001.png" id="2_texture"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_particles"]
+particles_animation = true
+particles_anim_h_frames = 4
+particles_anim_v_frames = 3
+particles_anim_loop = false
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_blast"]
+resource_local_to_scene = true
+lifetime_randomness = 0.5
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 1.0
+emission_ring_radius = 45.0
+emission_ring_inner_radius = 29.0
+emission_ring_cone_angle = 90.0
+angle_min = -45.0
+angle_max = 45.0
+gravity = Vector3(0, 10, 0)
+scale_min = 1.2
+scale_max = 2.0
+anim_speed_min = 1.0
+anim_speed_max = 1.0
+
+[node name="GoliathCannonParticles" type="GPUParticles2D" unique_id=727885309]
+material = SubResource("CanvasItemMaterial_particles")
+emitting = false
+amount = 6
+texture = ExtResource("2_texture")
+one_shot = true
+explosiveness = 1.0
+process_material = SubResource("ParticleProcessMaterial_blast")
+script = ExtResource("1_script")

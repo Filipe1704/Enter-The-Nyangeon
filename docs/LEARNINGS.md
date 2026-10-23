@@ -3189,3 +3189,14 @@
 - Notes / 说明: 客机 `FieldModManager` 永远不会启动场地效果；腐化蔓延改为 host 在 `_start_warning()` emit `wave_started(cells: PackedVector2Array, fog_points: PackedVector2Array)`，`coop_net` 用 `@rpc("authority","call_remote","reliable")` 广播快照，客机以 `is_remote=true` 实例化 `corruption_spread.tscn` 并 `apply_remote_wave()` 重建 `_band_cells`/`_remote_fog_points`，本地跑 2s/10s/5s 相位但 IDLE 不自动开波（每波由快照重新对齐，误差不累积）。晚加入在 `_accept_peer` / `_client_scene_ready` 调 `_send_field_state_to_peer()` 补发；`is_remote` 效果仍只扫 `"Player"` 组，玩家减速/腐化各自本地结算，`RemotePlayer` 不受影响。单进程验证：`apply_remote_wave(..., ACTIVE, 50)` 后 `band=3`、`fog=true`、state `cells/points=3/2`，50 tick 后回 IDLE 且 `band=0`，再 60 tick 仍不开波。**修正（2026-10-22，来源：user + test）**：只靠 `_on_round_start` 的 `_bind_field_sync` 会漏掉首次开波——双端实测日志里 `attach` 早于 `bind`（`field_mod_started` 在 deferred 绑定前已发出）。改为 `coop_net.install_hooks()` 注入 `ExtensionHooks.on_field_mod_started/stopped`，`_bind_field_sync` 仅兜底并用 `get_active_effects()` 补接；新增 `wave_activated`/`wave_ended` 做 ACTIVE/IDLE 补发（host 需与 pck 同版本的新 exe）。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-22
+### [Combat] 玩家端 `TRUE_DAMAGE` 需要单独分支，否则仍吃护甲和 `hurt_mult`
+- Evidence / 证据: `script/player_health_component.gd:124-151`（真伤分支跳过 `_armor_reduction()`、`stats.hurt_mult`、`damage_modifier` 与 `damage_multiplier`）；`script/health_component.gd:256`（敌人端原有真伤分支）
+- Notes / 说明: 敌人 `HealthComponent` 早已用 `TRUE_DAMAGE` 跳过全局易伤和伤害修饰，但玩家 `PlayerHealthComponent` 原实现没有检查该 flag。轨道炮击要“10% 最大生命真伤”必须在玩家端补同等分支；否则面板数值会先被护甲/减伤/修正吃掉。真伤仍然尊重 `is_invincible`、`hurt_box.contact_invincible`、`stats.hurt_invalid`、临时生命 `t_hp` 和敌人 `shield_active`。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-23
+
+### [VFX/Field] 场地逻辑 10Hz tick，但毫秒倒计时必须由 marker 逐帧更新
+- Evidence / 证据: `scenes/field_mods/orbital_barrage.gd`（`on_tick()` 只推进 IDLE/WARNING 相位）；`scenes/effects/orbital_strike_marker.gd`（`_process(delta)` 更新 `%0.3f` 倒计时）
+- Notes / 说明: 场地词条统一走 `GameEvents.global_time_count` 10Hz，不能为了倒计时把整条逻辑改成逐帧；把视觉倒计时放在 marker 自己的 `_process()`，逻辑仍在 10Hz 结算。这样 label 连续显示 `4.000→0.000`，爆炸最多比 label 归零晚一个 10Hz tick；不要在 effect 的 `on_tick()` 里只显示一位小数。
+- Source / 来源: code
+- Date / 日期: 2026-10-23

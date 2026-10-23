@@ -1,0 +1,80 @@
+[gd_scene format=3 uid="uid://m3wg74jkddmt"]
+
+[ext_resource type="Script" uid="uid://p53h8n03aaox" path="res://scenes/effects/orbital_strike_marker.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://djgjd5afkkjji" path="res://sprites/buff_icon/orbital_barrage.svg" id="2_icon"]
+[ext_resource type="FontFile" uid="uid://bc6g3b4t4cmu" path="res://fonts/BoutiqueBitmap7x7_1.7.ttf" id="3_ujk0x"]
+
+[sub_resource type="Gradient" id="Gradient_beam"]
+offsets = PackedFloat32Array(0, 0.45, 1)
+colors = PackedColorArray(1, 0.18, 0.12, 0.9, 1, 0.08, 0.04, 0.5, 1, 0, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
+bg_color = Color(0.06, 0.02, 0.02, 0.86)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 0.42, 0.36, 1)
+
+[node name="OrbitalStrikeMarker" type="Node2D" unique_id=1855412877]
+z_index = 50
+script = ExtResource("1_script")
+
+[node name="Beam" type="Line2D" parent="." unique_id=1741251659]
+width = 3.0
+default_color = Color(1, 0.26, 0.18, 1)
+gradient = SubResource("Gradient_beam")
+begin_cap_mode = 2
+
+[node name="Panel" type="Panel" parent="." unique_id=1346616544]
+modulate = Color(1, 1, 1, 0.8)
+offset_left = -35.0
+offset_top = -195.0
+offset_right = 35.0
+offset_bottom = -169.0
+pivot_offset = Vector2(68, 24)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Icon" type="TextureRect" parent="Panel" unique_id=1785914984]
+texture_filter = 1
+layout_mode = 0
+offset_left = 3.0
+offset_top = 4.0
+offset_right = 21.0
+offset_bottom = 22.0
+mouse_filter = 2
+texture = ExtResource("2_icon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Panel" unique_id=872986627]
+layout_mode = 0
+offset_left = 23.0
+offset_top = 3.0
+offset_right = 69.0
+offset_bottom = 16.0
+theme_override_colors/font_color = Color(1, 0.88, 0.8, 1)
+theme_override_colors/font_outline_color = Color(0.12, 0.02, 0.02, 1)
+theme_override_constants/line_spacing = -1
+theme_override_constants/outline_size = 2
+theme_override_fonts/font = ExtResource("3_ujk0x")
+theme_override_font_sizes/font_size = 6
+text = "380MM ORBITAL BARRAGE"
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="Countdown" type="Label" parent="Panel" unique_id=1513513180]
+layout_mode = 0
+offset_left = 23.0
+offset_top = 16.0
+offset_right = 67.0
+offset_bottom = 24.0
+theme_override_colors/font_color = Color(1, 0.3, 0.22, 1)
+theme_override_colors/font_outline_color = Color(0.12, 0.02, 0.02, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("3_ujk0x")
+theme_override_font_sizes/font_size = 8
+text = "4.000"
+horizontal_alignment = 2
+vertical_alignment = 1

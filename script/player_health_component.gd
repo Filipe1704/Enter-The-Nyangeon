@@ -122,28 +122,32 @@ func take_damage(damage_data: HealthChangeData):
 			owner.add_text("IMMUNE!")
 			owner._on_invincible_frame(false)
 		else:
-			## 2. 应用护甲减伤公式（指数曲线：前陡后平，趋近 armor_cap）
-			var mitigated = max(1, floor(raw_damage * (1.0 - _armor_reduction())))
-			## 或者用线性减伤： raw_damage - armor
+			var is_true := damage_data.flags.has(GameTags.TRUE_DAMAGE)
+			var final_damage: int
+			if is_true:
+				final_damage = max(1, raw_damage)
+				damage_multiplier = 1.0
+			else:
+				## 2. 应用护甲减伤公式（指数曲线：前陡后平，趋近 armor_cap）
+				var mitigated = max(1, floor(raw_damage * (1.0 - _armor_reduction())))
+				## 或者用线性减伤： raw_damage - armor
 
-			# 3. 应用全局伤害倍率
-			var final_damage: int = max(1, mitigated * stats.hurt_mult)
-			
-			var body_path: NodePath = owner.get_path()
-			
-			
-			
-			#GameEvents.emit_enemy_damage_taken(final_damage, damage_data, body_path)
-			
-			if not damage_data.damage_modifier.is_empty():
-				# 注意：回调可能期望 victim 是完整的角色节点（如 owner），
-				# 因此我们传入 owner（即拥有此 HealthComponent 的角色）
-				for i in damage_data.damage_modifier:
-					final_damage = i.call(owner, final_damage)
-			
-			final_damage *= damage_multiplier
-			damage_multiplier = 1.0
-			
+				# 3. 应用全局伤害倍率
+				final_damage = max(1, mitigated * stats.hurt_mult)
+
+				var body_path: NodePath = owner.get_path()
+
+				#GameEvents.emit_enemy_damage_taken(final_damage, damage_data, body_path)
+
+				if not damage_data.damage_modifier.is_empty():
+					# 注意：回调可能期望 victim 是完整的角色节点（如 owner），
+					# 因此我们传入 owner（即拥有此 HealthComponent 的角色）
+					for i in damage_data.damage_modifier:
+						final_damage = i.call(owner, final_damage)
+
+				final_damage *= damage_multiplier
+				damage_multiplier = 1.0
+
 			# 4. 扣血
 			var actual_hp_loss: int = 0
 			if stats.t_hp > 0:

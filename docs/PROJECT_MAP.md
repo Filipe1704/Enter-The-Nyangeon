@@ -67,7 +67,8 @@
 - `scenes/update_item/`：**最大子目录（约 396 文件）**，一件道具一个脚本，多为 `EquipItem` 子类。
 - `scenes/item/`：地图拾取物（`coin`, `pyroxenes`, `medical_kit`, `coin_box`, `game_tv`, `vending_machine`…）；**长按拾取物通用基类 `hold_pickup_item.gd`**（`class_name HoldPickupItem`，helper 脚本，无同名场景）。
 - `scenes/manager/`：单例式管理器场景（`round_manager`, `enemy_manager`, `chip_manager`, `field_mod_manager`, `upgrade_manager`, `pick_item_manager`, `sound_manager`, `*_buff_manager`, `interaction_manager`, `summoned_manager`…）。
-- `scenes/field_mods/`：场地词条效果场景、`FieldModEffect` / `TerrainFieldEffect` 基类，以及 `chip_corruption_spread` 的 `corruption_spread.gd/.tscn`（5 秒间隔 + 2 秒 tile_map 预警 + 10 秒腐化雾循环）；场景根通过 `start(chip)/stop()` 接入 `FieldModManager`。
+- `scenes/field_mods/`：场地词条效果场景、`FieldModEffect` / `TerrainFieldEffect` 基类，以及 `chip_corruption_spread` 的 `corruption_spread.gd/.tscn`（5 秒间隔 + 2 秒 tile_map 预警 + 10 秒腐化雾循环）和 `chip_orbital_barrage` 的 `orbital_barrage.gd/.tscn`（380mm 落点预警 + 真伤）；场景根通过 `start(chip)/stop()` 接入 `FieldModManager`。
+- `scenes/effects/`：通用视觉模块；`orbital_strike_marker.gd/.tscn` 为轨道炮击落点/光束/图标/毫秒倒计时，`goliath_cannon_particles.gd/.tscn` 为复用的 Goliath 爆炸粒子。
 - `scenes/effects/fog/` + `resources/fog/`：可复用雾气模块，`FogSettings` 配置资源、`FogField` 范围/密度/颜色控制、`FogCloud` 单朵粒子烟雾；像素风 shader 在 `shaders/particle_fog_pixel.gdshader`，噪声纹理 `resources/noise/fog_noise.tres`，共享材质 `resources/fog/fog_pixel_material.tres`。`FogField` 可把云直接挂到 `YSort`，不依赖具体词条。
 - `resources/<type>/`：`<type>.gd` 定义 `class_name`，每个 `.tres` 一条记录，`id` 通常等于文件名（见 `ARCHITECTURE.md` §Resource data model）。
 
