@@ -8,6 +8,7 @@ var dir: Vector2 = Vector2.ZERO
 @export var pick_free: bool = false
 @export var ignore_coin_mult: bool = false
 @export var ignore_auto_pick: bool = false
+@export var personal_pickup: bool = false
 var pick_up: bool = false
 var player: Node
 var coin: int = 0
@@ -44,6 +45,7 @@ func idle_state():
 	target = null
 	ignore_coin_mult = false
 	ignore_auto_pick = false
+	personal_pickup = false
 	collision_shape_2d.set_deferred("disabled", true)
 	if pick_free == true:
 		free_self.emit()

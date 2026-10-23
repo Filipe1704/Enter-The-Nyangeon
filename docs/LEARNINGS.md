@@ -3191,8 +3191,8 @@
 - Date / 日期: 2026-10-22
 
 ### [Chip] 玩家词条 Buff 每回合会被 `player_buff_clear` 清空，必须重挂
-- Evidence / 证据: `scenes/manager/round_manager.gd:151`（`emit_player_buff_clear()`）、`scenes/manager/player_buff_manager.gd:10-11`（`player_buff_clear` → `clear_all_buff`）、`scenes/manager/chip_manager.gd`（`_clear_player_chips()` / `_apply_player_chips()` / `prepare_round()` / `apply_network_round_state()`）
-- Notes / 说明: `round_upgrade` 会清空玩家全部 Buff，玩家词条的常驻 Buff 不能只挂一次；`prepare_round()` 开头先 `_clear_player_chips()`，抽完 `_active_chips` 后 `_apply_player_chips()` 重挂。客机不走 `prepare_round()`，必须在 `apply_network_round_state()` 末尾补挂，否则客机看不到玩家词条效果。`_reset_run()`、`_on_round_end()` 也要清理，避免跨局/回合残留。
+- Evidence / 证据: `scenes/manager/round_manager.gd:151`（`emit_player_buff_clear()`）、`scenes/manager/player_buff_manager.gd:10-11`（`player_buff_clear` → `clear_all_buff`）、`scenes/manager/chip_manager.gd`（`_clear_player_chips()` / `_apply_player_chips()` / `_on_local_player_ready()` / `_apply_player_chips_deferred()` / `prepare_round()` / `apply_network_round_state()`）、`mods/etn_coop/net/coop_net.gd`（`_place_and_refresh_local_player()` 的 `emit_get_player`）
+- Notes / 说明: `round_upgrade` 会清空玩家全部 Buff，玩家词条的常驻 Buff 不能只挂一次；`prepare_round()` 开头先 `_clear_player_chips()`，抽完 `_active_chips` 后 `_apply_player_chips()` 重挂。客机不走 `prepare_round()`，必须在 `apply_network_round_state()` 末尾补挂，否则客机看不到玩家词条效果。**`active_ids` 可能早于本地玩家生成**：`apply_network_round_state()` 那次 `_apply_player_chips()` 会因 `PlayerRef.resolve()` 为空直接返回，之后不会自动补。必须监听 `GameEvents.get_player` / `PlayerData.set_player`，用延迟队列在本地玩家就绪后重挂；玩家实例变化时先清理旧 target，避免来源残留。`_reset_run()`、`_on_round_end()` 也要清理，避免跨局/回合残留。
 - Source / 来源: code
 - Date / 日期: 2026-10-23
 
@@ -3259,6 +3259,12 @@
 ### [Coin/Pool] `parabola_path` 双池化：路径根与金币 body 分离回收
 - Evidence / 证据: `scenes/item/parabola_path.gd`（`PATH_POOL_ID`/`COIN_POOL_ID`、`_acquire_body`、`idle_state`、`_release_body`、`_reset_drop_config`）；`scenes/item/coin.gd`（`idled` 信号）；`scenes/item/coin_box.gd`、`resources/buff/components/sonic_coin_drop_component.gd`（`get_pool_idle`）；`scenes/main/main.gd`（`coin_clear_unit` 的 `Path2D` 分支）
 - Notes / 说明: 旧实现里 `parabola_path` 自带 coin body，且 `body.free_self -> queue_free` 会把整条路径销毁，无法复用。现改为路径根入 `parabola_coins`，body 入 `coins`。关键顺序：`idle_state()` 先让 body 发 `idled`，再在 `_release_body()` 里把 body `reparent` 回 `CoinRoot`、补 `PoolManager.add_pool("coins", body)`，最后才把路径标记 `is_idle=1`；否则路径池可能返回仍挂着 body 的路径。`coin_box` 末尾会 `erase_pool("coins")`，所以释放 body 时必须重新 `add_pool`。路径池跨索尼克/coin_box 共用，idle 时重置为 coin_box 默认参数，避免索尼克配置泄漏；`is_idle`/`PathFollow2D` 与 `coin.idled` 是这套回收协议。`main.coin_clear_unit()` 只遍历 `CoinRoot` 直接子节点，必须单独处理 `Path2D`，否则未拾取路径会一直留着。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-23
+
+### [Coop/Chip] B1 索尼克掉币：客户端上报、host 生成、拾取者独得
+- Evidence / 证据: `resources/buff/components/sonic_coin_drop_component.gd`（`player_coin_drop_interceptor`、`spawn_burst_at`）、`script/extension_hooks.gd`（`player_coin_drop_interceptor`）、`scenes/item/coin.gd` / `scenes/item/parabola_path.gd`（`personal_pickup`）、`mods/etn_coop/net/coop_net.gd`（`_gate_player_coin_drop`、`_server_player_coin_drop`、`_remote_parabola_coin`、`_server_pickup_coin`、`_do_shared_coin_pickup`）
+- Notes / 说明: 客户端不能在本地生成索尼克路径，否则 `_on_coin_spawned()` 只在 host 执行，客机掉币不会广播。现由客户端发 `total + origin` 给 host，host 校验频率/位置/激活词条后用静态 `spawn_burst_at()` 生成，沿用 `on_coin_spawned → _register_parabola_coin` 广播。`personal_pickup` 必须随 `_remote_parabola_coin` 同步：拾取时 host 只 `rpc_id(picker, "_apply_shared_coin_remote")`，其余端只收 despawn；host 自己拾取只本地加币，不再广播加币。普通金币 `personal_pickup=false`，仍走共享逻辑。`ignore_auto_pick` / `ignore_coin_mult` 也要同步，且 host 的 `_gate_coin_pickup` / `_server_pickup_coin` 必须读取 `ignore_coin_mult`，否则索尼克金币会被自动吸走或乘 `coin_mult`。严格反作弊未做：金额信任客户端，仅 clamp/限速/位置校验。
 - Source / 来源: code + user
 - Date / 日期: 2026-10-23
 

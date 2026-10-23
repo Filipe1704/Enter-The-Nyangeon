@@ -16,6 +16,7 @@ const COIN_LAYER: int = 64
 @export var map_clearance: float = 16.0
 @export var ignore_coin_mult: bool = false
 @export var ignore_auto_pick: bool = false
+@export var personal_pickup: bool = false
 @export var play_drop_sound: bool = true
 @export var arc_height: float = 300.0
 @export var fall_duration: float = 3.0
@@ -49,6 +50,7 @@ func drop(center_pos: Vector2) -> void:
 	body.can_pick = false
 	body.ignore_coin_mult = ignore_coin_mult
 	body.ignore_auto_pick = ignore_auto_pick
+	body.personal_pickup = personal_pickup
 	_body_layer = body.collision_layer if body.collision_layer != 0 else COIN_LAYER
 	# 金币出生点就是玩家位置，会立刻与 PickBox 重叠；惩罚金币在飞行期间
 	# 先退出拾取层，否则 PickBox 会在出生帧把 pick_up 置真，落地后自动飞回。
@@ -165,6 +167,7 @@ func _reset_drop_config() -> void:
 	map_clearance = 16.0
 	ignore_coin_mult = false
 	ignore_auto_pick = false
+	personal_pickup = false
 	play_drop_sound = true
 	arc_height = 300.0
 	fall_duration = 3.0

@@ -40,6 +40,8 @@ var enemy_proc_owner_suppress: Callable = Callable()
 # 玩家 buff 应用：光环等命中"远端玩家镜像"时，mod 已转交归属端则跳过本地 apply_buff
 # （参数 [target, buff, value]；返回 true = mod 已接管）
 var player_buff_apply_interceptor: Callable = Callable()
+# 惩罚型玩家词条金币掉落：参数 [source, total, origin]，返回 true = mod 已接管生成。
+var player_coin_drop_interceptor: Callable = Callable()
 # 玩家 buff 移除：同上（参数 [target, buff]；返回 true = mod 已接管）
 var player_buff_remove_interceptor: Callable = Callable()
 # 召唤物受伤：mod 已接管（远端镜像转发/丢弃）则跳过本地 take_damage 结算（参数 [summoned, damage_data]）

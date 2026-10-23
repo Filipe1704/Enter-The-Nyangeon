@@ -20,6 +20,7 @@ const ItemState := preload("res://mods/etn_coop/net/coop_item_state.gd")
 const MotionDownScript := preload("res://mods/etn_coop/ui/motion_down_screen.gd")
 const ReconnectOverlayScript := preload("res://mods/etn_coop/ui/coop_reconnect_overlay.gd")
 const SnapshotBuffer := preload("res://mods/etn_coop/net/coop_snapshot_buffer.gd")
+const SonicDropScript := preload("res://resources/buff/components/sonic_coin_drop_component.gd")
 const LanDiscoveryScript := preload("res://mods/etn_coop/net/coop_lan_discovery.gd")
 const UpnpScript := preload("res://mods/etn_coop/net/coop_upnp.gd")
 const RoomFont := preload("res://fonts/BoutiqueBitmap7x7_1.7.ttf")
@@ -1847,6 +1848,7 @@ func install_hooks() -> void:
 	ExtensionHooks.fever_time_gate = Callable(self, "_gate_fever_time")
 	ExtensionHooks.player_buff_apply_interceptor = Callable(self, "_gate_player_buff_apply")
 	ExtensionHooks.player_buff_remove_interceptor = Callable(self, "_gate_player_buff_remove")
+	ExtensionHooks.player_coin_drop_interceptor = Callable(self, "_gate_player_coin_drop")
 	ExtensionHooks.summoned_damage_interceptor = Callable(self, "_gate_summoned_damage")
 	ExtensionHooks.summoned_upgrade_interceptor = Callable(self, "_gate_summoned_upgrade")
 	ExtensionHooks.enemy_spawn_stat_scale = Callable(self, "_enemy_spawn_stat_scale")
@@ -2915,7 +2917,8 @@ func _gate_coin_pickup(coin, player, coin_mult) -> bool:
 		return false
 	if coin == null or player == null or coin.get("coin") == null:
 		return false
-	var value: int = _coin_value(int(coin.coin), float(coin_mult))
+	var effective_mult: float = 1.0 if coin.get("ignore_coin_mult") else float(coin_mult)
+	var value: int = _coin_value(int(coin.coin), effective_mult)
 	var pos: Vector2 = coin.global_position
 	var net_id: int = int(coin.get_meta("net_id")) if coin.has_meta("net_id") else -1
 	if multiplayer.is_server():
@@ -2924,6 +2927,58 @@ func _gate_coin_pickup(coin, player, coin_mult) -> bool:
 		_sync_coin_multiplier(float(coin_mult))
 		rpc_id(1, "_server_pickup_coin", net_id, value, pos)
 	return true
+
+
+# 客户端索尼克掉币：只上报给 host，由 host 生成并广播路径。
+func _gate_player_coin_drop(source, total: int, origin: Vector2) -> bool:
+	if not is_lan_game or multiplayer.is_server() or not _net_connected():
+		return false
+	if source == null or not is_instance_valid(source):
+		return false
+	var local := get_local_player()
+	if local == null or source != local:
+		return false
+	if total <= 0 or not (is_finite(origin.x) and is_finite(origin.y)):
+		return false
+	rpc_id(1, "_server_player_coin_drop", int(total), origin)
+	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _server_player_coin_drop(total: int, origin: Vector2) -> void:
+	if not multiplayer.is_server():
+		return
+	if not _server_sender_ok():
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not _rate_allow_tokens(sender, "chip_sonic_drop", 30.0, 12.0):
+		return
+	if not (is_finite(origin.x) and is_finite(origin.y)):
+		return
+	if not _has_active_player_chip("chip_sonic"):
+		return
+	var proxy := _local_or_remote_player(sender)
+	if proxy == null or not is_instance_valid(proxy) or not (proxy is Node2D):
+		return
+	var pos := origin
+	var proxy_pos := (proxy as Node2D).global_position
+	if pos.distance_squared_to(proxy_pos) > 512.0 * 512.0:
+		pos = proxy_pos
+	var amount: int = clampi(total, 1, MAX_NET_STAT)
+	var root := get_tree().get_first_node_in_group("CoinRoot")
+	if root == null:
+		return
+	SonicDropScript.spawn_burst_at(root, pos, amount)
+
+
+func _has_active_player_chip(chip_id: String) -> bool:
+	var cm := get_tree().get_first_node_in_group("ChipManager")
+	if cm == null or not cm.has_method("get_active_player_chips"):
+		return false
+	for chip in cm.call("get_active_player_chips"):
+		if chip != null and str(chip.game_mode_id) == chip_id:
+			return true
+	return false
 
 
 func _gate_player_death(player) -> bool:
@@ -4143,7 +4198,16 @@ func _register_parabola_coin(coin: Node) -> void:
 	next_coin_net_id += 1
 	coin.set_meta("net_id", net_id)
 	coin_by_net_id[net_id] = coin
-	rpc("_remote_parabola_coin", net_id, pts, int(coin.coin), bool(coin.pick_up))
+	rpc(
+		"_remote_parabola_coin",
+		net_id,
+		pts,
+		int(coin.coin),
+		bool(coin.pick_up),
+		bool(coin.get("ignore_auto_pick")),
+		bool(coin.get("ignore_coin_mult")),
+		bool(coin.get("personal_pickup"))
+	)
 
 
 func _on_player_downed(player: Node) -> void:
@@ -7419,6 +7483,7 @@ func dev_spawn_laser() -> void:
 # ---------------- 金币同步（服务端权威 + 共享增益） ----------------
 
 func _do_shared_coin_pickup(net_id: int, value: int, pos: Vector2, coin_node: Node) -> void:
+	var personal: bool = coin_node != null and bool(coin_node.get("personal_pickup"))
 	if coin_node != null and is_instance_valid(coin_node) and coin_node.has_method("idle_state"):
 		coin_node.idle_state()
 	if net_id >= 0:
@@ -7428,7 +7493,8 @@ func _do_shared_coin_pickup(net_id: int, value: int, pos: Vector2, coin_node: No
 	# 共享金币归属拾取者（host 权威）：host 拾取 → 记到本机
 	_add_team_coins(multiplayer.get_unique_id(), value)
 	_apply_shared_coin_local(value, pos)
-	rpc("_apply_shared_coin_remote", value, pos)
+	if not personal:
+		rpc("_apply_shared_coin_remote", value, pos)
 
 
 func _apply_shared_coin_local(value: int, pos: Vector2) -> void:
@@ -7489,7 +7555,15 @@ func _spawn_coin_remote(net_id: int, position: Vector2, value: int, pick_up: boo
 
 # 客机：抛物线金币镜像。按广播的世界折线随时间驱动飞行，落地后才可拾取。
 @rpc("authority", "call_remote", "reliable")
-func _remote_parabola_coin(net_id: int, points: PackedVector2Array, value: int, pick_up: bool) -> void:
+func _remote_parabola_coin(
+	net_id: int,
+	points: PackedVector2Array,
+	value: int,
+	pick_up: bool,
+	ignore_auto_pick: bool = false,
+	ignore_coin_mult: bool = false,
+	personal_pickup: bool = false
+) -> void:
 	if multiplayer.is_server() or coin_by_net_id.has(net_id):
 		return
 	var root := get_tree().get_first_node_in_group("CoinRoot")
@@ -7503,6 +7577,9 @@ func _remote_parabola_coin(net_id: int, points: PackedVector2Array, value: int, 
 	var start: Vector2 = points[0] if points.size() > 0 else Vector2.ZERO
 	c.global_position = start
 	c.coin = value
+	c.ignore_auto_pick = ignore_auto_pick
+	c.ignore_coin_mult = ignore_coin_mult
+	c.personal_pickup = personal_pickup
 	c.active_state()
 	c.pick_up = pick_up
 	c.can_pick = false
@@ -7564,15 +7641,19 @@ func _server_pickup_coin(net_id: int, value: int, pos: Vector2) -> void:
 		return
 	if not (is_finite(pos.x) and is_finite(pos.y)):
 		return
-	if not _rate_allow(multiplayer.get_remote_sender_id(), "pickup", 12):
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not _rate_allow(sender, "pickup", 12):
 		return
 	coin_traj.erase(net_id)
 	var c = coin_by_net_id.get(net_id)
+	var personal := false
 	# host 权威：已知 net_id 一律以 host 记录的币值为准（防客户端虚报）；未知 net_id 仅接受本地随机金币并 clamp
 	if net_id >= 0:
 		if c == null or not is_instance_valid(c):
 			return
-		value = _coin_value(int(c.coin), float(coin_multiplier_by_peer.get(multiplayer.get_remote_sender_id(), 1.0)))
+		var mult: float = 1.0 if c.get("ignore_coin_mult") else float(coin_multiplier_by_peer.get(sender, 1.0))
+		value = _coin_value(int(c.coin), mult)
+		personal = bool(c.get("personal_pickup"))
 	else:
 		value = clampi(value, 0, MAX_NET_STAT)
 	if value < 0 or (value == 0 and net_id < 0):
@@ -7581,11 +7662,17 @@ func _server_pickup_coin(net_id: int, value: int, pos: Vector2) -> void:
 		c.idle_state()
 	if net_id >= 0:
 		coin_by_net_id.erase(net_id)
-		rpc("_despawn_coin_remote", net_id, multiplayer.get_remote_sender_id())
+		rpc("_despawn_coin_remote", net_id, sender)
 	# 共享金币归属拾取者（host 权威）：client 拾取 → 记到该 client
-	_add_team_coins(multiplayer.get_remote_sender_id(), value)
-	_apply_shared_coin_local(value, pos)
-	rpc("_apply_shared_coin_remote", value, pos)
+	_add_team_coins(sender, value)
+	if personal:
+		if sender == multiplayer.get_unique_id():
+			_apply_shared_coin_local(value, pos)
+		else:
+			rpc_id(sender, "_apply_shared_coin_remote", value, pos)
+	else:
+		_apply_shared_coin_local(value, pos)
+		rpc("_apply_shared_coin_remote", value, pos)
 
 
 @rpc("authority", "call_remote", "reliable")

@@ -55,6 +55,9 @@ func _drop_coins() -> void:
 	var actual: int = before - _stats.coin
 	if actual <= 0:
 		return
+	var origin := (body as Node2D).global_position
+	if ExtensionHooks.intercept_named("player_coin_drop_interceptor", [body, actual, origin]):
+		return
 	call_deferred("_spawn_burst", actual)
 
 func _spawn_burst(total: int) -> void:
@@ -67,6 +70,31 @@ func _spawn_burst(total: int) -> void:
 		push_warning("SonicCoinDropComponent: CoinRoot not found, coin drop skipped")
 		return
 	var origin := (body as Node2D).global_position
+	spawn_burst_at(
+		root,
+		origin,
+		total,
+		max_pickups,
+		min_distance,
+		max_distance,
+		map_clearance,
+		drop_duration,
+		true
+	)
+
+static func spawn_burst_at(
+	root: Node,
+	origin: Vector2,
+	total: int,
+	max_pickups: int = MAX_PICKUPS,
+	min_distance: float = 80.0,
+	max_distance: float = 260.0,
+	map_clearance: float = 16.0,
+	fall_duration: float = 1.2,
+	sound: bool = true
+) -> void:
+	if root == null or total <= 0:
+		return
 	var values := split_amount(total, max_pickups)
 	var parts: int = values.size()
 	for i in parts:
@@ -81,8 +109,9 @@ func _spawn_burst(total: int) -> void:
 		path.map_clearance = map_clearance
 		path.ignore_coin_mult = true
 		path.ignore_auto_pick = true
-		path.fall_duration = drop_duration
-		path.play_drop_sound = i == 0
+		path.personal_pickup = true
+		path.fall_duration = fall_duration
+		path.play_drop_sound = sound and i == 0
 		var base_angle: float = randf_range(0.0, TAU) if parts == 1 else TAU * (float(i) + 0.5) / float(parts)
 		path.angle_override = base_angle + randf_range(-0.12, 0.12)
 		path.global_position = origin

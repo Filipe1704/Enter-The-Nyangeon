@@ -39,12 +39,18 @@ var _marked: Dictionary = {}
 var _should_update_weights := false
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _warned_chip_configs: Dictionary = {}
+var _applied_player_target: Node = null
+var _player_chip_apply_queued := false
 
 func _ready() -> void:
 	add_to_group("ChipManager")
 	_rng.randomize()
 	GameEvents.first_round_add.connect(_reset_run)
 	GameEvents.round_end.connect(_on_round_end)
+	if not GameEvents.get_player.is_connected(_on_local_player_ready):
+		GameEvents.get_player.connect(_on_local_player_ready)
+	if not PlayerData.set_player.is_connected(_on_local_player_ready):
+		PlayerData.set_player.connect(_on_local_player_ready)
 	_reset_run()
 
 func _reset_run() -> void:
@@ -309,8 +315,23 @@ func _refresh_active_field_chips() -> void:
 		if chip != null and chip.is_field_chip():
 			_active_field_chips.append(chip)
 
+func _on_local_player_ready() -> void:
+	if _player_chip_apply_queued:
+		return
+	_player_chip_apply_queued = true
+	_apply_player_chips_deferred.call_deferred()
+
+func _apply_player_chips_deferred() -> void:
+	_player_chip_apply_queued = false
+	if get_active_player_chips().is_empty():
+		return
+	_apply_player_chips()
+
 func _apply_player_chips(player: Node = null) -> void:
 	var target: Node = player if player != null else PlayerRef.resolve(self)
+	var previous: Node = _applied_player_target
+	if previous != null and is_instance_valid(previous) and previous != target:
+		_clear_player_chips(previous)
 	_clear_player_chips(target)
 	if target == null:
 		return
@@ -323,6 +344,7 @@ func _apply_player_chips(player: Node = null) -> void:
 				continue
 			BuffRouter.apply_buff(target, buff, [1, 1.0, chip_buff_duration], source_id)
 		_applied_player_chips.append(chip)
+	_applied_player_target = target
 
 func _clear_player_chips(player: Node = null) -> void:
 	var target: Node = player if player != null else PlayerRef.resolve(self)
@@ -335,6 +357,7 @@ func _clear_player_chips(player: Node = null) -> void:
 				if buff != null:
 					BuffRouter.remove_source(target, buff, source_id)
 	_applied_player_chips.clear()
+	_applied_player_target = null
 
 func _warn_chip_config(chip: GameMode) -> void:
 	if chip == null or not chip.chip_enabled:

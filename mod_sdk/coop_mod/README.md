@@ -610,7 +610,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - **dev**：`--coop-devcine`（host 强制一次黑幕过场；客机打印 `dev_cinematic_state` 看 `active/paused/marker` 的进入与释放）、`--coop-devfever`（host 强制 FEVER；打印两端 `dev_fever_state` 的 local/remote 计数）。
 
 ## 抛物线金币（coin_box）+ 角色专属状态 + Hina QTE 联机化
-- **coin_box 抛物线（纯 mod）**：host `_on_coin_spawned` 检测到 coin 的父节点是 `PathFollow2D`（抛物线 body）时 `call_deferred` 一帧（等 `drop()` 建好 `curve`）→ `_register_parabola_coin` 读 `parabola.curve` baked 点转世界坐标 → `rpc("_remote_parabola_coin", net_id, points, value, pick_up)`。客机建 coin 镜像（`can_pick=false`）+ `coin_traj`，`_physics_process` 按**墙钟**沿折线采样驱动飞行，落地才 `can_pick=true`；拾取仍走 `_gate_coin_pickup → host 共享`。清理：`_despawn_coin_remote`/`_do_shared_coin_pickup`/`_server_pickup_coin`/`_reset_player_sync` 清 `coin_traj`。
+- **coin_box 抛物线（纯 mod）**：host `_on_coin_spawned` 检测到 coin 的父节点是 `PathFollow2D`（抛物线 body）时 `call_deferred` 一帧（等 `drop()` 建好 `curve`）→ `_register_parabola_coin` 读 `parabola.curve` baked 点转世界坐标 → `rpc("_remote_parabola_coin", net_id, points, value, pick_up, ignore_auto_pick, ignore_coin_mult, personal_pickup)`。客机建 coin 镜像（`can_pick=false`）+ `coin_traj`，`_physics_process` 按**墙钟**沿折线采样驱动飞行，落地才 `can_pick=true`；拾取仍走 `_gate_coin_pickup → host 共享`。清理：`_despawn_coin_remote`/`_do_shared_coin_pickup`/`_server_pickup_coin`/`_reset_player_sync` 清 `coin_traj`。
 - **角色专属状态（int `cstate`，镜像只视觉回放）**：在玩家直接子节点实现 `get/apply_network_character_state`。**铁律：`apply_*` 只写视觉节点，绝不走会发 gameplay 信号的 setter**。
   - Aris（`aris_ps`）：`state = round(k*255)`；apply 直接写 `GraphicsGun/HeatBar.bar.value`/`visible`（+过热动画），**不写 `gun_heat.k`**。
   - Chinatsu（`chinatsu_ps`）：`state = charge & 0xF`；apply 只更新 `ChargeCount/Label.text`。
