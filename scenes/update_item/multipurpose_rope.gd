@@ -3,6 +3,8 @@ extends EquipItem
 var equip_luck: int = 20
 
 func pick_coin(coin: Node):
+	if coin.get("ignore_auto_pick"):
+		return
 	var luck = randf_range(0,200)
 	if luck < equip_luck + player.stats.luck:
 		coin.pick_up = true

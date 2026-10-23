@@ -28,6 +28,13 @@ var in_ammo_reload:bool = false
 var can_shoot:bool = true
 var is_shoot:bool = false
 
+var sustained_fire_damage_decay_per_shot: float = 0.0
+var sustained_fire_damage_decay_cap: float = 0.0
+var sustained_fire_decay_reset_time: float = 1.0
+var _shot_streak: int = 0
+var _time_since_last_shot: float = 0.0
+var _pending_damage_mult: float = 1.0
+
 var crosshair_pos: Vector2
 
 func _ready():
@@ -43,9 +50,13 @@ func get_player():
 func get_crosshair_pos(crosshair_position: Vector2):
 	crosshair_pos = crosshair_position * get_canvas_transform()
 
-func _physics_process(_delta):
+func _physics_process(delta: float):
 	if now_bullet_ammo > stats.max_ammo:
 		now_bullet_ammo = stats.max_ammo
+	if sustained_fire_damage_decay_per_shot > 0.0:
+		_time_since_last_shot += delta
+		if _time_since_last_shot >= sustained_fire_decay_reset_time:
+			_shot_streak = 0
 	if stats.bullet_shoot_time > 0:
 		shoot_timer.wait_time = float(60.0 / stats.bullet_shoot_time )
 	if player != null and is_shoot == true and shoot_timer.time_left <= 0 and ammo_reload_timer.time_left <= 0 and can_shoot == true :
@@ -58,6 +69,8 @@ func  _ammo_reload():
 	if can_reload_ammo == false:
 		return
 	
+	reset_sustained_fire()
+
 	if stats.reload_timer > 0:
 		ammo_reload_timer.wait_time = stats.reload_timer
 	
@@ -108,6 +121,7 @@ func reload_end():
 	in_ammo_reload = false
 
 func reload_ammo():
+	reset_sustained_fire()
 	if single_load == false:
 		now_bullet_ammo = stats.max_ammo
 	else:
@@ -126,6 +140,7 @@ func _shoot() -> void:
 	
 	shoot_timer.start()
 	GameEvents.emit_shake_screen( stats.shake_length, 15 * stats.shake_mult, 0.025 )
+	_pending_damage_mult = _current_sustained_fire_damage_mult()
 	_shoot_bullet()
 	if PoolManager.fx_allowed(&"muzzle_flash"):
 		var now_shoot_flash = PoolManager.get_pool("player_flash")
@@ -141,7 +156,9 @@ func _shoot() -> void:
 		fire_sounds.pitch_scale = randf_range(0.8, 1.2)
 	fire_sounds.play()
 	_shootAnim()
-	now_bullet_ammo -= stats.bullet_cost
+	now_bullet_ammo = consume_ammo(now_bullet_ammo, stats.bullet_cost)
+	_shot_streak += 1
+	_time_since_last_shot = 0.0
 	GameEvents.emit_player_gun_shoot(self)
 
 func _shoot_bullet():
@@ -175,6 +192,7 @@ func _configure_bullet(node: Node) -> void:
 			.direction_to(crosshair_pos) \
 			.normalized()
 	shoot_position.rotation = direction.angle()
+	node.set_meta("player_damage_mult", _pending_damage_mult)
 	if random_bullet == true:
 		node.speed = stats.bullet_speed * randf_range(0.7,1)
 	else:
@@ -195,3 +213,18 @@ func _shootAnim():
 	var anim_speed:float = max(1, 0.3 / shoot_timer.wait_time)
 	fire_anim.play("RESET")
 	fire_anim.play("fire", -1, anim_speed, false)
+
+func reset_sustained_fire() -> void:
+	_shot_streak = 0
+	_time_since_last_shot = 0.0
+
+func _current_sustained_fire_damage_mult() -> float:
+	return sustained_fire_damage_mult(_shot_streak, sustained_fire_damage_decay_per_shot, sustained_fire_damage_decay_cap)
+
+static func sustained_fire_damage_mult(streak: int, per_shot: float, cap: float) -> float:
+	if per_shot <= 0.0:
+		return 1.0
+	return maxf(1.0 - cap, 1.0 - per_shot * float(streak))
+
+static func consume_ammo(current: float, cost: float) -> float:
+	return maxf(0.0, current - cost)

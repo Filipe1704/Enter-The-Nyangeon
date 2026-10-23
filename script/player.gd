@@ -480,14 +480,16 @@ func bullet_hit_damage(_shot_position: Vector2, bullet_body: Node):
 	if bullet_body.has_method("apply_penetrate_dealt"):
 		bullet_body.apply_penetrate_dealt()
 	var luck = randf_range(0, 100)
+	var base_damage: int
 	if luck < stats.critical_luck:
 		bullet_body.damage_data.is_crit = true
-		bullet_body.damage_data.base_damage = max(1, round(stats.bullet_damage * stats.global_damage * stats.critical_damage))
+		base_damage = max(1, round(stats.bullet_damage * stats.global_damage * stats.critical_damage))
 		GameEvents.emit_player_shot_critical(bullet_body)
 	else:
 		bullet_body.damage_data.is_crit = false
-		bullet_body.damage_data.base_damage = max(1, round(stats.bullet_damage * stats.global_damage))
+		base_damage = max(1, round(stats.bullet_damage * stats.global_damage))
 		GameEvents.emit_player_shot_not_critical(bullet_body)
+	bullet_body.damage_data.base_damage = _apply_player_damage_mult(bullet_body, base_damage)
 	
 	if !damage_types.is_empty():
 		for type in damage_types:
@@ -512,12 +514,20 @@ func refresh_bullet_damage(bullet_body: Node):
 	if bullet_body.damage_data == null:
 		return
 	var luck = randf_range(0, 100)
+	var base_damage: int
 	if luck < stats.critical_luck:
 		bullet_body.damage_data.is_crit = true
-		bullet_body.damage_data.base_damage = max(1, round(stats.bullet_damage * stats.global_damage * stats.critical_damage))
+		base_damage = max(1, round(stats.bullet_damage * stats.global_damage * stats.critical_damage))
 	else:
 		bullet_body.damage_data.is_crit = false
-		bullet_body.damage_data.base_damage = max(1, round(stats.bullet_damage * stats.global_damage))
+		base_damage = max(1, round(stats.bullet_damage * stats.global_damage))
+	bullet_body.damage_data.base_damage = _apply_player_damage_mult(bullet_body, base_damage)
+
+func _apply_player_damage_mult(bullet_body: Node, base_damage: int) -> int:
+	var damage_mult := float(bullet_body.get_meta("player_damage_mult", 1.0))
+	if is_equal_approx(damage_mult, 1.0):
+		return base_damage
+	return max(1, round(float(base_damage) * damage_mult))
 
 func update_jump_cd_bar():
 	jump_cd_bar.visible = true

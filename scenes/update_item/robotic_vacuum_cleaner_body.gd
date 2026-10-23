@@ -89,10 +89,14 @@ func _on_get_target():
 
 
 func _on_pick_box_area_entered(area):
+	if area.get("ignore_auto_pick"):
+		return
 	if area.is_in_group("PickItem") and !pick_group.has(area):
 		pick_group.append(area)
 
 func _on_find_box_area_entered(area):
+	if area.get("ignore_auto_pick"):
+		return
 	if area.is_in_group("PickItem") and !coin_group.has(area):
 		coin_group.append(area)
 	sort_item()

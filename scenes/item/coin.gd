@@ -1,10 +1,13 @@
 extends Area2D
 
 signal free_self
+signal idled
 
 var dir: Vector2 = Vector2.ZERO
 @export var can_pick: bool = true
 @export var pick_free: bool = false
+@export var ignore_coin_mult: bool = false
+@export var ignore_auto_pick: bool = false
 var pick_up: bool = false
 var player: Node
 var coin: int = 0
@@ -39,11 +42,14 @@ func idle_state():
 	self.global_position = Vector2.ZERO
 	pick_up = false
 	target = null
+	ignore_coin_mult = false
+	ignore_auto_pick = false
 	collision_shape_2d.set_deferred("disabled", true)
 	if pick_free == true:
 		free_self.emit()
 	set_physics_process(false)
 	CoinManager.unregister(self)
+	idled.emit()
 
 func active_state():
 	reset_physics_interpolation()
@@ -57,14 +63,19 @@ func active_state():
 	collision_shape_2d.set_deferred("disabled", false)
 	set_physics_process(true)
 	CoinManager.register(self)
-	# 青辉石拾取后：本回合新生成的金币也自动飞向玩家
-	if CoinManager.auto_pick:
+	# 青辉石拾取后：本回合新生成的金币也自动飞向玩家。
+	# 惩罚型金币的 ignore_auto_pick 必须清掉 body._ready() 阶段可能留下的自动拾取状态。
+	if ignore_auto_pick:
+		pick_up = false
+	elif CoinManager.auto_pick:
 		can_pick = true
 		pick_up = true
 	GameEvents.emit_enemy_coin_drops(self)
 	ExtensionHooks.notify_named("on_coin_spawned", [self, coin])
 
 func auto_pick():
+	if ignore_auto_pick:
+		return
 	can_pick = true
 	pick_up = true
 
@@ -82,9 +93,9 @@ func absorb(value: int, add_pick_up: bool) -> void:
 	if is_idle == 1:
 		return
 	coin += value
-	if add_pick_up or CoinManager.auto_pick:
+	if not ignore_auto_pick and (add_pick_up or CoinManager.auto_pick):
 		pick_up = true
-	if CoinManager.auto_pick:
+	if not ignore_auto_pick and CoinManager.auto_pick:
 		can_pick = true
 	var v = coin_scale(coin)
 	self.scale = Vector2(v, v)
@@ -117,7 +128,7 @@ func add_coin():
 		return
 	add_end = true
 	player = p
-	var coin_value: int = ceil(coin * p.stats.coin_mult)
+	var coin_value: int = coin if ignore_coin_mult else ceil(coin * p.stats.coin_mult)
 	if ExtensionHooks.intercept_named("coin_pickup_gate", [self, p, p.stats.coin_mult]):
 		return
 	p.coin_sounds.play()

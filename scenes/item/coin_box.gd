@@ -3,6 +3,7 @@ extends Node2D
 @onready var timer: Timer = $Timer
 
 var coin: PackedScene = preload("res://scenes/item/parabola_path.tscn")
+const PATH_POOL_ID: String = "parabola_coins"
 @export var coin_count: int = 1
 @export var coin_quantity: int = 1
 
@@ -18,10 +19,12 @@ func _on_pyroxenes_pick_up() -> void:
 func add_coin():
 	timer.wait_time = 3.0 / coin_quantity
 	for i in coin_quantity:
-		var coin_ins = coin.instantiate()
+		var coin_ins = PoolManager.get_pool_idle(PATH_POOL_ID)
+		if coin_ins == null:
+			coin_ins = coin.instantiate()
+			get_tree().get_first_node_in_group("CoinRoot").add_child(coin_ins)
 		coin_ins.global_position = self.global_position
 		coin_ins.coin_num = ceil(int(float(coin_count) / float(coin_quantity)))
-		get_tree().get_first_node_in_group("CoinRoot").add_child(coin_ins)
 		coin_ins.drop(Vector2.ZERO)
 		if _flushed:
 			continue

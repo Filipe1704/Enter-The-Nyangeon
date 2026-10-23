@@ -30,6 +30,7 @@ signal field_chips_changed(active_field_chips: Array)
 var _selected_chips: Array[GameMode] = []
 var _active_chips: Array[GameMode] = []
 var _active_field_chips: Array[GameMode] = []
+var _applied_player_chips: Array[GameMode] = []
 var _counts: Array[int] = []
 var _weight_state: Dictionary = {}
 var _cap := 0
@@ -47,6 +48,7 @@ func _ready() -> void:
 	_reset_run()
 
 func _reset_run() -> void:
+	_clear_player_chips()
 	_weight_state.clear()
 	_selected_chips.clear()
 	_active_chips.clear()
@@ -60,6 +62,7 @@ func _reset_run() -> void:
 	field_chips_changed.emit([])
 
 func _on_round_end() -> void:
+	_clear_player_chips()
 	if not _should_update_weights:
 		return
 	_update_weights_after_pick(_selected_chips, _active_chips)
@@ -72,6 +75,7 @@ func prepare_round() -> void:
 	_selected_chips = _load_selected_chip_modes()
 	for chip in _selected_chips:
 		_warn_chip_config(chip)
+	_clear_player_chips()
 	_active_chips.clear()
 	_active_field_chips.clear()
 	_counts.clear()
@@ -91,6 +95,7 @@ func prepare_round() -> void:
 		for chip in _selected_chips:
 			_active_chips.append(chip)
 	_refresh_active_field_chips()
+	_apply_player_chips()
 	_cap = _cap_for_round(maxi(1, int(PlayerData.now_round)))
 	_counts.resize(_active_chips.size())
 	for i in _counts.size():
@@ -110,7 +115,7 @@ func apply_to_enemy(enemy_body: Node, enemy_card: EnemyCard, is_boss: bool) -> b
 	var candidate_weights: Array[float] = []
 	for i in _active_chips.size():
 		var chip := _active_chips[i]
-		if chip == null or chip.is_field_chip():
+		if chip == null or not chip.is_enemy_chip():
 			continue
 		if is_boss_enemy and not chip.chip_include_boss:
 			continue
@@ -203,7 +208,14 @@ func get_active_chips() -> Array:
 func get_active_enemy_chips() -> Array:
 	var out: Array = []
 	for chip in _active_chips:
-		if chip != null and not chip.is_field_chip():
+		if chip != null and chip.is_enemy_chip():
+			out.append(chip)
+	return out
+
+func get_active_player_chips() -> Array:
+	var out: Array = []
+	for chip in _active_chips:
+		if chip != null and chip.is_player_chip():
 			out.append(chip)
 	return out
 
@@ -236,6 +248,7 @@ func get_network_round_state() -> Dictionary:
 func apply_network_round_state(active_ids: Array, cap: int, counts: Array = []) -> void:
 	_selected_chips = _load_selected_chip_modes()
 	var by_id := _chip_mode_lookup()
+	_clear_player_chips()
 	_active_chips.clear()
 	for id in active_ids:
 		var chip = by_id.get(str(id), null)
@@ -248,6 +261,7 @@ func apply_network_round_state(active_ids: Array, cap: int, counts: Array = []) 
 	_active_count = 0
 	_marked.clear()
 	_refresh_active_field_chips()
+	_apply_player_chips()
 	_should_update_weights = _selected_chips.size() > active_chip_limit
 	chips_changed.emit(_active_chips.duplicate(), _counts.duplicate(), _cap)
 
@@ -285,7 +299,7 @@ func get_selected_chip_count() -> int:
 func get_selected_enemy_chip_count() -> int:
 	var count := 0
 	for chip in _selected_chips:
-		if chip != null and not chip.is_field_chip():
+		if chip != null and chip.is_enemy_chip():
 			count += 1
 	return count
 
@@ -294,6 +308,33 @@ func _refresh_active_field_chips() -> void:
 	for chip in _active_chips:
 		if chip != null and chip.is_field_chip():
 			_active_field_chips.append(chip)
+
+func _apply_player_chips(player: Node = null) -> void:
+	var target: Node = player if player != null else PlayerRef.resolve(self)
+	_clear_player_chips(target)
+	if target == null:
+		return
+	for chip in _active_chips:
+		if chip == null or not chip.is_player_chip():
+			continue
+		var source_id := "chip:" + chip.game_mode_id
+		for buff in chip.chip_player_buffs:
+			if buff == null:
+				continue
+			BuffRouter.apply_buff(target, buff, [1, 1.0, chip_buff_duration], source_id)
+		_applied_player_chips.append(chip)
+
+func _clear_player_chips(player: Node = null) -> void:
+	var target: Node = player if player != null else PlayerRef.resolve(self)
+	if target != null:
+		for chip in _applied_player_chips:
+			if chip == null:
+				continue
+			var source_id := "chip:" + chip.game_mode_id
+			for buff in chip.chip_player_buffs:
+				if buff != null:
+					BuffRouter.remove_source(target, buff, source_id)
+	_applied_player_chips.clear()
 
 func _warn_chip_config(chip: GameMode) -> void:
 	if chip == null or not chip.chip_enabled:
@@ -305,13 +346,20 @@ func _warn_chip_config(chip: GameMode) -> void:
 	if chip.is_field_chip():
 		if chip.chip_field_scene == null:
 			message = "Field chip '%s' has no chip_field_scene" % key
-		elif not chip.chip_buffs.is_empty():
-			message = "Field chip '%s' should not define chip_buffs" % key
+		elif not chip.chip_buffs.is_empty() or not chip.chip_player_buffs.is_empty():
+			message = "Field chip '%s' should not define chip_buffs or chip_player_buffs" % key
+	elif chip.is_player_chip():
+		if chip.chip_player_buffs.is_empty():
+			message = "Player chip '%s' has no chip_player_buffs" % key
+		elif not chip.chip_buffs.is_empty() or chip.chip_field_scene != null:
+			message = "Player chip '%s' should only define chip_player_buffs" % key
 	else:
 		if chip.chip_buffs.is_empty():
 			message = "Enemy chip '%s' has no chip_buffs" % key
 		elif chip.chip_field_scene != null:
 			message = "Enemy chip '%s' should not define chip_field_scene" % key
+		elif not chip.chip_player_buffs.is_empty():
+			message = "Enemy chip '%s' should not define chip_player_buffs" % key
 	if message == "":
 		return
 	_warned_chip_configs[key] = true

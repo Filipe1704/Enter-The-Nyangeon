@@ -3189,6 +3189,31 @@
 - Notes / 说明: 客机 `FieldModManager` 永远不会启动场地效果；腐化蔓延改为 host 在 `_start_warning()` emit `wave_started(cells: PackedVector2Array, fog_points: PackedVector2Array)`，`coop_net` 用 `@rpc("authority","call_remote","reliable")` 广播快照，客机以 `is_remote=true` 实例化 `corruption_spread.tscn` 并 `apply_remote_wave()` 重建 `_band_cells`/`_remote_fog_points`，本地跑 2s/10s/5s 相位但 IDLE 不自动开波（每波由快照重新对齐，误差不累积）。晚加入在 `_accept_peer` / `_client_scene_ready` 调 `_send_field_state_to_peer()` 补发；`is_remote` 效果仍只扫 `"Player"` 组，玩家减速/腐化各自本地结算，`RemotePlayer` 不受影响。单进程验证：`apply_remote_wave(..., ACTIVE, 50)` 后 `band=3`、`fog=true`、state `cells/points=3/2`，50 tick 后回 IDLE 且 `band=0`，再 60 tick 仍不开波。**修正（2026-10-22，来源：user + test）**：只靠 `_on_round_start` 的 `_bind_field_sync` 会漏掉首次开波——双端实测日志里 `attach` 早于 `bind`（`field_mod_started` 在 deferred 绑定前已发出）。改为 `coop_net.install_hooks()` 注入 `ExtensionHooks.on_field_mod_started/stopped`，`_bind_field_sync` 仅兜底并用 `get_active_effects()` 补接；新增 `wave_activated`/`wave_ended` 做 ACTIVE/IDLE 补发（host 需与 pck 同版本的新 exe）。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-22
+
+### [Chip] 玩家词条 Buff 每回合会被 `player_buff_clear` 清空，必须重挂
+- Evidence / 证据: `scenes/manager/round_manager.gd:151`（`emit_player_buff_clear()`）、`scenes/manager/player_buff_manager.gd:10-11`（`player_buff_clear` → `clear_all_buff`）、`scenes/manager/chip_manager.gd`（`_clear_player_chips()` / `_apply_player_chips()` / `prepare_round()` / `apply_network_round_state()`）
+- Notes / 说明: `round_upgrade` 会清空玩家全部 Buff，玩家词条的常驻 Buff 不能只挂一次；`prepare_round()` 开头先 `_clear_player_chips()`，抽完 `_active_chips` 后 `_apply_player_chips()` 重挂。客机不走 `prepare_round()`，必须在 `apply_network_round_state()` 末尾补挂，否则客机看不到玩家词条效果。`_reset_run()`、`_on_round_end()` 也要清理，避免跨局/回合残留。
+- Source / 来源: code
+- Date / 日期: 2026-10-23
+
+### [Chip] 玩家词条共享抽取池、计入 TM/计分，但不增加敌人同场上限
+- Evidence / 证据: `scenes/manager/chip_manager.gd:get_selected_enemy_chip_count()` / `_cap_for_round()` / `get_score_multiplier()`；`ui/gamemode_button.gd:76-85`（`get_selected_mod_count()` 统计全部，`get_selected_enemy_mod_count()` 复用）；`ui/level_select.gd:274`
+- Notes / 说明: 用户裁定：玩家削弱词条与敌人/场地词条共用 `enemy_mod_box` 和同一 `active_chip_limit` 抽取池；`havoc_min_enemy_mods` 与每词条 +3% 计分按**选中总数**（含玩家词条）；但同场敌人上限的额外部分只按选中 `ENEMY` 词条数计算。因此用 3 个玩家词条满足 TM 会比用敌人词条更难，这是预期。
+- Source / 来源: user
+- Date / 日期: 2026-10-23
+
+### [Buff] `max_ammo_mult` 只乘 `max_ammo_add`，不是弹匣基础倍率
+- Evidence / 证据: `script/PlayerData.gd:370`（`clamp(1, base_max_ammo + max_ammo_add * max_ammo_mult, max_ammo_value)`）；`script/buff_stat_map.gd` 未映射 `max_ammo_mult`
+- Notes / 说明: 想用 `Buff.modifiers` 做“弹匣 -30%”时不能映射到 `max_ammo_mult`——它只放大 `max_ammo_add`，基础 `max_ammo_add=0` 时完全无效。真正的基础倍率字段是 `hurt_resis_mult`（护甲/减伤）与 `reload_timer_mult`（换弹时间），弹匣类削弱需新增 `max_ammo_base_mult` 并改进 `PlayerData` 重算，或走 `BuffComponent`。
+- Source / 来源: code
+- Date / 日期: 2026-10-23
+
+### [Buff/UI] 玩家 debuff 会自动显示在玩家 Buff 栏
+- Evidence / 证据: `scenes/manager/player_buff_manager.gd:47-50`（`_buff_box()` 返回 `body.game_ui.buff_box`）、`scenes/manager/buff_manager_base.gd:451-472`（`_obtain_buff_card()`）、`ui/BuffCard.gd:39-57`（图标/层数/环形进度）
+- Notes / 说明: 经 `BuffRouter.apply_buff(player, ...)` 挂到玩家的 Buff 无需额外 UI 代码就会进 Buff 栏。卡片只显示 `Buff.icon`、层数和环形进度，不显示 `Buff.name`；因此玩家词条 Buff 必须配置 `icon`。`source_refcount=true` 时层数显示来源数，单来源不显示数字；`is_debuff=true` 时 `PlayerBuffManager._duration_multiplier()` 返回 1.0，不会吃到玩家“有益 Buff 持续时间”加成。99999 秒的常驻 buff 环形进度几乎一直满格，属于预期。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-23
+
 ### [Combat] 玩家端 `TRUE_DAMAGE` 需要单独分支，否则仍吃护甲和 `hurt_mult`
 - Evidence / 证据: `script/player_health_component.gd:124-151`（真伤分支跳过 `_armor_reduction()`、`stats.hurt_mult`、`damage_modifier` 与 `damage_multiplier`）；`script/health_component.gd:256`（敌人端原有真伤分支）
 - Notes / 说明: 敌人 `HealthComponent` 早已用 `TRUE_DAMAGE` 跳过全局易伤和伤害修饰，但玩家 `PlayerHealthComponent` 原实现没有检查该 flag。轨道炮击要“10% 最大生命真伤”必须在玩家端补同等分支；否则面板数值会先被护甲/减伤/修正吃掉。真伤仍然尊重 `is_invincible`、`hurt_box.contact_invincible`、`stats.hurt_invalid`、临时生命 `t_hp` 和敌人 `shield_active`。
@@ -3198,5 +3223,53 @@
 ### [VFX/Field] 场地逻辑 10Hz tick，但毫秒倒计时必须由 marker 逐帧更新
 - Evidence / 证据: `scenes/field_mods/orbital_barrage.gd`（`on_tick()` 只推进 IDLE/WARNING 相位）；`scenes/effects/orbital_strike_marker.gd`（`_process(delta)` 更新 `%0.3f` 倒计时）
 - Notes / 说明: 场地词条统一走 `GameEvents.global_time_count` 10Hz，不能为了倒计时把整条逻辑改成逐帧；把视觉倒计时放在 marker 自己的 `_process()`，逻辑仍在 10Hz 结算。这样 label 连续显示 `4.000→0.000`，爆炸最多比 label 归零晚一个 10Hz tick；不要在 effect 的 `on_tick()` 里只显示一位小数。
+- Source / 来源: code
+- Date / 日期: 2026-10-23
+
+### [Chip/Gun] `max_ammo=1` + `bullet_cost=2` 必须把弹药扣到 0，不能要求“弹药足够才能开火”
+- Evidence / 证据: `script/player_gun.gd:134,159,229-230`；`scenes/update_item/concentrated_ammo.gd:5-11`；`resources/buff/player_buff/chip_bad_ammo_buff.tres:16`
+- Notes / 说明: `_shoot()` 在扣弹前只检查 `now_bullet_ammo <= 0` 触发换弹；`consume_ammo()` 把 `now - cost` clamp 到 0。若为了避免负数改成 `now >= cost` 才能开火，浓缩弹构筑（`max_ammo=1`）会既打不出子弹也不触发换弹。负弹药不会出现，HUD 也不会显示负数；扣到 0 后下一次扳机换弹。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-23
+
+### [Combat/Damage] 连射衰减系数是每颗子弹的生成快照，池化子弹必须每次 spawn 覆盖 meta
+- Evidence / 证据: `script/player_gun.gd:143,190-195,217-227`；`script/player.gd:492,526-530`
+- Notes / 说明: `_pending_damage_mult` 在 `_shoot()` 时按当前 streak 算出，`_configure_bullet()` 写入 `player_damage_mult` meta；`PlayerData` 在 base 伤害之后读取。子弹来自对象池，若只在生成新子弹时设 meta，复用旧子弹会沿用上一次的系数；每次 spawn 必须覆盖。streak 是扳机计数，多弹丸同一次 `_shoot()` 共享同一系数；换弹/停火 1 秒归零，第一发 1.0，第 11 发起 0.8（cap 0.2）。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-23
+
+### [Chip] 后坐力削弱用加算，避免与浓缩弹的 `+0.5` 相乘
+- Evidence / 证据: `resources/buff/player_buff/chip_bad_ammo_buff.tres:16`；`scenes/update_item/concentrated_ammo.gd:5-11`；`script/PlayerData.gd:139`
+- Notes / 说明: 用户拍板用 `bullet_recoil_mult` 的 `mode:"add", amount:0.5`；浓缩弹 1.5 → 2.0。若用 `mode:"mult", amount:1.5` 会 1.5 → 2.25，叠乘后后坐力过强，也与“+50 个百分点”描述不符。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-23
+
+### [Chip/Coin] 惩罚型金币掉落必须绕开 `coin_mult`，否则可套利
+- Evidence / 证据: `scenes/item/coin.gd`（`ignore_coin_mult`、`idle_state()` 重置）；`scenes/item/parabola_path.gd`（同名导出参数）；`resources/buff/components/sonic_coin_drop_component.gd`
+- Notes / 说明: 浩劫金币加成会放大拾取额，若扣款按原值、拾回再乘 `coin_mult`，玩家可通过反复受击净赚；因此 `parabola_path` 掉落时设 `body.ignore_coin_mult=true`，让拾回额与扣除额一致。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-23
+
+### [Coin] 青辉石后的全局 `auto_pick` 会吸走之后生成的所有金币，惩罚掉落要逐枚 opt-out
+- Evidence / 证据: `scenes/manager/coin_manager.gd:24-32`（`pyroxenes_pick_up` 置 `auto_pick=true`，`round_start` 重置）；`scenes/item/coin.gd:24-35,52-75,87-90`（`_ready→active_state`、`active_state/auto_pick/absorb`）；`scenes/item/parabola_path.gd`（`drop()` 取池/实例化 body 后重置 flag 与飞行层、`idle_state`/`_release_body`）；`script/player.gd:557-560`（`PickBox.area_entered` 无条件置 `pick_up`）；`scenes/update_item/multipurpose_rope.gd`、`robotic_vacuum_cleaner_body.gd`（自动拾取守卫）
+- Notes / 说明: 不能改 `CoinManager.auto_pick` 本身，否则正常金币也会失去青辉石后的自动吸取；惩罚金币用 `ignore_auto_pick=true`，只阻断自动飞向玩家，仍保留玩家走近 `PickItem` 拾取。**body 的 `_ready()` 可能早于 `drop()` 的 flag 写入**：`drop()` 从 `coins` 池取 idle body 或实例化后，必须立即清 `pick_up/target/can_pick` 再写 flag；仅设置 flag 不会清除已置真的状态。路径 scene 已不再自带 body，不需要 `_enter_tree()` 预写。**另有一条出生点重叠路径**：金币起点就是玩家位置，玩家 `PickBox` 会在出生帧把 `pick_up` 置真（不看 `can_pick`），落地后 `can_pick=true` 即自动飞回；因此惩罚金币飞行期间必须 `collision_layer=0`，落地恢复后再清 `pick_up/target`。绳索/吸尘器是另外的自动来源，也必须检查 `ignore_auto_pick`。索尼克落地动画用 `fall_duration=1.2`，旧 `coin_box` 保持 `3.0`。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-23
+
+### [Coin/Pool] `parabola_path` 双池化：路径根与金币 body 分离回收
+- Evidence / 证据: `scenes/item/parabola_path.gd`（`PATH_POOL_ID`/`COIN_POOL_ID`、`_acquire_body`、`idle_state`、`_release_body`、`_reset_drop_config`）；`scenes/item/coin.gd`（`idled` 信号）；`scenes/item/coin_box.gd`、`resources/buff/components/sonic_coin_drop_component.gd`（`get_pool_idle`）；`scenes/main/main.gd`（`coin_clear_unit` 的 `Path2D` 分支）
+- Notes / 说明: 旧实现里 `parabola_path` 自带 coin body，且 `body.free_self -> queue_free` 会把整条路径销毁，无法复用。现改为路径根入 `parabola_coins`，body 入 `coins`。关键顺序：`idle_state()` 先让 body 发 `idled`，再在 `_release_body()` 里把 body `reparent` 回 `CoinRoot`、补 `PoolManager.add_pool("coins", body)`，最后才把路径标记 `is_idle=1`；否则路径池可能返回仍挂着 body 的路径。`coin_box` 末尾会 `erase_pool("coins")`，所以释放 body 时必须重新 `add_pool`。路径池跨索尼克/coin_box 共用，idle 时重置为 coin_box 默认参数，避免索尼克配置泄漏；`is_idle`/`PathFollow2D` 与 `coin.idled` 是这套回收协议。`main.coin_clear_unit()` 只遍历 `CoinRoot` 直接子节点，必须单独处理 `Path2D`，否则未拾取路径会一直留着。
+- Source / 来源: code + user
+- Date / 日期: 2026-10-23
+
+### [Chip/Damage] `chip_sonic` 受击掉金币用 `stats.is_hurt`，含 DOT 每 tick
+- Evidence / 证据: `script/Stats.gd:7,176`（`is_hurt`）；`script/player_health_component.gd:177,202`（`damage_taken` 也会在 `play_hit_feedback` 发出）；`resources/buff/components/sonic_coin_drop_component.gd`（`_on_hurt`）；`resources/game_mode/chip_sonic.tres`
+- Notes / 说明: 用户明确要求 DOT 每跳也触发、不做去抖；`stats.is_hurt` 只在真实结算扣血后发，`damage_taken` 还会被联机表现回放 `play_hit_feedback()` 复用，监听后者会让客机凭空掉钱。同一时间多段伤害会多次扣款/掉落，属于预期。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-23
+
+### [Item/Path] `parabola_path` 复用给惩罚掉落时，落点必须用 `MapBounds` 压回地图
+- Evidence / 证据: `scenes/item/parabola_path.gd`（`_pick_end_pos`）；`script/map_bounds.gd`（`nearest_inside`）
+- Notes / 说明: `coin_box` 默认落点在 `30~120` 内且不 clamp；索尼克 360° 且 `80~260`，可能落到墙外。`clamp_to_walkable=true` 时每枚最多重采样 `target_attempts=8`，最终用 `nearest_inside(world, 16)` 兜底；默认关闭，避免改变旧掉落。
 - Source / 来源: code
 - Date / 日期: 2026-10-23

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/buff/components/bad_ammo_component.gd" id="1_badammo"]
+
+[node name="BadAmmoComponent" type="Node"]
+script = ExtResource("1_badammo")

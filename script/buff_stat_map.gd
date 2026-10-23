@@ -58,6 +58,12 @@ const MAP := {
 	"bullet_kill_time_mult": {
 		PLAYER: "bullet_kill_time_mult",
 	},
+	"bullet_cost_mult": {
+		PLAYER: "bullet_cost_mult",
+	},
+	"bullet_recoil_mult": {
+		PLAYER: "bullet_recoil_mult",
+	},
 	"kick_damage_mult": {
 		PLAYER: "kick_damage_mult",
 	},
@@ -71,6 +77,15 @@ const MAP := {
 	},
 	"max_hp_mult": {
 		ENEMY: "max_hp_mult",
+	},
+	"heal_mult_add": {
+		PLAYER: "heal_mult_add",
+	},
+	"hurt_resis_mult": {
+		PLAYER: "hurt_resis_mult",
+	},
+	"reload_timer_mult": {
+		PLAYER: "reload_timer_mult",
 	},
 }
 

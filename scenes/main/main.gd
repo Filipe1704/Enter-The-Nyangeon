@@ -125,10 +125,15 @@ func _show_converted_clear_coin(value: int) -> void:
 	ft.start("+" + str(value))
 
 func coin_clear_unit():
-	for coins in get_tree().get_first_node_in_group("CoinRoot").get_children():
+	var coin_root = get_tree().get_first_node_in_group("CoinRoot")
+	if coin_root == null:
+		return
+	for coins in coin_root.get_children():
 		if coins.is_in_group("PickItem"):
 			PoolManager.erase_pool("coins")
 			coins.coin_clear()
+		elif coins is Path2D and coins.has_method("clear_uncollected"):
+			coins.clear_uncollected()
 
 func item_clear_unit():
 	for items in get_tree().get_first_node_in_group("CoinRoot").get_children():

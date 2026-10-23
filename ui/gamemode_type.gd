@@ -4,6 +4,7 @@ signal selection_changed(game_mode_id: String, selected: bool)
 
 const KIND_MARK_ENEMY := Color(0.815686, 0.701961, 0.0235294, 1.0)
 const KIND_MARK_FIELD := Color(0.16, 0.78, 0.9, 1.0)
+const KIND_MARK_PLAYER := Color(0.92, 0.27, 0.35, 1.0)
 
 @export var gamemode_card: GameMode
 @export var gamemode_conflicting: Array[String]
@@ -44,7 +45,11 @@ func get_gamemode_card():
 	label.text = str(gamemode_card.game_mode_name) + "_id"
 	game_mode = gamemode_card.game_mode_id
 	texture_rect.texture = gamemode_card.game_mode_icon
-	var mark_color := KIND_MARK_FIELD if gamemode_card.is_field_chip() else KIND_MARK_ENEMY
+	var mark_color := KIND_MARK_ENEMY
+	if gamemode_card.is_field_chip():
+		mark_color = KIND_MARK_FIELD
+	elif gamemode_card.is_player_chip():
+		mark_color = KIND_MARK_PLAYER
 	kind_mark.color = mark_color
 	kind_mark_accent.color = mark_color
 	if PlayerData.game_mode.has(game_mode):

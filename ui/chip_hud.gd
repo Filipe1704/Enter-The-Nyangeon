@@ -93,7 +93,12 @@ func _on_chips_changed(active_chips: Array, counts: Array, _cap: int) -> void:
 		(slot["panel"] as Control).visible = true
 		(slot["icon"] as TextureRect).texture = chip.game_mode_icon
 		var count := int(counts[i]) if i < counts.size() else 0
-		(slot["count"] as Label).text = "F" if chip.is_field_chip() else str(count)
+		var count_text := str(count)
+		if chip.is_field_chip():
+			count_text = "F"
+		elif chip.is_player_chip():
+			count_text = "P"
+		(slot["count"] as Label).text = count_text
 	visible = _ui_shown
 
 func _on_chip_count_changed(_index: int, _count: int) -> void:
