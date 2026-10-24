@@ -238,7 +238,7 @@ func _populate_option_pages(menu_box: Node, button_box: Node) -> void:
 - 返回**未加入场景树**的本体 `ui/option_button.tscn` 实例；调用方负责加入 `button_box`。`button_id` 必须与对应页面的 `option_id` 相同，页面仍需实现 `menu_show()` / `menu_hide()`（可继承 `script/option_menu.gd` 并提供 `option_in` 动画）。
 - `title` 可传翻译键，默认继承自动翻译；硬编码标题使用 `ModAPI.create_option_tab("option_coop", "COOP", false)`。返回控件的 `text` 属性支持运行期更新标题。
 - 字体、字号、描边、悬停/选中动画由本体统一维护；GAME、CONTROLS、MOD 也使用同一组件。不要在左侧页签上另设独立 `theme` 或添加一套文字节点；右侧内容页可使用自己的样式。
-- 此接口为新增能力，`ModAPI.VERSION` 仍为 `1`（无破坏性变更），需要包含该接口的本体版本。已有 `.pck` 不会自动改用接口，mod 作者需更新调用并重新发布。
+- 此接口为新增能力，当前 `ModAPI.VERSION` 为 `3`（`script/mod_api.gd:6`，与 `script/mod_manager.gd` 的 `API_VERSION` 一致；该接口本身无破坏性变更），需要包含该接口的本体版本。已有 `.pck` 不会自动改用接口，mod 作者需更新调用并重新发布。
 
 ## 13. 深度修改（玩法重构 / 覆盖本体文件）
 
@@ -334,12 +334,13 @@ members = Array[String](["my_mod_hero", "my_mod_leader"])
 - **边界**：`pack_mod` 原样打包，**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）；自带贴图请走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
 - 注意：`build_coop_mod.ps1` 假设源与镜像目录不同（源在 `mod_sdk/coop_mod/mods/`）；源直接放项目根 `mods/` 时它会镜像自拷贝报错，这类 mod 用 `build_local_mod.ps1`。
 
-## 17. 命中前伤害修饰（协议 v4）
+## 17. 命中前伤害修饰（协议 v5）
 
 2026-10-14 用户改定发布版本为本体 `v0.5.1.4` / 官方联机 `0.1.10`，尚未提交上游的协议变更统一为 v4；本节接口保留。SUPERSEDED: 期间曾回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），不能仅按发布版本字符串判断接口是否存在。
+SUPERSEDED: 2026-10-24 官方联机协议现为 v5（`coop_net.gd` 的 `PROTOCOL_VERSION = 5`），`ModAPI.VERSION` 现为 `3`；本节其余 v4 字样仅作历史记录。
 
 自定义角色或藏品若要修改**本次伤害**，订阅 `GameEvents.enemy_damage_calculating(final_damage, damage_data, body_path)`，在其中调整目标 HealthComponent 的 `damage_multiplier` 或临时追加 `damage_data.damage_modifier`。前置阶段只负责数值计算，勿在此扣血、生成副作用或触发结算 proc。该阶段在客机预测/发送之前执行一次，临时修饰在结算后恢复，不跨穿透命中累积。
 
 `enemy_damage_taken` 继续保留给结算关联的施加状态/触发道具；在客机上它由房主结算后回传，因此旧 Mod 在该事件内改倍率不能改变本次权威 HP，应迁移到前置阶段。预先放入子弹 DamageData 的纯数值闭包（如距离增伤）也会在本端求值；**不传输 Callable**。
 
-官方联机协议 v4 使用可序列化的 `resolved_damage`。目标条件使用攻击者命中时的快照，房主继续负责目标合法性、无敌、阵营和真实 HP；沿用好友房可信的数值自报模型，不新增反作弊语义。双方需同时更新本体和官方 Mod，具体见 `coop_mod/README.md`。
+官方联机协议 v5 使用可序列化的 `resolved_damage`。目标条件使用攻击者命中时的快照，房主继续负责目标合法性、无敌、阵营和真实 HP；沿用好友房可信的数值自报模型，不新增反作弊语义。双方需同时更新本体和官方 Mod，具体见 `coop_mod/README.md`。

@@ -4,7 +4,7 @@
 > 双语项目知识库。英文标题、中文说明、代码符号原样保留。
 > Entry point / 入口: `AGENTS.md` → `docs/`.
 > 用户纠正优先于本文推断；来源标记（code/user/test）见 `docs/LEARNINGS.md`。
-> Last updated / 最后更新: 2026-10-20
+> Last updated / 最后更新: 2026-10-24
 
 ## 1. What this is / 项目是什么
 
@@ -12,8 +12,8 @@
 - **Genre**: top-down arena shooter / roguelite (Blue Archive–flavored fan game).
 - **Main scene**: `res://scenes/main/title_screen.tscn` (`project.godot:18`).
 - **Scale**: 本体 `script/` / `scenes/` / `ui/` / `resources/` 共 481 个 GDScript；整体场景/SDK/测试规模以审计地图统计为准。
-- **Physics**: Rapier2D (`project.godot:234`).
-- **Resolution**: design 640×360, window override 1280×720, stretch `canvas_items` (`project.godot:46-50`).
+- **Physics**: Rapier2D (`project.godot:245`).
+- **Resolution**: design 640×360, window override 1280×720, stretch `canvas_items` (`project.godot:53-57`).
 - **Version**: 以 `script/Game.gd:13` 的 `Game.version_number` 为准，当前 **`v0.5.2.0-test`**；官方联机发布版本 `0.1.13`（最低本体 `v0.5.2.0`），联机协议为 v6。SUPERSEDED: 2026-10-14 先回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），随后用户改定发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4）；2026-10-20 腐化同步使协议升到 v5、联机 Mod 升到 `0.1.12`；2026-10-24 镰刀残留修复使协议升到 v6、联机 Mod 升到 `0.1.13`，同日最低本体声明提升为 `v0.5.2.0`（Mod 版本不变）。联机与具备前置伤害接口的本体仍需配套更新。
 - **README**: 根目录 `README.md` 面向玩家、Mod 开发者与项目维护者，提供下载、源码启动、SDK 和知识库入口；顶部横幅复用 `ui/ark_of_Shittim/ETN_key_visual.png`。
 
@@ -50,7 +50,7 @@
 
 - **审计修复入口（2026-10-14）**：`tests/run_support_persistence_checks.py` 覆盖支援 Mod 启停与 v2→v3 迁移；`run_mod_lifecycle_checks.py` 覆盖冲突闭包、卸载链接；联机 runner 新增 relay_queue / simultaneous_leave。SDK `net/coop_enet_peer.gd` 适配原生 ENet 的连接事件/发送边界，不增加 autoload；`SceneData` 格式升为 3，运行期资源由 SupportData 恢复。
 
-- **从零全量审查及修复（2026-10-14）**：full 审查新增的五项（Relay 准入、前置伤害、导出镜像、刷新权重、外推）已修复；原 full 报告归档，当前结果以 CODEBASE_AUDIT.md 为准。新永久守卫 `run_damage_contract_checks.py`、`run_upgrade_snapshot_checks.py`、`run_export_boundary_checks.py`；联机恢复扩至 13 组，增加真实双端 damage 场景；中继测试强制并发准入顺序。旧观察型诊断保留并随实际调用链更新。
+- **从零全量审查及修复（2026-10-14）**：full 审查新增的五项（Relay 准入、前置伤害、导出镜像、刷新权重、外推）已修复；原 full 报告归档，当前问题状态以独立回归结果为准。新永久守卫 `run_damage_contract_checks.py`、`run_upgrade_snapshot_checks.py`、`run_export_boundary_checks.py`；联机恢复扩至 13 组，增加真实双端 damage 场景；中继测试强制并发准入顺序。旧观察型诊断保留并随实际调用链更新。
 
 ## 3. Scene ↔ script pairing rule / 场景与脚本配对规则
 
@@ -91,7 +91,7 @@ main.tscn          (Node2D, main.gd)   ← 正式战斗
 test_room.tscn     (Node2D, test_room.gd)  ← 沙盒/测试房（从 menu 进入）
 ```
 
-- 进入战斗时 `GameEvents.change_scene()` 会：切换场景 → `await tree_changed` → 播放 transition 收尾 → 把所选玩家场景实例化到组 `"PlayerRoot"` → `call_deferred("emit_first_round_add")`（`GameEvents.gd:163-181`）。
+- 进入战斗时 `GameEvents.change_scene()` 会：切换场景 → `await tree_changed` → 播放 transition 收尾 → 把所选玩家场景实例化到组 `"PlayerRoot"` → `call_deferred("emit_first_round_add")`（`GameEvents.gd:194-213`）。
 - `main.tscn` 的根下分组容器：`BuffBox`, `BackLayer`, `FloorLayer`, `YSort`（含 `Wall`/`Map`/`SpawnMap`/`SpawnNorth/East/South/West` TileMap）, `PlayerRoot`, `EnemiesRoot`, `CoinRoot`, `PropRoot`, `BulletRoot`, `EquipLayer`, `SELayer`, `ForegroundLayer`。
 
 ## 6. Localization files / 本地化文件
@@ -120,9 +120,12 @@ test_room.tscn     (Node2D, test_room.gd)  ← 沙盒/测试房（从 menu 进�
 | 敌人/玩家/召唤物 | `docs/SYSTEMS.md` §Entities → `script/entity_ENEMY.gd`, `script/player.gd`, `script/summoned.gd` |
 | 数据资源字段 | `docs/SYSTEMS.md` §Resource data model |
 | 命名/层/本地化/输入 | `docs/CONVENTIONS.md` |
+| 道具固定加成 / 卡片立绘绑定 | `docs/SYSTEMS.md` §8 / §10 → `script/equip_item.gd`、`script/lazy_texture_binding.gd`；本次验证见 `docs/REFACTOR_REUSE.md`。 |
+| 角色/服装商店确认与购买 | `docs/SYSTEMS.md` §12 → `ui/shop_purchase_card.gd`、`ui/character_shop_card.gd`、`ui/item_shop_card.gd`；验证见 `docs/SHOP_PURCHASE_REFACTOR.md`。 |
+| 火/毒扩散生命周期 | `docs/SYSTEMS.md` §2.9 → `script/dot_diffuse.gd`、`scenes/debuff/fire_diffuse.gd`、`poison_diffuse.gd`；验证见 `docs/DIFFUSE_LIFECYCLE_REFACTOR.md`。 |
+| 升级抽取 / 旧算法清理 | `docs/SYSTEMS.md` §8 → `scenes/manager/upgrade_manager.gd`、`item_weight_manager.gd`、`weight_system.gd`；固定种子验证及兼容边界见 `docs/UPGRADE_LEGACY_CLEANUP.md`。 |
 | 按语言换字体（越南语 Roboto） | `docs/ARCHITECTURE.md` §1.10 → `script/locale_font.gd` |
 | Mod 系统（挂载/内容/补丁/entry） | `docs/ARCHITECTURE.md` §1.11、`docs/SYSTEMS.md` §11、`docs/CONVENTIONS.md` §10 → `script/mod_manager.gd`、`mod_sdk/README.md` |
 | Mod 导出/真机验证 | `docs/MOD_TESTING.md` |
 | 官方联机通用拓展接口 | `docs/COOP_EXTENSION_API.md` → 官方 `net/coop_extensions.gd`；`tests/run_coop_extension_contract_checks.py` |
 | 已知坑与未解问题 | `docs/LEARNINGS.md`, `docs/WORKLOG.md` |
-| 全仓工程审计与当前问题状态 | 根 `CODEBASE_AUDIT.md`（历史修复摘要）；当前提交需以独立回归结果为准。 |
