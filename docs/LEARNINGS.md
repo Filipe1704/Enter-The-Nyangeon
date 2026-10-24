@@ -1653,6 +1653,7 @@
 - Date / 日期: 2026-10-08
 
 - UPDATE 2026-10-08: 补 `_ako_force_release_owner`/`_remote_ako_force_release`（`coop_net.gd`）——host 因 BOSS/超距/看门狗/敌人失效强制释放时，回通知 owner 本机链 `release_enemy()`，避免客机链一直显示锁定到自身超时。
+- UPDATE 2026-10-25: 上述 host 夹取只对带 `frozen` 的本体敌人成立；侵蚀之塔这类「聚合实体根」（Node2D，无 `frozen`）现在会被拒绝并收回链，不再把整组 Boss 拖走（见下方「[Coop] Ako 链锁到塔组根…」）。
 
 ### [Mod] tsurugi 第二枪后坐同步：开火事件带枪节点路径 + 镜像第二枪一并禁用
 - Evidence / 证据: 本体 `scenes/player/tsurugi/second_shoot.gd`（按住 kick → `second_gun.is_shoot=true`；第二枪=`Kick/blood_n_gunpowder`=PlayerGun，主枪=`GraphicsGun/Gun`）；`script/player_gun.gd:_shoot()` → `GameEvents.emit_player_gun_shoot(self)`；子弹走 `ProjectileSpawner.spawn_core`→`on_projectile_spawned`（已同步），枪口走 `on_visual_activated`（已同步）。mod `coop_net.gd`：`_on_local_gun_shoot`（`:7513`，改带 `p.get_path_to(gun)`）、`_server_player_gun_shoot`（`:7530`）、`_remote_player_gun_shoot`（`:7547`，按路径解析镜像枪 `_shootAnim`，失败回退主枪）；`coop_player_proxy.gd:setup`（`second_gun` 同主枪关 physics/process + 锁 `is_shoot=false`）。`coop_player_proxy._apply_weapon_look` 已对 `second_gun.look_at`。
@@ -3389,5 +3390,11 @@
 ### [Coop/Field] 场地词条音效在客机是「纯表现」，host 播了不代表客机有声
 - Evidence / 证据: `scenes/field_mods/orbital_barrage.gd:155,199`（host 播 `BlipSounds1` / `ExplosionSounds2`）；`scenes/effects/orbital_barrage_remote.gd`（客机纯表现，2026-10-25 在 `add_marker`/`spawn_blast` 补同一 key 与节流，`apply_state` 传 `play_sound=false`）；`scenes/field_mods/corruption_spread.gd:310` + `:363-380`（`is_remote` 镜像 `apply_remote_wave(ACTIVE)` → `_activate_wave()` 本地播 `CorruptionSpawn`，已同步）；本地单进程回归 `tests/field_sfx_checks.gd`（不入库）。
 - Notes / 说明: **现象**（user）：联机场地词条音效不同步。**结论**：轨道炮击的落点提示与逐发爆炸音只在 host 的 `orbital_barrage.gd` 里播，客机 `OrbitalBarrageRemote` 只复刻 marker/粒子 → 客机完全无声；腐化蔓延反而本来就是同步的（客机镜像 `apply_remote_wave(ACTIVE)` 会走 `_activate_wave()`，同一 `AudioStreamPlayer` 重播，听感一次）。**约定**：新增场地词条时，host 的每个 `SoundManager.play_sfx*` 都要在对应客机纯表现脚本里以同一 key/节流参数回放；补发历史状态（`apply_state`）不补播音效；不要给已同步的腐化蔓延再加第二份。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-25
+
+### [Coop] Ako 链锁到塔组根（无 `frozen` 的聚合 Node2D）→ 整组 BOSS 被拖、远端激光留在原地
+- Evidence / 证据: `scenes/enemies/boss/erosion_tower_group.tscn:59`（塔组根无 `groups`、无 `frozen`；子塔才是 `BOSS`/`Enemy`）、`script/spawn_anim.gd:146`（net_id 打在塔组根）、`scenes/player/ako/ako_chain.gd:144`（本体 BOSS 超距只释放不拖）、`scenes/bullet/launcher/laser_launcher.gd`（发射器是塔体子节点，客机看到的是特效克隆）；mod `mods/etn_coop/net/coop_net.gd`：`_resolve_enemy_net_id`（`:3183` 回溯父链）、`_apply_ako_lock`（`:3293`，原实现对根写 `frozen`）、`_tick_ako_locks`（`:3346`，只对 `BOSS` 组跳过夹取）、`_on_projectile_spawned`（`:3637`，一次性特效通道）、`_effect_anchor_of/_bind_effect_anchor/_tick_effect_anchors`（`:3726/:3773/:3790`）；`docs/LEARNINGS.md:3379`（不存在的属性赋值会中断当前函数）。
+- Notes / 说明: **现象**（user）：联机侵蚀之塔 Boss 被 Ako 链拖动；塔移动后客机端激光留在原地（伤害洞也在原地），房主/客机两种角色都能复现。**根因**：链命中子塔后 `_resolve_enemy_net_id` 沿父链回溯到塔组根；host `_apply_ako_lock` 对根写 `frozen` → GDScript 运行时错误并中断函数，但错误前 `_ako_lock_by_enemy` 已登记；`_tick_ako_locks` 只对 `BOSS` 组跳过夹取，塔组根不在组里 → 整组塔被夹到 Ako 120px 内。客机激光是 `on_projectile_spawned` 的一次性特效克隆，只在生成时定位，不随镜像塔移动。**「房主和客机都会」不是本体 bug**：两条锁定路径最终都汇到 host 的同两个 mod 函数；本体没有写塔组根位置的代码，战斗动画也不移动发射器（只有 `enter_anim` 移动 `Graphics`，且开火在入场结束后）。**修法（纯 mod）**：① `_apply_ako_lock` 对 `enemy.get("frozen") == null` 的聚合实体返回 false、不再登记；host 本机入口与 `_server_ako_event` 按返回值收回链（`_ako_release_owner_chain`），`_tick_ako_locks` 加不可冻结防御分支；② `laser_launcher` 特效 entry 附 `an`(宿主 net_id)+`ap`(相对 net entity 根的路径)，客机解析镜像发射器并逐帧把克隆 `global_position` 贴过去（只锚位置、旋转仍自驱）。**通用教训**：① 聚合实体根（Node2D + 聚合 stats）没有 `Enemy.frozen`，按 net entity 写敌人字段前必须做能力检查，拒绝时不能只吞错误、必须撤销登记；② 一次性视觉克隆若宿主会移动，必须按 net_id + 相对路径绑定镜像节点，不能只信生成时世界坐标；③ 「房主和客机都复现」先确认权威路径是否都汇到 host，再判断本体；④ 塔组根故意不在 `BOSS`/`Enemy` 组（`main.gd:enemy_clear_unit` 只清直接子节点），不要为了这条链把根加组。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-25

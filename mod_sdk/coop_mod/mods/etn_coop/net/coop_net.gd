@@ -247,7 +247,11 @@ func _sanitize_effect_entry(e) -> Dictionary:
 		for k in EFFECT_PROP_NAMES:
 			if pr.has(k):
 				pr_out[k] = pr[k]
-	return {
+	# 锚点（laser_launcher 跟随宿主实体）：仅接受正整数 net_id + 安全相对路径。
+	# 客机来源的这些字段只在 host 中转时保留，接收端仍会做祖先/类型校验。
+	var an: int = int(e.get("an", 0))
+	var ap: String = str(e.get("ap", ""))
+	var entry: Dictionary = {
 		"s": s,
 		"p": _finite_v2(e.get("p", Vector2.ZERO), Vector2.ZERO),
 		"r": rot,
@@ -258,6 +262,10 @@ func _sanitize_effect_entry(e) -> Dictionary:
 		"eid": str(e.get("eid", "")).substr(0, MAX_NET_ID_LEN),
 		"nh": true,                      # 客机来源特效不开放"伤害洞"
 	}
+	if an > 0 and an < MAX_NET_STAT and _is_safe_anchor_path(ap):
+		entry["an"] = an
+		entry["ap"] = ap
+	return entry
 
 
 func _visual_reject() -> void:
@@ -652,6 +660,14 @@ const FOLLOW_IDLE_RESYNC_MSEC: int = 500
 const MAX_BEAM_SEGMENTS: int = 16
 var _follow_timer: float = 0.0
 var _follow_nodes: Dictionary = {}   # effect_id -> Node（本机拥有的持续视觉）
+
+# 敌方持久发射器（erosion_tower 的 laser_launcher）在客机是一次性视觉克隆：
+# 若宿主实体（塔组根/子塔）被链拖或击退，克隆必须跟随**客机镜像发射器**，
+# 否则激光与伤害洞留在生成点。entry 附带 an=net_id、ap=相对 net entity 根的节点路径，
+# 接收端按 effect_id 逐帧把克隆 global_position 贴到镜像发射器。
+const LASER_LAUNCHER_SCENE: String = "res://scenes/bullet/launcher/laser_launcher.tscn"
+const MAX_ANCHOR_PATH_LEN: int = 128
+var _effect_anchors: Dictionary = {}   # effect_id -> {"node": Node2D, "anchor": Node2D}
 
 # ---------------- 远程命中反馈（其它玩家来源）频率门 ----------------
 const REMOTE_FLASH_BASE_MS: int = 60
@@ -3050,6 +3066,7 @@ func _clear_round_visuals() -> void:
 	_pending_visual.clear()
 	_pending_visual_reliable.clear()
 	_follow_nodes.clear()
+	_effect_anchors.clear()
 	_follow_timer = 0.0
 	var root := get_tree().get_first_node_in_group("BulletRoot")
 	if root != null:
@@ -3191,8 +3208,11 @@ func _handle_local_ako_chain(_player: Node, ev: String, data: Dictionary) -> voi
 			if chain_node != null and is_instance_valid(chain_node):
 				_ako_local_chain_nodes[idx] = chain_node
 			if multiplayer.is_server():
-				_apply_ako_lock(net_id, multiplayer.get_unique_id(), idx)
-				rpc("_remote_ako_event", multiplayer.get_unique_id(), "lock", idx, net_id, Vector2.ZERO)
+				if _apply_ako_lock(net_id, multiplayer.get_unique_id(), idx):
+					rpc("_remote_ako_event", multiplayer.get_unique_id(), "lock", idx, net_id, Vector2.ZERO)
+				else:
+					# 聚合实体（塔组根）不可锁：立即收回 host 本机链，不广播 lock
+					_ako_release_owner_chain(multiplayer.get_unique_id(), idx)
 			else:
 				if chain_node != null and is_instance_valid(chain_node):
 					chain_node.set_meta("coop_ako_host_drives", true)
@@ -3225,9 +3245,12 @@ func _server_ako_event(op: String, net_id: int, index: int, dir: Vector2) -> voi
 	elif op == "lock":
 		if not enemy_by_net_id.has(net_id):
 			return
-		_apply_ako_lock(net_id, sender, index)
-		_remote_ako_event(sender, "lock", index, net_id, Vector2.ZERO)
-		rpc("_remote_ako_event", sender, "lock", index, net_id, Vector2.ZERO)
+		if _apply_ako_lock(net_id, sender, index):
+			_remote_ako_event(sender, "lock", index, net_id, Vector2.ZERO)
+			rpc("_remote_ako_event", sender, "lock", index, net_id, Vector2.ZERO)
+		else:
+			# 不可冻结的聚合实体：不登记、不广播 lock，直接让 owner 收链
+			_ako_force_release_owner(sender, index)
 	elif op == "release":
 		var rec = _ako_lock_by_enemy.get(net_id)
 		if rec == null or int(rec.get("owner", -1)) != sender:
@@ -3263,22 +3286,28 @@ func _remote_ako_event(owner_peer: int, op: String, index: int, net_id: int, dir
 				rec3["state"] = 3
 
 
-# host：注册锁定 + 冻结真身（已策反则不冻）
-func _apply_ako_lock(net_id: int, owner_peer: int, index: int) -> void:
+# host：注册锁定 + 冻结真身（已策反则不冻）。
+# 只有带 frozen 的本体敌人可被锁/拖。塔组根这类聚合实体（Node2D，无 frozen）必须拒绝：
+# 写 frozen 会中断当前函数，且 _tick_ako_locks 会把整组 Boss 拉到 Ako 身边。
+# 返回 false 时调用方负责收回链，不得留下 _ako_lock_by_enemy 记录。
+func _apply_ako_lock(net_id: int, owner_peer: int, index: int) -> bool:
 	var enemy = enemy_by_net_id.get(net_id)
 	if enemy == null or not is_instance_valid(enemy):
-		return
+		return false
+	if enemy.get("frozen") == null:
+		return false
 	_ako_lock_by_enemy[net_id] = {"owner": owner_peer, "index": index, "msec": Time.get_ticks_msec()}
 	if enemy.has_method("is_converted") and enemy.is_converted():
 		enemy.frozen = false
 	else:
 		enemy.frozen = true
+	return true
 
 
-# host：解冻 + 注销
+# host：解冻 + 注销（聚合实体没有 frozen，跳过写入）
 func _apply_ako_unlock(net_id: int) -> void:
 	var enemy = enemy_by_net_id.get(net_id)
-	if enemy != null and is_instance_valid(enemy):
+	if enemy != null and is_instance_valid(enemy) and enemy.get("frozen") != null:
 		enemy.frozen = false
 	_ako_lock_by_enemy.erase(net_id)
 
@@ -3287,6 +3316,19 @@ func _apply_ako_unlock(net_id: int) -> void:
 func _ako_force_release_owner(owner_peer: int, idx: int) -> void:
 	if owner_peer != multiplayer.get_unique_id() and multiplayer.get_peers().has(owner_peer):
 		rpc_id(owner_peer, "_remote_ako_force_release", idx)
+
+
+# host：收回指定 owner 的链。远端 owner 走 RPC；本地 owner（host 自己玩 Ako）
+# 直接清登记并收招，覆盖「拒绝锁定」和 tick 兜底两条路径（否则 host 本机链会挂到自身超时）。
+func _ako_release_owner_chain(owner_peer: int, idx: int) -> void:
+	if owner_peer != multiplayer.get_unique_id():
+		_ako_force_release_owner(owner_peer, idx)
+		return
+	var chain = _ako_local_chain_nodes.get(idx)
+	_ako_local_chain_nodes.erase(idx)
+	_ako_local_lock.erase(idx)
+	if chain != null and is_instance_valid(chain) and chain.has_method("release_enemy"):
+		chain.release_enemy()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -3315,13 +3357,19 @@ func _tick_ako_locks() -> void:
 		var idx: int = int(rec.get("index", 0))
 		if enemy == null or not is_instance_valid(enemy) or not (enemy is Node2D):
 			_ako_lock_by_enemy.erase(net_id)
-			_ako_force_release_owner(owner_peer, idx)
+			_ako_release_owner_chain(owner_peer, idx)
+			continue
+		# 防御：锁定期间实体变成不可冻结（换池/重登记/聚合根）时不再拖拽，按释放处理
+		if enemy.get("frozen") == null:
+			_apply_ako_unlock(net_id)
+			rpc("_remote_ako_event", owner_peer, "release", idx, net_id, Vector2.ZERO)
+			_ako_release_owner_chain(owner_peer, idx)
 			continue
 		var owner = _local_or_remote_player(owner_peer)
 		if owner == null or not is_instance_valid(owner) or not (owner is Node2D):
 			_apply_ako_unlock(net_id)
 			rpc("_remote_ako_event", owner_peer, "release", idx, net_id, Vector2.ZERO)
-			_ako_force_release_owner(owner_peer, idx)
+			_ako_release_owner_chain(owner_peer, idx)
 			continue
 		if enemy.has_method("is_converted") and enemy.is_converted():
 			enemy.frozen = false
@@ -3334,13 +3382,13 @@ func _tick_ako_locks() -> void:
 			if enemy.is_in_group("BOSS"):
 				_apply_ako_unlock(net_id)
 				rpc("_remote_ako_event", owner_peer, "release", idx, net_id, Vector2.ZERO)
-				_ako_force_release_owner(owner_peer, idx)
+				_ako_release_owner_chain(owner_peer, idx)
 				continue
 			(enemy as Node2D).global_position = anchor + to_anchor.normalized() * AKO_MAX_RANGE
 		if now - int(rec.get("msec", now)) > AKO_LOCK_MAX_MSEC:
 			_apply_ako_unlock(net_id)
 			rpc("_remote_ako_event", owner_peer, "release", idx, net_id, Vector2.ZERO)
-			_ako_force_release_owner(owner_peer, idx)
+			_ako_release_owner_chain(owner_peer, idx)
 
 
 func _ensure_ako_chain_visual(owner_peer: int, index: int) -> Dictionary:
@@ -3609,7 +3657,7 @@ func _on_projectile_spawned(bullet: Node, _owner: Node, _source_faction: int) ->
 		# 含 network_get_beam_state 的持续光束（player_laser_beam）登记进跟随通道
 		if bullet.has_method("network_get_beam_state"):
 			_follow_nodes[effect_id] = bullet
-		_queue_effect({
+		var effect_entry: Dictionary = {
 			"s": scene_path,
 			"p": bullet.global_position,
 			"r": bullet.global_rotation,
@@ -3618,7 +3666,14 @@ func _on_projectile_spawned(bullet: Node, _owner: Node, _source_faction: int) ->
 			"m": "active_state",
 			"pr": props,
 			"eid": effect_id,
-		})
+		}
+		# 敌方持久发射器（塔的 laser_launcher）带上宿主实体锚点：
+		# 客机克隆按镜像节点逐帧跟随，避免宿主移动后激光/伤害洞留在生成点。
+		var anchor: Dictionary = _effect_anchor_of(bullet)
+		if not anchor.is_empty():
+			effect_entry["an"] = int(anchor.get("nid", 0))
+			effect_entry["ap"] = str(anchor.get("path", ""))
+		_queue_effect(effect_entry)
 		return
 	var sync_id: String = "%d_%d" % [multiplayer.get_unique_id(), _next_visual_id]
 	_next_visual_id += 1
@@ -3662,6 +3717,91 @@ func _root_group_of(node: Node) -> String:
 		if gs in ["SELayer", "BulletRoot", "ForegroundLayer", "FloorLayer", "PlayerRoot", "EnemiesRoot", "EquipLayer"]:
 			return gs
 	return "SELayer"
+
+
+# ---------------- 远端特效锚点（laser_launcher 跟随宿主实体） ----------------
+
+# 只有激光发射器需要锚定：塔组根/子塔移动（链拖、击退、插值）时，
+# 客机克隆的激光与伤害洞必须跟着镜像发射器走。
+func _effect_anchor_of(node: Node) -> Dictionary:
+	if node == null or not is_instance_valid(node) or not (node is Node2D):
+		return {}
+	if str(node.scene_file_path) != LASER_LAUNCHER_SCENE:
+		return {}
+	var ent: Node = _net_entity_of(node)
+	if ent == null or not is_instance_valid(ent):
+		return {}
+	var nid: int = -1
+	var root: Node = ent
+	if ent.has_meta("coop_owner_net_id"):
+		nid = int(ent.get_meta("coop_owner_net_id"))
+		root = enemy_by_net_id.get(nid)
+	else:
+		nid = int(ent.get_meta("net_id", -1))
+	if nid <= 0 or root == null or not is_instance_valid(root) or not (root is Node2D):
+		return {}
+	var path: String = str((root as Node2D).get_path_to(node))
+	if not _is_safe_anchor_path(path):
+		return {}
+	return {"nid": nid, "path": path}
+
+
+func _is_safe_anchor_path(path: String) -> bool:
+	if path == "" or path.length() > MAX_ANCHOR_PATH_LEN:
+		return false
+	if path.begins_with("/") or path.contains("..") or path.contains(":"):
+		return false
+	return true
+
+
+# 客机：把 net_id + 相对路径解析成镜像树里的发射器节点（必须是 net entity 的后代、Node2D）。
+func _resolve_visual_anchor(net_id: int, path: String) -> Node:
+	if net_id <= 0 or not _is_safe_anchor_path(path):
+		return null
+	var root = enemy_by_net_id.get(net_id)
+	if root == null or not is_instance_valid(root) or not (root is Node):
+		return null
+	var anchor = (root as Node).get_node_or_null(NodePath(path))
+	if anchor == null or not is_instance_valid(anchor) or not (anchor is Node2D):
+		return null
+	if not (root as Node).is_ancestor_of(anchor):
+		return null
+	return anchor
+
+
+# 客机：登记「克隆 → 镜像锚点」。同一克隆被新 eid 复用时先清掉旧绑定，避免两个锚点互抢。
+func _bind_effect_anchor(effect_id: String, net_id: int, path: String) -> void:
+	if effect_id == "":
+		return
+	var anchor: Node = _resolve_visual_anchor(net_id, path)
+	if anchor == null:
+		return
+	var node = _visual.get_effect(effect_id)
+	if node == null or not (node is Node2D):
+		return
+	for eid in _effect_anchors.keys():
+		var rec: Dictionary = _effect_anchors[eid]
+		if rec.get("node") == node:
+			_effect_anchors.erase(eid)
+	_effect_anchors[effect_id] = {"node": node, "anchor": anchor}
+
+
+# 每物理帧把克隆贴到镜像锚点。锚点/克隆失效或克隆已 idle 时剪绑（池复用/回合清场自愈）。
+func _tick_effect_anchors() -> void:
+	if _effect_anchors.is_empty():
+		return
+	for eid in _effect_anchors.keys():
+		var rec: Dictionary = _effect_anchors[eid]
+		var node = rec.get("node")
+		var anchor = rec.get("anchor")
+		if node == null or not is_instance_valid(node) or not (node is Node2D) \
+				or anchor == null or not is_instance_valid(anchor) or not (anchor is Node2D):
+			_effect_anchors.erase(eid)
+			continue
+		if node.get("is_idle") != null and int(node.is_idle) == 1:
+			_effect_anchors.erase(eid)
+			continue
+		(node as Node2D).global_position = (anchor as Node2D).global_position
 
 
 func _on_projectile_despawned(bullet: Node) -> void:
@@ -5047,6 +5187,7 @@ func _reset_player_sync() -> void:
 	_pending_visual.clear()
 	_pending_effects.clear()
 	_follow_nodes.clear()
+	_effect_anchors.clear()
 	_follow_timer = 0.0
 	_remote_fx_last_ms.clear()
 	_remote_flash_last_ms.clear()
@@ -5367,6 +5508,7 @@ func _physics_process(delta: float) -> void:
 	_sync_local_melee_hook()
 	_tick_ako_locks()
 	_tick_ako_chain_visuals(delta)
+	_tick_effect_anchors()
 	_update_coin_trajectories()
 	_update_network_diagnostics(delta)
 	_network_heartbeat(delta)
@@ -6985,6 +7127,7 @@ func _spawn_one_effect(e) -> void:
 		return
 	if not remote_effect_allowed(StringName("eff:" + str(e.get("s", "")))):
 		return
+	var eid: String = str(e.get("eid", ""))
 	_visual.spawn_visual_effect(
 		get_tree(),
 		str(e.get("s", "")),
@@ -6994,9 +7137,12 @@ func _spawn_one_effect(e) -> void:
 		str(e.get("g", "SELayer")),
 		str(e.get("m", "active_state")),
 		e.get("pr", {}),
-		str(e.get("eid", "")),
+		eid,
 		not bool(e.get("nh", false))     # 客机来源（nh=true）不开放"伤害洞"
 	)
+	# laser_launcher 等宿主实体的持续发射器：克隆生成后绑定镜像锚点并逐帧跟随
+	if eid != "" and e.has("an") and e.has("ap"):
+		_bind_effect_anchor(eid, int(e.get("an", 0)), str(e.get("ap", "")))
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -7171,6 +7317,7 @@ func _server_despawn_visual_bullet(sync_id: String) -> void:
 func _despawn_visual_effect(effect_id: String) -> void:
 	if multiplayer.is_server():
 		return
+	_effect_anchors.erase(effect_id)
 	_visual.despawn_visual_effect(effect_id)
 
 
@@ -7184,6 +7331,7 @@ func _server_despawn_visual_effect(effect_id: String) -> void:
 		return
 	if not _rate_allow_tokens(multiplayer.get_remote_sender_id(), "vdespawn", 120.0, 40.0):
 		return
+	_effect_anchors.erase(effect_id)
 	_visual.despawn_visual_effect(effect_id)
 	var sender: int = multiplayer.get_remote_sender_id()
 	for peer in multiplayer.get_peers():

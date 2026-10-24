@@ -92,6 +92,7 @@
 - `total_active_ticks() = WARNING_TICKS + life_time + END_TICKS`（单一真源，供塔组算窗口）。
 - 光束命中检测（`scenes/bullet/laser_bullet.gd`）：`add_damage()`（`global_time_count` tick）用 `PhysicsShapeQueryParameters2D` + `PhysicsDirectSpaceState2D.intersect_shape` **即时查询**当前命中框形状覆盖的 HurtBox，过滤 `is_instance_valid` + `monitorable` 再 `hit_received.emit`；形状 `disabled`（光束成长/淡出）时跳过。**不再**用 `HitBox.area_entered/exited` 维护 `_contacts` 集合（也没有 `_seed_contacts`）。⚠️ 边沿事件集合在 `monitorable` 切换（跳跃 `set_dodge`）时不补发 `area_exited` → 残留，玩家跳出/跳跃躲开后仍掉血（且躲回不再补发 `area_entered` → 漏打），2026-10-10 改即时查询修复（见 `LEARNINGS.md`）。`intersect_shape` 是即时空间查询，不受 `get_overlapping_areas()` 的 Rapier 缓存残留影响（`LEARNINGS.md` 321/463）；调用点由 Timer（`round_timer`/`test_room` 的 `_on_timer_timeout`）驱动的 `global_time_count` 触发，在 idle 帧、非物理 flush 期，安全。
 - 塔组 `erosion_tower_group.attack_state()` 用 `_active_attack_ticks()` 把单次攻击窗口 `shoot_time` 抬到 ≥ 当前开火激光的 `total_active_ticks()`，使激光只受自身 `life_time` 约束；非激光攻击仍为 `shoot_time_max`（`erosion_tower_group.gd:19,99`）。⚠️ `erosion_tower_group.enemy_fever_time()` 是**死代码**（塔组从未连 `GameEvents.fever_time_start`，全局只有 `goliath.gd:127` 连）。
+- **联机远端克隆锚定（mod，2026-10-25）**：敌方激光在客机是 `on_projectile_spawned` 的一次性特效克隆，塔组根/子塔被链拖或击退后克隆不会跟。`coop_net._on_projectile_spawned` 对 `laser_launcher` 场景附带 `an`(宿主 net_id)+`ap`(相对 net entity 根的路径)；客机 `_bind_effect_anchor` 解析镜像发射器，`_tick_effect_anchors` 每物理帧把克隆 `global_position` 贴过去（只锚位置，旋转仍自驱），`_clear_round_visuals`/`_reset_player_sync`/`_despawn_visual_effect` 清绑定。宿主移动的根因是 Ako 链拖塔组根，见 §5.11。
 
 ### 2.3 HealthComponent 结算（敌方）
 `script/health_component.gd`：
@@ -359,6 +360,11 @@
 - `ui/coop_menu.gd` 按可选页面工厂创建页签，与内置页面互斥；导航只纳入可见且启用的控件，关闭/重开恢复提供者原始交互设置。
 - 准备中拒绝重复启动，自动重连保留连接设施；显式退出、F12、取消及退树释放提供者。延迟失败校验代次，不关闭后续新会话。
 - 官方包可独立运行；提供者由独立 Mod 自行实现。契约见 `docs/COOP_EXTENSION_API.md`，仅官方包回归见 `tests/run_coop_extension_contract_checks.py`。
+
+### 5.11 联机 Ako 链与聚合 Boss（mod，2026-10-25）
+
+- 侵蚀之塔的联机 net entity 是 `erosion_tower_group` 根 Node2D（聚合血量），不在 `BOSS`/`Enemy` 组、没有 `Enemy.frozen`。Ako 链命中子塔后 mod 会回溯到该根；host 权威锁定必须先做能力检查：`frozen == null` 的实体拒绝登记并收回链（`_apply_ako_lock` 返回 bool + `_ako_release_owner_chain`），`_tick_ako_locks` 不再夹取。否则原实现会在写 `frozen` 时中断函数、但仍留下锁记录 → 整组塔被拖。
+- 本体不参与：`ako_chain._process_locked` 对 BOSS 只按超距释放；塔组根位移只来自 mod 的 host tick。证据与通用教训见 `docs/LEARNINGS.md` 同名条目。
 
 ## 6. Managers / 管理器
 

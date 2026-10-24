@@ -2,6 +2,13 @@
 
 > 当前发布版本 **0.1.14**（以 `mods/etn_coop/mod.json` 为准），协议 **v6**；最低本体版本声明为 **v0.5.2.0**。运行时仍要求本体具备 `enemy_damage_calculating` 前置伤害接口，本体与 Mod 需配套更新；当前不整文件覆盖本体脚本。
 
+## 2026-10-25 侵蚀之塔链拖 / 远端激光脱节修复（fix，不升版）
+
+- **现象**：联机 Ako 链锁侵蚀之塔后整组塔被拖动；塔移动后客机端激光留在原地（伤害洞也在原地）。房主/客机两种角色都能复现，属于 host 权威路径统一汇到同一处，不是本体缺陷。
+- **根因**：塔组根是聚合 `Node2D`（无 `frozen`、不在 `BOSS`/`Enemy` 组），链命中子塔后 `_resolve_enemy_net_id` 回溯到它；host `_apply_ako_lock` 写 `frozen` 触发 GDScript 运行时错误并中断函数，但错误前锁记录已登记 → `_tick_ako_locks` 把整组塔夹到 Ako 120px 内。客机激光是 `on_projectile_spawned` 的一次性特效克隆，只在生成时定位。
+- **修法（纯 mod，本体零改动）**：`_apply_ako_lock` 对 `enemy.get("frozen") == null` 的聚合实体返回 false 且不登记；host 本机入口与 `_server_ako_event` 按返回值收回链（`_ako_release_owner_chain`），`_tick_ako_locks` 加不可冻结防御分支。`laser_launcher` 特效 entry 附 `an`(宿主 net_id)+`ap`(相对 net entity 根的路径)，客机解析镜像发射器并逐帧把克隆 `global_position` 贴过去（只锚位置、旋转仍自驱）。`PROTOCOL_VERSION` 保持 **v6**，两份 mod 副本同步。
+- **回归**：新增 `tests/coop_laser_anchor_checks.gd`（本地、不入库）；`tests/coop_visual_follow_checks.gd` 与 `tests/run_coop_difficulty_start_checks.py` 通过。发布时单独做 `chore(coop): 发布版本升至 0.1.15`（`MOD_VERSION` + `mod.json` + 版本文档），联机双方一起更新；不升版时新旧 0.1.14 握手无法区分。
+
 ## 0.1.14 联机难度面板开战修复（2026-10-24）
 
 - **现象**：联机选完人后卡在难度选择界面——房主点关卡不转场、不进关卡，客机停在「等待房主选择」；移动端反馈最集中（难度面板只有 ESC 取消、没有屏幕返回键，手机无法退出）。
