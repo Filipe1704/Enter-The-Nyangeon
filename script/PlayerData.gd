@@ -373,7 +373,7 @@ func _recompute_player_ability():
 	player.stats.bullet_kill_time = max(0.1, base_bullet_kill_time * bullet_kill_time_mult)
 	player.stats.bullet_shoot_time = clamp(base_bullet_shoot_time * bullet_shoot_time_mult, 1, max_bullet_shoot_time)
 	player.stats.bullet_speed = clamp((base_bullet_speed * bullet_speed_mult), 50, max_bullet_speed)
-	player.stats.bullet_damage = clamp(((max(1, base_bullet_damage + bullet_damage_add) * bullet_damage_mult * ability_mult)), 1, 999999)
+	player.stats.bullet_damage = clamp(((max(1, base_bullet_damage + bullet_damage_add) * bullet_damage_mult * ability_mult)), 1, 9999999)
 	player.stats.bullet_recoil = clamp(base_bullet_recoil * bullet_recoil_mult, 10, 9999)
 	player.stats.bullet_knockback = clamp(base_bullet_knockback * bullet_knockback_mult, 0, 9999)
 	player.stats.bullet_penetrate = clamp(base_bullet_penetrate + bullet_penetrate_add, 1, 9999)
