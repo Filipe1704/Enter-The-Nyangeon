@@ -53,7 +53,7 @@ func _process(_delta):
 			num = (self.global_position + Vector2(75,95)).distance_to(get_global_mouse_position())
 			if look_at > PI/2:
 				look_at = -(look_at - PI)
-			rotation = clamp(-0.08, look_at * 0.0005 * num , 0.08)
+			rotation = clamp(look_at * 0.0005 * num , -0.08, 0.08)
 			node_2d_2.rotation = -rotation
 		else:
 			rotation = 0

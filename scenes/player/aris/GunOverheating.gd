@@ -44,8 +44,8 @@ func return_to_zero():
 func get_player_shoot_time():
 	
 	player_shoot_time = max(1, PlayerData.base_bullet_shoot_time * PlayerData.bullet_shoot_time_mult)
-	player_recoil = clamp(10, PlayerData.base_bullet_recoil * PlayerData.bullet_recoil_mult, 9999)
-	player_bullet_damage = clamp(1, (max(1, PlayerData.base_bullet_damage + PlayerData.bullet_damage_add) * PlayerData.bullet_damage_mult), 99999)
+	player_recoil = clamp(PlayerData.base_bullet_recoil * PlayerData.bullet_recoil_mult, 10, 9999)
+	player_bullet_damage = clamp((max(1, PlayerData.base_bullet_damage + PlayerData.bullet_damage_add) * PlayerData.bullet_damage_mult), 1, 99999)
 	player_bullet_scale = max(0.1, PlayerData.base_bullet_scale * PlayerData.bullet_scale_mult )
 	player_stats_count()
 

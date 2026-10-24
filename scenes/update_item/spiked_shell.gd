@@ -48,7 +48,7 @@ func time_count():
 
 func damage_cd_count():
 	if player != null:
-		damage_cd = clamp(1,19 - 3 * speed / 50, 10)
+		damage_cd = clamp(19 - 3 * speed / 50, 1, 10)
 
 func apply_melee_damage_data():
 	hit_box.damage_data = DamageData.fill(hit_box.damage_data, {
