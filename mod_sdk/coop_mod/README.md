@@ -1,6 +1,13 @@
 # ETN Coop Mod（骨架）
 
-> 当前发布版本 **0.1.13**（以 `mods/etn_coop/mod.json` 为准），协议 **v6**；最低本体版本声明为 **v0.5.2.0**。运行时仍要求本体具备 `enemy_damage_calculating` 前置伤害接口，本体与 Mod 需配套更新；当前不整文件覆盖本体脚本。
+> 当前发布版本 **0.1.14**（以 `mods/etn_coop/mod.json` 为准），协议 **v6**；最低本体版本声明为 **v0.5.2.0**。运行时仍要求本体具备 `enemy_damage_calculating` 前置伤害接口，本体与 Mod 需配套更新；当前不整文件覆盖本体脚本。
+
+## 0.1.14 联机难度面板开战修复（2026-10-24）
+
+- **现象**：联机选完人后卡在难度选择界面——房主点关卡不转场、不进关卡，客机停在「等待房主选择」；移动端反馈最集中（难度面板只有 ESC 取消、没有屏幕返回键，手机无法退出）。
+- **根因**：`coop_difficulty.gd` 以自身作为 `level_select`，但未声明 `ui/level_button.gd:_on_timer_timeout` 会写的 `transition_started`；GDScript 对不存在属性的赋值是运行时错误并中断当前函数 → 转场与 `GameEvents.change_scene` 都不执行。
+- **修法**：补 `var transition_started: bool = false`（与 `ui/level_select.gd:17` 对齐）；两份 mod 副本同步。不涉及 RPC 契约，协议保持 **v6**；`MOD_VERSION` 0.1.13→0.1.14 仅作发布标记，旧 PCK 会因握手版本号不等被拒绝，联机双方需一起更新。
+- **回归**：`tests/run_coop_difficulty_start_checks.py`（从源码打包 PCK、隔离 user://、headless 走 `level_button → Timer → change_scene`；修复前 `checks=5 failures=2` 并复现 `ui/level_button.gd:151` 的 SCRIPT ERROR，修复后 `failures=0`）；单机难度页 `python tests/run_ui_ux_checks.py --godot <Godot路径> --level-focus-only` 37 项通过。
 
 ## 0.1.13 远端镰刀残留修复（2026-10-24）
 
@@ -9,8 +16,7 @@
 - **修法（mod）**：`CoopVisualSync.spawn_visual_effect` 同 eid 优先复用 `_by_effect_id` 中的同一克隆（失效/待删先剔除）；新增 `idle_effect(eid)`：隐藏但**保留** eid→节点映射，不写 `_ended_effect`；`_acquire_effect` 跳过被其它 eid 占用的节点。`coop_net._flush_follow_states` 对实现 `network_get_visual_state` 且 idle 的节点按 `FOLLOW_IDLE_RESYNC_MSEC=500` 节流广播 `{eid, h}`（首帧立即发、丢包重发自愈；光束仍走 reliable despawn），`_sanitize_follow_entry` 在坐标校验前分流 `h`，`_apply_remote_follow` 收到 `h` 调 `idle_effect`。
 - **修法（本体）**：`murky_hand_scythe_icon.network_apply_visual_state` 收到活跃状态时若处于 idle 则恢复 `is_idle=0`/`visible=true` 并吸附到目标位置，避免迟到的 idle 包把远端克隆永久隐藏。
 - **验证**：单元探针 `tests/coop_visual_follow_checks.gd`（复用/隐藏/恢复/消毒）；双进程 LAN `tests/run_coop_scythe_visual_checks.py`（隔离 user://）3 轮 idle/shoot 后远端克隆数恒为 1、同一实例复用、idle 隐藏/激活恢复；同一用例对旧 PCK 复现 `count=2→3→4`（确认回归能捕获原 bug）。
-- **难度面板开战修复（2026-10-24）**：`coop_difficulty.gd` 以自身作为 `level_select`，但未声明 `ui/level_button.gd:_on_timer_timeout` 会写的 `transition_started` → 该赋值是运行时错误并中断回调，房主点难度后不转场、不进关卡（联机选完人卡在难度界面，客机停在「等待房主选择」）。修法：补 `var transition_started: bool = false`（与 `ui/level_select.gd` 对齐）；协议与 `MOD_VERSION` 不变，只需重建 PCK。回归：`tests/run_coop_difficulty_start_checks.py`（从源码打包 PCK、隔离 user://、headless 走 `level_button → Timer → change_scene`；修复前 `checks=5 failures=2`，修复后 `failures=0`）。
-- **最低支持本体提升为 `v0.5.2.0`**（2026-10-24）：manifest `game_version` 由 `v0.5.1.4` 改为 `v0.5.2.0`；`-test` 后缀按数字段忽略，当前 `v0.5.2.0-test` 视为满足。仅清单声明变化，`MOD_VERSION` 仍 `0.1.13`、协议仍 `v6`，Mod 尚未正式发布。
+- **最低支持本体提升为 `v0.5.2.0`**（2026-10-24）：manifest `game_version` 由 `v0.5.1.4` 改为 `v0.5.2.0`；`-test` 后缀按数字段忽略，当前 `v0.5.2.0-test` 视为满足。仅清单声明变化，`MOD_VERSION` 当时仍 `0.1.13`、协议仍 `v6`；随后由 0.1.14（见上节）正式发布。
 
 ## 0.1.12 腐化同步（2026-10-20）
 
@@ -360,7 +366,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - **动态显示同步（2026-10-14）**：菜刀随远端瞄准旋转，世界原点也是合法目标；小小凯伊同步绕行/范围/朝向，救生衣、人形参、特制营养剂同步触发动画和护盾状态。视觉副本使用独立材质/动画库并过滤玩法轨道。
 - **菜刀转向平滑（2026-10-15）**：瞄准点与玩家位置共用快照插值时间，镜像准星、身体和武器统一使用采样目标，避免菜刀只在收包时跳动。无需增加发包频率或修改协议；回归在 60 FPS 连续扫动准星，检查远端刀刃的停帧比例、角度步长及对准误差。
 - **外观唯一性与重建**：按 peer + item_id 复用外观；动态快照可补建缺失副本，镜像重建后恢复缓存。现有房主迁移路径同时迁移道具缓存。
-- **兼容与道具回归**：协议 v6，双方需配套更新，Mod 发布版本为 `0.1.13`（最低本体 `v0.5.2.0`）。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 检查 LAN/Relay 双端道具显示及重复外观。
+- **兼容与道具回归**：协议 v6，双方需配套更新，Mod 发布版本为 `0.1.14`（最低本体 `v0.5.2.0`）。`python tests/run_coop_item_visual_checks.py --godot <Godot 路径>` 检查 LAN/Relay 双端道具显示及重复外观。
 - **持久身体**：`utaha_turret`（已由召唤同步覆盖）；`shiroko_drone`/`robotic_vacuum_cleaner` 经 `_hook_visual_roots` 检测后接入召唤通道（`PERSISTENT_BODY_SCENES` + `_register_persistent_body`），仅视觉镜像 + 变换同步。
 - **B 生成型**：`_hook_visual_roots` 扩到 `EquipLayer/FloorLayer`；`player_bullet_launcher` 跳过。
 
