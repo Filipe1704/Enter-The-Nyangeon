@@ -93,7 +93,6 @@ signal enemy_spawn
 
 signal shake_screen(length: int,shake_range: float,freq: float)
 
-signal transition_start
 
 signal ability_upgrade_added(upgrade: AbilityUpgrade, current_upgrade: Dictionary)
 signal on_refresh
@@ -604,8 +603,6 @@ func force_emit_round_end():
 func emit_fever_time_start():
 	fever_time_start.emit()
 
-func emit_transition_start():
-	transition_start.emit()
 
 func emit_spawn_start():
 	spawn_start.emit()

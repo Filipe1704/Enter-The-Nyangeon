@@ -25,17 +25,6 @@ func _apply_effect(quantity: int):
 		return
 	equip_mult += 0.8
 
-func bullet_damage_count():
-	var damage: int
-	var luck = randf_range(0, 100)
-	if luck < player.stats.critical_luck:
-		damage = max(1, round((player.stats.max_hp + player.stats.t_hp) * equip_mult * player.stats.global_damage * player.stats.equip_damage * player.stats.critical_damage))
-		is_critical = true
-	else:
-		damage = max(1, round((player.stats.max_hp + player.stats.t_hp) * equip_mult * player.stats.global_damage * player.stats.equip_damage))
-		is_critical = false
-	return damage
-
 func shoot_bullet(hit_position: Vector2):
 
 	ProjectileSpawner.spawn_core(
