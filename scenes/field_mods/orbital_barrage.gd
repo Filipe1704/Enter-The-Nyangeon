@@ -152,7 +152,7 @@ func _spawn_next_target() -> void:
 		"marker": marker,
 	})
 	strike_marker_spawned.emit(strike_id, point, warning_seconds)
-	SoundManager.play_sfx_throttled("LaserSounds3")
+	SoundManager.play_sfx_throttled("BlipSounds1")
 
 func _detonate_due_strikes() -> void:
 	var index := 0

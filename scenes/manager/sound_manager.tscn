@@ -40,6 +40,7 @@
 [ext_resource type="AudioStream" uid="uid://b314uj2v2b0of" path="res://sounds/voice/midori/Midori_Formation_In_2.ogg" id="27_xeds2"]
 [ext_resource type="AudioStream" uid="uid://bwcqhlgmlmqr4" path="res://sounds/voice/midori/Midori_Tactic_Victory_1.ogg" id="28_rdc76"]
 [ext_resource type="AudioStream" uid="uid://b3ldxe6o4vnbr" path="res://sounds/168707__qubodup__tank-firing.wav" id="28_vuuyk"]
+[ext_resource type="AudioStream" uid="uid://bhvq7amq0vimg" path="res://sounds/armor_break.wav" id="29_848ts"]
 [ext_resource type="AudioStream" uid="uid://bn4isyh7bq3hv" path="res://sounds/voice/midori/Midori_Tactic_Victory_2.ogg" id="29_pfdop"]
 [ext_resource type="AudioStream" uid="uid://b5iknhfth6kac" path="res://sounds/powerup03.wav" id="30_bgxan"]
 [ext_resource type="AudioStream" uid="uid://cdyo2vba83iw2" path="res://sounds/voice/midori/Midori_Tactic_Defeat_1.ogg" id="30_ki2kk"]
@@ -66,6 +67,7 @@
 [ext_resource type="AudioStream" uid="uid://mj51meuitlgv" path="res://sounds/voice/aris/Aris_Tactic_Defeat_1.ogg" id="41_rww5l"]
 [ext_resource type="AudioStream" uid="uid://bish4j6b1iobe" path="res://sounds/voice/aris/Aris_Tactic_Defeat_2.ogg" id="42_6qaaf"]
 [ext_resource type="AudioStream" uid="uid://6tn6kb2wqbf6" path="res://sounds/laser_beam.wav" id="42_xatox"]
+[ext_resource type="AudioStream" uid="uid://u65v2eehfhs5" path="res://sounds/blip.wav" id="43_j27j0"]
 [ext_resource type="AudioStream" uid="uid://dwhj454to6gek" path="res://sounds/voice/utaha/Utaha_Formation_In_1.ogg" id="46_n7abv"]
 [ext_resource type="AudioStream" uid="uid://bc262qn7s7whb" path="res://sounds/voice/utaha/Utaha_Formation_In_2.ogg" id="47_ncccv"]
 [ext_resource type="AudioStream" uid="uid://bchjeso7ejcc7" path="res://sounds/voice/utaha/CH0182_Tactic_Victory_1.ogg" id="48_m53uw"]
@@ -211,6 +213,7 @@
 [ext_resource type="AudioStream" uid="uid://7t6p4l4ppubr" path="res://sounds/voice/chinatsu/Chinatsu_Cafe_monolog_2.ogg" id="171_848ts"]
 [ext_resource type="AudioStream" uid="uid://dwywku5g3oll8" path="res://sounds/voice/chinatsu/CH0163_Tactic_Defeat_1.ogg" id="172_1lc1w"]
 [ext_resource type="AudioStream" uid="uid://dyfien3qmac4r" path="res://sounds/voice/chinatsu/CH0163_Tactic_Defeat_2.ogg" id="173_sans8"]
+[ext_resource type="AudioStream" uid="uid://4mqp0sj78r8c" path="res://sounds/corruption_spread_sounds.wav" id="174_corrsp"]
 
 [sub_resource type="Animation" id="Animation_4rqlr"]
 resource_name = "1s"
@@ -307,9 +310,7 @@ volume_db = 2.0
 bus = &"SFX"
 
 [node name="CorruptionSpawn" type="AudioStreamPlayer" parent="SFX" unique_id=227522940]
-stream = ExtResource("4_4kyom")
-volume_db = -10.0
-pitch_scale = 0.75
+stream = ExtResource("174_corrsp")
 bus = &"SFX"
 
 [node name="GunSounds3" type="AudioStreamPlayer" parent="SFX" unique_id=1670236268]
@@ -424,9 +425,7 @@ pitch_scale = 2.5
 bus = &"SFX"
 
 [node name="ArmorBreak" type="AudioStreamPlayer" parent="SFX" unique_id=751217686]
-stream = ExtResource("21_phc8b")
-volume_db = -6.0
-pitch_scale = 1.55
+stream = ExtResource("29_848ts")
 bus = &"SFX"
 
 [node name="CannonSounds1" type="AudioStreamPlayer" parent="SFX" unique_id=1145385167]
@@ -503,6 +502,11 @@ bus = &"SFX"
 
 [node name="EquipSounds8" type="AudioStreamPlayer" parent="SFX" unique_id=371931944]
 stream = ExtResource("42_xatox")
+volume_db = -4.0
+bus = &"SFX"
+
+[node name="BlipSounds1" type="AudioStreamPlayer" parent="SFX" unique_id=94675837]
+stream = ExtResource("43_j27j0")
 volume_db = -4.0
 bus = &"SFX"
 

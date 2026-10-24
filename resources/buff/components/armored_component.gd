@@ -102,7 +102,7 @@ func _update_visual(old_strength: float, new_strength: float) -> void:
 				_bar.play_break()
 			_spawn_break_effect()
 			if not Engine.is_editor_hint():
-				SoundManager.play_sfx_once(ARMOR_BREAK_SFX)
+				SoundManager.play_sfx(ARMOR_BREAK_SFX)
 		return
 	if _bar == null or not is_instance_valid(_bar):
 		return
