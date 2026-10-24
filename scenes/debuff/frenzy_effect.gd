@@ -108,7 +108,7 @@ func _process(_delta: float) -> void:
 	_refresh_fit()
 
 func _refresh_fit() -> void:
-	var bounds := _hurt_box_bounds(_target_body)
+	var bounds := HurtBoxMeasure.measure(_target_body, FALLBACK_DIAMETER)
 	var size: Vector2 = bounds["size"]
 	var center: Vector2 = bounds["center"]
 	position = center

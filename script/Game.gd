@@ -12,8 +12,6 @@ var _loading_playerdata := false
 
 var version_number: String = "v0.5.2.0-test"
 
-var size_x: float = 0
-var size_y: float = 0
 
 var on_full_screen: bool
 var shake_screen: bool
@@ -118,23 +116,6 @@ func _unhandled_input(event:InputEvent ) -> void:
 			control_mode = 2
 			game_mode_changed.emit()
 
-func _physics_process(_delta):
-	# 长发描边已改为在 screen_outline shader 内按设计分辨率计算，
-	# 不再需要每帧轮询窗口尺寸。需要时可再启用。
-	# get_window_size()
-	pass
-
-func get_window_size():
-	var v := DisplayServer.window_get_size().x
-	if size_x != v:
-		size_x = v
-		size_y = round(size_x * 0.5625)
-		if not OS.has_feature("mobile"):
-			DisplayServer.window_set_size(Vector2i(int(size_x), int(size_y)))
-		var n: float = size_x / 640
-		GameEvents.emit_screen_changed(n)
-	if not OS.has_feature("mobile") and DisplayServer.window_get_size().y != size_y:
-		DisplayServer.window_set_size(Vector2i(int(size_x), int(size_y)))
 
 func write_to_log(message: String):
 	# 1. 定义文件夹路径和文件路径
@@ -194,13 +175,6 @@ func load_all_records_as_json(file_path: String) -> Array:
 	file.close()
 	return records
 
-#func get_files_by_extension(folder_path: String, extension: String) -> Array:
-	#var files = []
-	#var dir = DirAccess.open(folder_path)
-	#
-	#if dir == null:
-		#print("无法打开文件夹: ", folder_path)
-		#return files
 	#
 	#dir.list_dir_begin()  # 开始遍历
 	#var file_name = dir.get_next()

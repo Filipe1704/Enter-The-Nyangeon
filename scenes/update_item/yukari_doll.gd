@@ -33,14 +33,7 @@ func _apply_effect(quantity: int):
 func spawn_doll():
 	if player == null:
 		return
-	var ins = yukari_doll_icon.instantiate()
-	for i in get_tree().get_nodes_in_group("Follow"):
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(ins)
-			ins.get_follow(i)
-			i.follow_use = true
-			doll = ins
-			break
+	doll = attach_follow_icon(yukari_doll_icon)
 
 func _on_player_hurt(_player: Node):
 	if cd_timer.time_left > 0:

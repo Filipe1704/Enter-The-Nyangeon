@@ -25,14 +25,14 @@
 ### 2.2 导入 → 生成 `.translation`
 - 内置 `csv_translation` importer：`.import` 中 `importer="csv_translation"`, `type="Translation"`, `dest_files` 每语言一个 `.translation`。
 - 参数：`compress=true`, `delimiter=0`(逗号), `unescape_keys=false`, `unescape_translations=true`。
-- 生成物 `<name>.<locale>.translation` 已提交，并在 `project.godot:208` 的 `locale/translations` 注册。
+- 生成物 `<name>.<locale>.translation` 已提交，并在 `project.godot:219` 的 `locale/translations` 注册。
 - ⚠️ 重导入会重写该 CSV **全部** locale 的 `.translation`。仅改部分语言列时，未改动 locale 也可能出现**无内容变化的字节抖动**（`OptimizedTranslation` 序列化差异，2026-10-13 实测 `en`/`vi_VN`）；提交前还原这些抖动，**只提交实义变化的 locale**。
 
 ### 2.3 代码/scene 引用方式
 - **无** 自动翻译键系统；`script/auto_text.gd` / `auto_text_box.gd` 是**字体自动适配**工具（调用 `atr(text)`），不是翻译器。
-- 机制：① `Label`/`Button` 文本直接设原始键，由 Godot 自动翻译（如 `ui/game_option.tscn` `text="option_full_screen"`）；② 显式 `tr(key)`（如 `ui/ark_of_Shittim/talk_text.gd:8`, `ui/ability_shop_item_card.gd:186-217`）。
+- 机制：① `Label`/`Button` 文本直接设原始键，由 Godot 自动翻译（如 `ui/game_option.tscn` `text="option_full_screen"`）；② 显式 `tr(key)`（如 `ui/ark_of_Shittim/talk_text.gd:8`, `ui/ability_shop_item_card.gd:153-175`）。
 - 卡片文本 key 由资源 `id` 派生：升级/道具卡 `<id>_name` / `_description` / `_forward` / `_negative`（`ui/ability_upgrade_card.gd:76-79`, `ui/test_item_card.gd:139`, `ui/upgrade_item_card.gd:18`）；敌人测试卡 `<id>_name` / `<id>_description`（`ui/test_enemy_card.gd:84`，敌人 id 见 `resources/enemy/*.tres`）。
-- 语言选择器：`ui/langue_button`（主菜单 / 暂停页共用）**数据驱动**——列表来自 `ModManager.get_languages()`（内置 4 种 + mod `ModAPI.register_language` 注册/覆盖），选中后 `TranslationServer.set_locale(...)` 并持久化 `Game.game_language`；启动时 `Game.gd:322` 应用，默认 `"zh_CN"`。mod 注册与字体映射见 `mod_sdk/README.md` §15。
+- 语言选择器：`ui/langue_button`（主菜单 / 暂停页共用）**数据驱动**——列表来自 `ModManager.get_languages()`（内置 4 种 + mod `ModAPI.register_language` 注册/覆盖），选中后 `TranslationServer.set_locale(...)` 并持久化 `Game.game_language`；启动时 `Game.gd:352` 应用，默认 `"zh_CN"`。mod 注册与字体映射见 `mod_sdk/README.md` §15。
 - 按语言换字体：`script/locale_font.gd` 按当前 locale 查 `_locale_fonts`（内置 `vi_VN` + mod `LocaleFont.register_locale_fonts`）：仅当文本是本地化键、或含注册 `glyph_ranges` 内且像素字缺失的字形时，才把「显示本地化文本」的控件换成替换字体；数字/符号/硬编码/CJK 保持像素字。
 
 ### 2.4 编辑规则（来自 `AGENTS.md`，务必遵守）
@@ -73,7 +73,7 @@ description = "测试buff"
 - 战斗内词条 HUD：默认只显示词条图标，不显示标题、名称和同场计数；计数通过 `debug_show_counts` 调试开启。`ChipHud` CanvasLayer 固定 `layer=1`（与 `RoundTimer` 同层），整体缩放 50%、透明度 0.7，位置贴近 `RoundTimer` 下方。
 - 通用护盾/范围特效：`scenes/debuff/shield_effect.tscn` 复用 tower 的 `ripple` 视觉；实例化后用 `fit_to_enemy(body)` 按**敌人本体** `HurtBox/HurtBoxShape2D` 形状最大边 ×`cover_ratio`（默认 1.1）自适应。取 `body.hurt_box_shape_2d` 或根路径 `HurtBox/HurtBoxShape2D`，**禁止 `find_child()` 递归查找**（会命中 `Graphics/Shield`、`WeakPart` 等子部件）；本体 HurtBox 缺失再回退 CollisionShape。坦克等 HurtBox 会旋转/移动的敌人由特效每帧跟随。不要直接改 `erosion_tower.tscn` 的 Boss 专用对齐。
 
-## 4. Physics layers / 物理层（`project.godot:210-230`）
+## 4. Physics layers / 物理层（`project.godot:221-241`）
 
 layer N = bit `1<<(N-1)`：
 
@@ -91,17 +91,17 @@ layer N = bit `1<<(N-1)`：
 | 10 | `summoned` | | |
 
 - 检测靠 layer↔mask 交叉：敌 hurtbox（layer 15，mask 18/16）← 玩家子弹/近战；玩家 hurtbox（layer 12，mask 11/8/4）← 敌子弹/接触。
-- 代码示例：layer 17 `enemy_hitbox` → `131072`（`scenes/bullet/enemy_bullet.gd:112`）；layer 15 `enemy_hurtbox` → `16384`；layer 4 `enemy` → `8`（`hurt_box.gd:54`）。
+- 代码示例：layer 17 `enemy_hitbox` → `131072`（`scenes/bullet/enemy_bullet.gd:116`）；layer 15 `enemy_hurtbox` → `16384`；layer 4 `enemy` → `8`（`hurt_box.gd:20`）。
 - `HurtBox._ready` 会 `collision_mask |= 8`（layer 4）以便接触检测。
 
-## 5. Input actions / 输入动作（`project.godot:62-200`）
+## 5. Input actions / 输入动作（`project.godot:73-211`）
 
 共 23 个：`ui_accept/cancel/left/right/up/down`、`move_left/right/up/down`(A/D/W/S + 左摇杆, deadzone 0.2)、`move_jump`(Space + 手柄 A/Axis4)、`shoot`(左键 + A)、`use`(E + Y)、`reload`(R + X)、`pause`(Esc + Select/Start)、`EX_skill`(F + 右摇杆按下)、`kick`(右键 + button9)、`fire`(左键 + Axis5)、`cheat_menu`(`` ` ``)、`aim_left/right/up/down`(右摇杆 Axis2/3, deadzone 0.2)。
 
 - 主菜单文字按钮：鼠标实际移动到按钮时转移键盘焦点，高亮只跟随焦点，Enter 确认同一项。键盘切换后静止鼠标不维持另一项高亮；离开按钮保留当前焦点，直到下一次有效导航或页面禁用。上下键按可见菜单顺序导航（包含 MOD 入口），首项上键及末项下键停留，菜单启用时统一覆盖共用场景遗留的固定邻居。
 - 主菜单选角页：`ui_up/ui_down` 切换社团（首尾循环），`ui_left/ui_right` 按显式邻居移动角色焦点（边界停留），`ui_accept` 确认角色，`pause` 返回。本体角色有已解锁形态时，Tab 进入形态按钮、Enter 切换后焦点返回角色卡。社团切换复用已有动作，因此键盘方向键与手柄十字键均可使用；按键重复事件不连续切换社团。
 - 角色卡的鼠标预览与键盘确认共用角色焦点：实际鼠标移动进入另一张卡才转移焦点；静止指针及零位移事件不抢回键盘选择。形态按钮焦点计入所属角色，稳定显示时只展开当前角色的说明。
-- 难度页默认聚焦 NORMAL；Tab / Shift+Tab 按「支援 → 难度 → 模式 → 返回」循环切换区域，并记住区域内的上次位置。支援主卡 Enter 展开，↑↓ 浏览、Enter 应用并收起；Esc 优先收起支援列表，再次按返回选角。难度 ↑↓ 选择、Enter 开始；模式 ←→ 选择、Enter / Space 开关，纵向方向键按网格列数移动，互斥关系沿用资源配置（闪击和无尽可同时开启）。返回按钮 Enter 返回选角并恢复角色焦点；确认难度后锁定辅助选项，Esc 仍可取消待启动计时。支援列表随焦点滚动，焦点用白色边框表示，与模式开启填色分开（`ui/level_select.gd:_input/_bind_focus_controls`）。支援详情浮层在难度页与测试房启用（`ui/level_select.tscn:627`、`ui/character_test_menu.tscn:384` 的 `details_enabled`；支援商店不启用），复用统一悬浮提示（§5.1）：鼠标悬停 0.2 秒后出现并跟随指针（切换卡片不重新等待，靠近边缘翻到指针另一侧），键盘/手柄聚焦时在卡片旁立即显示，限制在视口内且不拦截鼠标；触屏不显示（关闭 `emulate_mouse_from_touch` 后点按即选中，浮层会闪现）。
+- 难度页默认聚焦 NORMAL；Tab / Shift+Tab 按「支援 → 难度 → 模式 → 返回」循环切换区域，并记住区域内的上次位置。支援主卡 Enter 展开，↑↓ 浏览、Enter 应用并收起；Esc 优先收起支援列表，再次按返回选角。难度 ↑↓ 选择、Enter 开始；模式 ←→ 选择、Enter / Space 开关，纵向方向键按网格列数移动，互斥关系沿用资源配置（闪击和无尽可同时开启）。返回按钮 Enter 返回选角并恢复角色焦点；确认难度后锁定辅助选项，Esc 仍可取消待启动计时。支援列表随焦点滚动，焦点用白色边框表示，与模式开启填色分开（`ui/level_select.gd:_input/_bind_focus_controls`）。支援详情浮层在难度页与测试房启用（`ui/level_select.tscn:638`、`ui/character_test_menu.tscn:384` 的 `details_enabled`；支援商店不启用），复用统一悬浮提示（§5.1）：鼠标悬停 0.2 秒后出现并跟随指针（切换卡片不重新等待，靠近边缘翻到指针另一侧），键盘/手柄聚焦时在卡片旁立即显示，限制在视口内且不拦截鼠标；触屏不显示（关闭 `emulate_mouse_from_touch` 后点按即选中，浮层会闪现）。
 
 ### 5.1 Hover tooltips / 悬浮提示浮层
 
@@ -115,7 +115,7 @@ layer N = bit `1<<(N-1)`：
 
 ## 6. Rendering & misc / 渲染与杂项
 
-- `default_texture_filter=3`, `viewport/hdr_2d=true`, shader cache disabled（`project.godot:236-243`）。
+- `default_texture_filter=3`（`project.godot:249`）、`viewport/hdr_2d=true`（`project.godot:252`）；旧记录的 shader cache disabled 项已不在 `project.godot` 中。
 - 全局 UI 主题 `res://fonts/theme.tres`，`default_font_antialiasing=0`。
 - 玩家血条上的腐化段固定为紫色 `#8C36EB`（`ui/game_ui.tscn` 的 `Corruption_HP_BAR`，`fill_mode=1` 从右向左），数值 `CORRUPTION_VAL` 用同色系 `#A24FFF`；不要复用临时生命的青色。**本地 HUD 中临时生命条绘制在腐化条之上**（2026-10-20 用户裁定：`Corruption_HP_BAR` 设 `show_behind_parent=true` 并排在 `Temporary_HP_BAR2` 之前；腐化数值仍以 `-N` 为准）。联机队友头顶 44×4 小血条暂不调整。
 - GAME 设置项标签统一右对齐，列宽 126、控件间距 8；分组标题左对齐并在高 18 的 Header 内垂直居中。滑条数值槽统一为 96×22、右对齐并启用 `clip_text`，防止长文本撑宽 HBox；新增翻译须检查最长数值文案。见 `ui/game_option.tscn` 的 Header、行 Label 和数值 Label。
@@ -131,15 +131,7 @@ layer N = bit `1<<(N-1)`：
 
 ### 6.1 Android launcher icons / Android 启动器图标
 
-- `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
-- `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
-- 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
-- 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成。SUPERSEDED: 2026-10-14 用户要求忽略所有 `.import`，不再随源资源提交；`.gitignore` 的本地改动也不提交。新文件用 `.git/info/exclude` 忽略，已跟踪文件用本地 `skip-worktree` 跳过，保留磁盘内容与既有跟踪关系。
-- 验证记录（2026-10-13）：Godot 4.7 隔离项目使用本体 Android 预设完成 debug APK 导出；包内五档密度图标尺寸正确，自适应 XML 包含 `background` / `foreground` / `monochrome`，前景最远像素距中心约 127.47 px，小于安全半径 132 px。已检查圆形、圆角方形和明暗主题预览，尚未真机验证。规范参考：[Godot 启动器图标说明](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html#providing-launcher-icons)。
-
-### 6.1 Android launcher icons / Android 启动器图标
-
-- `export_presets.cfg:137` 至 `:140` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
+- `export_presets.cfg:133` 至 `:136` 显式配置四种图标，资源放在 `android/icons/`，不要放入被忽略、可重新生成的 `android/build/`。
 - `launcher_main.svg` 为 192×192 的传统图标；`launcher_foreground.svg`、`launcher_background.svg`、`launcher_monochrome.svg` 均为 432×432。SVG 用矩形路径复刻 `ui/game_icon.png` 的像素猫，保持原配色；背景为不透明 `#28303e`，前景保留透明留白，不预裁圆角或圆形。
 - 自适应前景与单色层共用 `translate(108 105) scale(6)`，主体范围为 `(108,129)` 至 `(324,303)`，完整落在中心 `(216,216)`、半径 132 的安全圆内；安全区是**圆形**，不能只检查 264×264 的外接正方形。调整造型时同步修改彩色及单色层。
 - 单色层仅以白色和透明度表达猫头，眼睛挖空，由 Android 13+ 启动器着色。`.svg.import` 由 Godot 生成。SUPERSEDED: 2026-10-14 用户要求忽略所有 `.import`，不再随源资源提交；`.gitignore` 的本地改动也不提交。新文件用 `.git/info/exclude` 忽略，已跟踪文件用本地 `skip-worktree` 跳过，保留磁盘内容与既有跟踪关系。

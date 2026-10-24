@@ -329,5 +329,4 @@ func _clear_active_strikes() -> void:
 			marker.queue_free()
 	_active_strikes.clear()
 
-func _clear_markers() -> void:
-	_clear_active_strikes()
+

@@ -190,7 +190,7 @@ func add_collision_bullet(_end_point: Vector2):
 
 func count_bullet_speed():
 	hit_box.damage_data = damage_data
-	animation_player.speed_scale = clamp(0.1, 0.001 * speed, 1)
+	animation_player.speed_scale = clamp(0.001 * speed, 0.1, 1)
 	animation_player.play("shoot")
 
 func _on_area_2d_body_entered(body):

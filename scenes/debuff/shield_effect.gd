@@ -26,7 +26,7 @@ func _process(_delta: float) -> void:
 	_refresh_fit()
 
 func _refresh_fit() -> void:
-	var bounds := _hurt_box_bounds(_target_body)
+	var bounds := HurtBoxMeasure.measure(_target_body, fallback_diameter)
 	var diameter := maxf(maxf(bounds["size"].x, bounds["size"].y), fallback_diameter) * cover_ratio
 	position = bounds["center"]
 	scale = Vector2.ONE * (diameter / maxf(base_visual_diameter, 1.0))

@@ -3305,6 +3305,37 @@
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-24
 
+### [UI] 立绘卡片离树只释放引用，隐藏才清空纹理
+- Evidence / 证据: `script/lazy_texture_binding.gd:8-32`、`ui/player_card.gd:173-185`、`tests/refactor_reuse_checks.gd:_check_cards`（本地测试不提交）。
+- Notes / 说明: 三类卡片重构前离开场景树时释放 LazyTexture 引用，但仍保留显示节点的 texture；共用绑定需保持此区别。owner.tree_exiting 仅释放并清空路径记录，clear 才同时置空纹理；重新入树后 reveal 会重新 acquire，不把仍有 texture 误当成已持有缓存引用。四类真实卡片（含继承的 mod_player_card）已验证离树/重新入树与共享引用平衡，结果见 REFACTOR_REUSE.md。
+- Source / 来源: test
+- Date / 日期: 2026-10-20
+
+### [Upgrade] 纯属性重复扫描须忽略说明注释，按函数体核对
+- Evidence / 证据: `scenes/update_item/samuela_the_beyond.gd:1-7`；`tests/run_refactor_reuse_checks.py:effect_lines/repeated_effect/verify_item_diff`（本地测试不提交）。
+- Notes / 说明: 初轮依赖完整文件模板，漏掉了 extends 与函数之间带说明注释的 samuela_the_beyond；该脚本并无特殊首次效果。复查已补齐，合计 35 个道具。识别相同首次/叠加效果时须按函数体剔除空行/说明注释，再核对属性表达式、顺序与 quantity=1 守卫；不能因脚本头部注释而排除候选，也不能去重首次/后续不同的 s_bullet。当前守卫仅针对同型常量属性赋值，不代表所有复杂道具均可机械重构。
+- Source / 来源: code
+- Date / 日期: 2026-10-20
+
+### [Shop] 确认动画之后才读触屏余额，解锁通知之前不扣款
+- Evidence / 证据: `ui/shop_purchase_card.gd:57-89`、`ui/character_shop_card.gd:add_character`、`ui/item_shop_card.gd:add_item`、`script/PlayerData.gd:13-20`；本地 `tests/shop_purchase_flow_checks.gd` 追踪（不提交）。
+- Notes / 说明: 触屏 yes 先等待选中动画，随后才判断余额与价格；shoot/鼠标立即判断。共用流程须先调用商品解锁（角色/社团各按需存档并发 check_data；服装按分组存档），再重读当前价格扣款。货币 setter 的 pyroxenes_changed 又早于其存档，所以通知中读到的主档可能仍是扣款前值。把存档合成一次、提前缓存价格或统一触屏/鼠标的等待点都会改变可观察行为；本次只提取流程，没有改变这些契约。
+- Source / 来源: code
+- Date / 日期: 2026-10-20
+
+### [DOT] 火与毒扩散共享生命周期，但不能统一计时与选敌时机
+- Evidence / 证据: `scenes/debuff/fire_diffuse.tscn:23-25`、`poison_diffuse.tscn:22-23`、`script/dot_diffuse.gd:18-57`、`scenes/debuff/poison_diffuse.gd:6-41`；本地 `tests/diffuse_lifecycle_checks.gd`（不提交）。
+- Notes / 说明: 火 Timer 为单次、毒 Timer 为重复模式；共同超时回调只先置 add_end=true、结算、关闭探测，不停 Timer 或清目标。毒仅在集合进出时排序，结算前不会因目标移动重新排序；已有 poison_diffuse 标签不覆盖。集合在进入结算时非空、剔除后全无效，或毒 enemy_num=0，仍生成扩散飘字。上述差异已用原版基线与真实物理/Timer 对照确认，提取共用逻辑时不可顺手统一或提前短路。
+- Source / 来源: code + test
+- Date / 日期: 2026-10-20
+
+### [Upgrade] 旧抽取入口无仓库内调用，但“备用”抽样方法与标签上下文仍须保留
+- Evidence / 证据: 基线 `1e84934` 的 `scenes/manager/upgrade_manager.gd:73-126,142-150,199-231,259-287,300-306`、`ui/UpgradeScreen.gd:201-214`、`script/mod_api.gd:60-61`；2026-10-20 对本体、SDK、官方 coop 与文本场景/资源进行静态引用扫描。
+- Notes / 说明: 当前选卡走 add_upgrade_card→get_triple_choice→get_random_options→get_random_item_from_pool，get_random_options 虽标“备用”仍是正式路径。pick_upgrades 未发现仓库内调用；tag_sort 仅被该旧入口调用，tag_count 的调用已注释。round_bouns 与 tag_1/2/3 的读取仅属旧算法，可作为后续清理候选；但 round_bouns_upgrade 仍负责回合权重等现用流程，不能随字段一并删除。tags_group 仍由 get_current_context 以 player_tags 键输出，即使当前本体没有活跃写入，也应保留字段与上下文形状。本轮仅核实，未删除代码；外部已打包或以动态拼接方法名调用的 Mod 兼容性无法由此静态扫描保证。
+- Source / 来源: code
+- Date / 日期: 2026-10-20
+- Follow-up / 后续（2026-10-20，来源：code + test）：用户授权清理后已删除上述三个旧方法、四个字段、旧增量及注释调用，现用方法与 tags_group 保留；此前“仅核实、未删除”描述属于核实阶段。固定 5 种子的 50 场景、966 项断言、520 条当前行为追踪与改前一致，现用 14 个方法的可执行内容仅减少旧字段增量；详见 `docs/UPGRADE_LEGACY_CLEANUP.md`。仓库外 Mod 直接调用旧方法的兼容风险仍存在。
+
 ### [UI] 难度页入场窗口内展开的预览会被父级忽略，按钮动画永久卡在展开态
 - Evidence / 证据: `ui/level_select.tscn:410-435`（`select_in` 在 t=0.2 的 method track 调 `emit_player_selected`）；`ui/level_button.gd:26-27,61-87`（`player_selected→open_mouse` 启用鼠标/焦点、`mouse_entered/focus_entered→mouse_in→open_preview`、新增 `_preview_allowed` 门控）；`ui/level_select.gd:306-324`（`animation_finished` 后再等一个 `process_frame` 才置 `_keyboard_ready=true`）、`:222-234`（未就绪时 `previewed` 被忽略/收起）；入场窗口内调用 `open_preview()` → `_preview_open=true` 且 `_open_level_button=null`，之后不再被收起。
 - Notes / 说明: **现象**（user）：进入难度选择时，鼠标在难度框内来回移动，有概率某个按钮的动画一直保持展开。**根因**：动画 method track 先启用按钮的鼠标/焦点，`_keyboard_ready` 晚一帧；窗口内 hover 展开后 `previewed` 被父级忽略且不记录 `_open_level_button`，该按钮 `_preview_open` 永久为 true → 后续 `open_preview()` 全部早退、父级也只会关闭“被记录的那一个”。若入场时鼠标停在非第一个难度上，ready 后第一个难度又展开，便会同时出现两个展开且其中一个卡死。**修法**：`level_button.mouse_in/open_preview` 经可选 `is_preview_ready()` 门控（`level_select` 返回 `_keyboard_ready and not _selection_pending`；`coop_difficulty` 无该方法、行为不变），父级在忽略路径主动 `close_preview()` 兜底。**通用教训**：① 「按钮先播动画、再通知父级」的预览模式必须让父级能在通知时拒绝并回滚本地状态；② 动画 method track 启用输入与逻辑就绪标志分属两帧时，门控应画在按钮侧或延后启用，不能只靠父级忽略信号；③ 卡死类 UI 问题优先核对「按钮本地状态」与「父级记录」是否会失配。
@@ -3315,4 +3346,23 @@
 - Evidence / 证据: `ui/round_timer.gd`（`play_fever_anim()` / `play_boss_intruder_anim()` / `_play_banner(text)`）、`ui/round_timer.tscn:399-435`（`FeverTime` 节点与 `fever_time`/`fever_anim` 动画）
 - Notes / 说明: `!! BOSS RAID !!` 与 `>> FEVER TIME >>` 共用同一个 `$FeverTime/Label` 和两段动画；只在乱入时改文本会让下一次 FEVER 继续显示 RAID 文本。当前两条触发在时间上互斥（乱入为回合开始后 10–25s；FEVER 在普通计时归零或 Boss 超时），但新增任何复用该横幅的触发都必须走 `_play_banner(text)`，并在各自的播放入口显式给文本。
 - Source / 来源: code
+- Date / 日期: 2026-10-24
+
+### [PlayerData] `_recompute_player_ability` 的 clamp 参数全部颠倒，属性上限是死参数；满弧公式含整数除法
+- Evidence / 证据: `script/PlayerData.gd:354,359,362,370,374-376,378,379,386`（`clamp(下界常量, 计算值, 上界)`，如 `:354` `clamp(0, ...critical_luck..., 101)`、`:359` `clamp(50, ...MAX_SPEED..., MAX_SPEED_value)`、`:362` max_hp 上界 99999）；`:384` `360 * (1 - 1/player.stats.bullet_count)`，`script/Stats.gd:61` `bullet_count: int`。
+- Notes / 说明: GDScript `clamp(value, min, max)`，这里 value 位放的是常量下界，实际语义为 `max(下界, 计算值)`——下界碰巧生效、**上界全部不生效**：暴击率可超 101（>100 即必暴）、速度/HP/弹药/弹速/伤害的 9999/99999 级上限均可被乘区突破且不可逆。满弧分支 `1/bullet_count` 是 int/int 整除，count≥2 恒得 0 → 弧度恒 360（本意 360*(1-1/count) 避免首尾重叠），单弹 arc=0、多弹全圆。修复需逐条改回 `clamp(计算值, 下界, 上界)` 与 `1.0/count`，并核对各上限的既有实际表现（改动会改变数值行为，须跑数值回归）。
+- Source / 来源: code
+- Date / 日期: 2026-10-24
+- Follow-up / 后续（2026-10-24，来源：code）：当日已按上述结论修复——`_recompute_player_ability` 内 11 处 clamp 改回 `clamp(计算值, 下界, 上界)`、满弧公式改 `1.0/count`；另全局排查并修复 7 处同型误用（`EnemyStats.gd:168`、`mashiro_sniper_bullet.gd:193`、`tester_automaton_shield.gd:130`、`GunOverheating.gd:47-48`、`spiked_shell.gd:51`、`ability_upgrade_card.gd:56`）。上限参数首次真正生效，属性数值行为会变化（超上限不再穿透）。
+
+### [GDScript] 基类调用子类方法必须声明桩，否则整个 class_name 注册链编译失败
+- Evidence / 证据: `ui/ability_shop_card_base.gd:_attempt_purchase` 调 `item_upgrade()` 时基类未声明，报 `Function "item_upgrade()" not found in base self`，连带两个子类 `Could not resolve class "AbilityShopCardBase"`；同仓库既有模式 `ui/shop_purchase_card.gd`（基类声明 `_get_purchase_cost`/`_grant_purchase`）、`script/fire_field_base.gd`（钩子 `_field_lifetime` 等均带默认实现）。
+- Notes / 说明: GDScript 2 对基类内直接调用未声明方法是**硬编译错误**（不是 warning），且基类编译失败会让 class_name 无法注册、所有按类名引用的脚本连锁失败。基类模板方法（Templated Hook）必须显式声明空桩或默认实现；探针脚本 `--script` 模式 `load()` 全部相关脚本是验证这类继承链的最小手段（`--check-only --script` 不注册 autoload，不可用）。
+- Source / 来源: code
+- Date / 日期: 2026-10-24
+
+### [Pickup] `coin.can_pick` 不随 `idle_state()` 重置：parabola 飞行态污染金币池，复用币 `pick_up=true` 却永不归位
+- Evidence / 证据: `scenes/item/parabola_path.gd:50`（`drop()` 取池时置 `body.can_pick = false`，落地 `:83` 才恢复）；`scenes/item/coin.gd` `idle_state()`（重置 `pick_up/target/ignore_*` 但**不重置 `can_pick`**）；`scenes/manager/coin_manager.gd` `_activate()`（复用池内金币时不设 `can_pick`）。实测（SceneTree 探针 + 真实场景）：sonic 掉币 → 拾取回池（`can_pick` 残留 false）→ `CoinManager.drop_coin` 复用该币 → PickBox `area_entered` 置 `pick_up=true`，但 `coin._physics_process` 要求 `pick_up && can_pick` 同真 → 金币永久躺在原地，玩家走近/站上去都无反应，币值不入账。
+- Notes / 说明: **现象**（user）：单机启用 sonic 词条后，获得大量金币时受伤，掉落的金币部分无法捡起；用 Trainer 把拾取范围 ×10 后成堆卡死币在玩家眼皮底下可见（PickBox 在币重新激活时补发 `area_entered` 置 `pick_up=true`，卡死状态更显眼）。**根因**：`can_pick` 的生命周期只由 `parabola_path.drop()` 维护，回池时残留 `false`；`coins` 池被 parabola（sonic/coin_box）与 `CoinManager` 双方共用，后者假设池内金币 `can_pick=true`（首次生命周期成立、复用后不成立）。**修法**：① `coin.gd idle_state()` 重置 `can_pick = false`（回池即失能，状态显式化）；② `coin_manager.gd _activate()` 显式置 `can_pick = true`（地面投放立即可拾取）；`parabola_path.drop()` 本就显式写 false/true，不受影响。**通用教训**：双消费方共用的对象池，激活路径必须显式设置**全部**门控状态，不能依赖「上一次使用者恰好留对了值」；`idle_state()` 的重置清单与 `drop()/active_state()` 的写入清单要对齐审计（本例 `pick_up/target/ignore_*/add_end` 都有对齐，唯独漏 `can_pick`）。
+- Source / 来源: code + test
 - Date / 日期: 2026-10-24

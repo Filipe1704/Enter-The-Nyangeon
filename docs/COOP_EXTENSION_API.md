@@ -7,6 +7,7 @@
 - `mod_sdk/coop_mod/mods/etn_coop/net/coop_extensions.gd` 管理提供者注册、准备结果与生命周期，接口版本为 1。
 - `coop_net.gd` 持有注册表，继续负责 ENet、版本握手、准备房、玩法同步、断线重连与退出；拓展仅交付连接端点，不接管玩法 RPC。
 - `ui/coop_menu.gd` 按页面描述创建页签、登记交互控件并维护状态栏。没有提供者时，LAN / Relay / OPTION 保持原流程。
+- 以下未写明前缀的路径（如 `coop_net.gd`、`ui/coop_menu.gd`）均相对 `mod_sdk/coop_mod/mods/etn_coop/`。
 
 ## Provider Contract / 提供者契约
 

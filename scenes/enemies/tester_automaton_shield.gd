@@ -127,7 +127,7 @@ func head_look_player():
 			head_look = -PI - head_look
 		elif head_look > PI/2:
 			head_look = PI - head_look
-		head.rotation = clamp(-0.44,head_look,0.52)
+		head.rotation = clamp(head_look,-0.44,0.52)
 
 func face_to_player():
 	var t := get_target()

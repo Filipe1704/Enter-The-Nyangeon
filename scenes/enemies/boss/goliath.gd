@@ -326,7 +326,6 @@ func time_count():
 
 func tick_physics(state: State, delta: float) -> void:
 	ACCELERATION = stats.move_acceleration()
-	#graphics.speed_scale = (velocity.x * velocity.x + velocity.y * velocity.y) / 6400
 	apply_soft_collision()
 	
 	match state:

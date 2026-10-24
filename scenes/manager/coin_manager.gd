@@ -100,6 +100,9 @@ func _activate(c: Node, pos: Vector2, value: int, pick_up: bool) -> void:
 	c.global_position = pos
 	c.coin = value
 	c.pick_up = pick_up
+	# 池里的金币可能带着 parabola_path 飞行期残留的 can_pick=false（idle_state 不曾重置），
+	# 地面投放必须显式置真，否则 PickBox 置 pick_up 后金币仍无法归位拾取。
+	c.can_pick = true
 	c.active_state()
 
 func _nearest_active(pos: Vector2, require_pickable: bool) -> Node:

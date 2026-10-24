@@ -41,30 +41,9 @@ func _ready():
 	first_position = self.global_position
 	GameEvents.test_room_reset.connect(reset_position)
 
-#func idle_state():
-	#is_idle = 1
-	#if GameEvents.global_time_count.is_connected(time_count):
-		#GameEvents.global_time_count.disconnect(time_count)
-	#get_next_state(State.IDLE)
-	#enemy_body.clear()
-	#self.visible = false
-	#self.global_position = Vector2.ZERO
-	#collision_shape_2d.disabled = true
-	#hurt_box_shape_2d.disabled = true
-	#enemy_buff_manager.clear_all_buff()
-	#set_physics_process(false)
-
 func active_state():
 	reset_physics_interpolation()
 	super.active_state()
-	#is_idle = 0
-	#if !GameEvents.global_time_count.is_connected(time_count):
-		#GameEvents.global_time_count.connect(time_count)
-	#stats.spawn_hp()
-	#self.visible = true
-	#collision_shape_2d.disabled = false
-	#hurt_box_shape_2d.disabled = false
-	#set_physics_process(true)
 	hp_bar_update()
 
 func reset_position():

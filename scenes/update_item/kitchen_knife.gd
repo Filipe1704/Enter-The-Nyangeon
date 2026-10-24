@@ -48,8 +48,6 @@ func roation_damage_count():
 
 func _on_equip():
 	player = get_tree().get_first_node_in_group("Player")
-	equip_damage = 45
-	hp_mult = 0.1
 
 func _setup():
 	hit_box.area_entered.connect(_on_hit_box_area_entered)

@@ -165,7 +165,7 @@ func _compute_knockback_resis() -> int:
 	return DamageRouter.apply_knockback_resist(raw)
 
 func update_body_ability():
-	max_hp = clamp(1, base_max_hp * max_hp_mult, 9223372036854775807)
+	max_hp = clamp(base_max_hp * max_hp_mult, 1, 9223372036854775807)
 	knockback_resis = _compute_knockback_resis()
 	penetrate_resis = base_penetrate_resis + penetrate_resis_add
 	hurt_resis = base_hurt_resis + hurt_resis_add

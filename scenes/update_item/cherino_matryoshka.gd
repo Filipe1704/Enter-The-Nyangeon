@@ -5,17 +5,10 @@ extends EquipItem
 @onready var range_explosion_anim = $RangeExplosion
 
 var explosion_num: int = 0
-var group: Array = []
 
 func _on_equip():
 	player = get_tree().get_first_node_in_group("Player")
-	var sprite_2d = cherino_matryoshka_icon.instantiate()
-	group = get_tree().get_nodes_in_group("Follow")
-	for i in group:
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(sprite_2d)
-			sprite_2d.get_follow(i)
-			i.follow_use = true
+	attach_follow_icon(cherino_matryoshka_icon)
 
 func _setup():
 	GameEvents.explosion_damage.connect(explosion_count)

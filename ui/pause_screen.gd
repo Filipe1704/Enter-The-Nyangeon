@@ -86,11 +86,7 @@ func _input(event: InputEvent) -> void:
 				option_menu.out_option_selected()
 		else:
 			SoundManager.play_sfx("UISounds2")
-			SoundManager.set_bgm_base_db(linear_to_db(1))
-			Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
-			hide()
-			button_close()
-			get_window().set_input_as_handled()
+			_pause_close()
 
 func hide_pause_screen():
 	if self.visible == true:
@@ -113,11 +109,7 @@ func auto_text():
 func game_over_no_pause(_player_dead: bool):
 	can_pause = false
 	if self.visible == true:
-		SoundManager.set_bgm_base_db(linear_to_db(1))
-		Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
-		hide()
-		button_close()
-		get_window().set_input_as_handled()
+		_pause_close()
 
 func is_can_pause():
 	can_pause = true
@@ -315,65 +307,37 @@ func yes_mouse_out():
 
 func yes_mouse_selected(event: InputEvent):
 	if event as InputEventScreenTouch and event.pressed and on_quit_yes == false:
-		if PlayerData.on_test_room == true:
-			quit_button_close()
-			on_quit_yes = true
-			SoundManager.play_sfx("ButtonSounds")
-			SoundManager.bgm_fade_out()
-			Transition.play_left_start()
-			await Transition.left_end_start
-			get_tree().paused = false
-			GameEvents.change_scene(path,"")
-		else:
-			if PlayerData.on_endless == false:
-				SoundManager.play_sfx("UISounds2")
-				SoundManager.set_bgm_base_db(linear_to_db(1))
-				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
-				hide()
-				button_close()
-				get_window().set_input_as_handled()
-				var player_dead = true
-				GameEvents.emit_game_over(player_dead)
-			else:
-				SoundManager.play_sfx("UISounds2")
-				SoundManager.set_bgm_base_db(linear_to_db(1))
-				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
-				hide()
-				button_close()
-				get_window().set_input_as_handled()
-				var player_dead = false
-				GameEvents.emit_game_over(player_dead)
-	
+		_confirm_quit()
+
 	if event.is_action_pressed("shoot") and on_quit_yes == false:
-		if PlayerData.on_test_room == true:
-			quit_button_close()
-			on_quit_yes = true
-			SoundManager.play_sfx("ButtonSounds")
-			SoundManager.bgm_fade_out()
-			Transition.play_left_start()
-			await Transition.left_end_start
-			get_tree().paused = false
-			GameEvents.change_scene(path,"")
-		else:
-			if PlayerData.on_endless == false:
-				
-				SoundManager.play_sfx("UISounds2")
-				SoundManager.set_bgm_base_db(linear_to_db(1))
-				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
-				hide()
-				button_close()
-				get_window().set_input_as_handled()
-				var player_dead = true
-				GameEvents.emit_game_over(player_dead)
-			else:
-				SoundManager.play_sfx("UISounds2")
-				SoundManager.set_bgm_base_db(linear_to_db(1))
-				Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
-				hide()
-				button_close()
-				get_window().set_input_as_handled()
-				var player_dead = false
-				GameEvents.emit_game_over(player_dead)
+		_confirm_quit()
+
+# 关闭暂停菜单并复位 BGM/鼠标（hide_pause_screen 因升级页鼠标归属不同而不走此处）
+func _pause_close():
+	SoundManager.set_bgm_base_db(linear_to_db(1))
+	Input.mouse_mode = Input.MOUSE_MODE_CONFINED_HIDDEN
+	hide()
+	button_close()
+	get_window().set_input_as_handled()
+
+# 退出确认（触屏/shoot 共用）：测试房直接回菜单，否则按模式结束本局
+func _confirm_quit():
+	if PlayerData.on_test_room == true:
+		quit_button_close()
+		on_quit_yes = true
+		SoundManager.play_sfx("ButtonSounds")
+		SoundManager.bgm_fade_out()
+		Transition.play_left_start()
+		await Transition.left_end_start
+		get_tree().paused = false
+		GameEvents.change_scene(path,"")
+	else:
+		SoundManager.play_sfx("UISounds2")
+		_game_over_close(PlayerData.on_endless == false)
+
+func _game_over_close(player_dead: bool):
+	_pause_close()
+	GameEvents.emit_game_over(player_dead)
 
 func no_mouse_in():
 	SoundManager.play_sfx("ButtonSounds2")

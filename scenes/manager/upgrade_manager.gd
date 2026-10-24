@@ -12,13 +12,8 @@ extends Node
 @export var round_max: float = 20.0
 var current_upgrades: Dictionary = {}
 var player: Node
-var round_bouns: float = 0
 var now_round:float = 0
 var tags_group: Dictionary = {}
-
-var tag_1: String = ""
-var tag_2: String = ""
-var tag_3: String = ""
 
 # 内部池
 var item_pool: Array[AbilityUpgrade] = []
@@ -53,7 +48,6 @@ func round_bouns_upgrade():
 		now_round += 1.0
 	weight_manager.defense_bonus += 0.3
 	round_weight_upgrade()
-	round_bouns += 3
 	if test_mode == false:
 		# 移动端外接鼠标时 HIDDEN 会让指针不可见且无法用鼠标选择；改为可见。
 		if OS.has_feature("mobile"):
@@ -69,62 +63,6 @@ func round_weight_upgrade():
 		2: round_weight_curve_3.sample(round_local)
 	}
 	pool_size = round(round_pool_curve.sample(round_local))
-
-func pick_upgrades():
-	var chosen_upgrades: Array[AbilityUpgrade] = []
-	var filtered_upgrades = upgrade_pool.duplicate()
-	var has_tag: bool = false
-	
-	if tags_group.size() >= 3:
-		tag_sort()
-		if tag_1 != "":
-			has_tag = true
-	
-	
-	for i in 3:
-		var luck = randf_range(0,100)
-		var pool: Array[AbilityUpgrade] = []
-		var tag_pool: Array[AbilityUpgrade] = []
-		
-		if (luck + round_bouns) < 75:
-			for n in filtered_upgrades.size():
-				if filtered_upgrades[n].rare == 0:
-					pool.push_back(filtered_upgrades[n])
-		elif luck + round_bouns > 97 + (round_bouns / 2):
-			for n in filtered_upgrades.size():
-				if filtered_upgrades[n].rare == 2:
-					pool.push_back(filtered_upgrades[n])
-		else:
-			for n in filtered_upgrades.size():
-				if filtered_upgrades[n].rare == 1:
-					pool.push_back(filtered_upgrades[n])
-		
-		if has_tag == true:
-		
-			var tag_luck = randf_range(0,100)
-			
-			if tag_luck <= 19:
-				for n in pool.size():
-					if pool[n].tags.has(tag_1):
-						tag_pool.push_back(pool[n])
-			elif tag_luck <= 32 and tag_luck > 19:
-				for n in pool.size():
-					if pool[n].tags.has(tag_2):
-						tag_pool.push_back(pool[n])
-			elif tag_luck <= 40 and tag_luck > 32:
-				for n in pool.size():
-					if pool[n].tags.has(tag_3):
-						tag_pool.push_back(pool[n])
-		
-		var chosen_upgrade
-		if tag_pool.is_empty():
-			chosen_upgrade = pool.pick_random() as AbilityUpgrade
-		else :
-			chosen_upgrade = tag_pool.pick_random() as AbilityUpgrade
-		chosen_upgrades.append(chosen_upgrade)
-		filtered_upgrades = filtered_upgrades.filter(func (upgrade): return upgrade.id != chosen_upgrade.id)
-	return chosen_upgrades
-
 
 func refresh_weight_upgrade():
 	weight_manager.defense_bonus += 0.1
@@ -196,7 +134,6 @@ func apply_upgrade(upgrade:AbilityUpgrade):
 				#if remove_n != -1:
 					#upgrade_pool.remove_at(remove_n)
 	
-	#tag_count(upgrade)
 	weight_manager.record_selection(upgrade)
 	update_weight_manager_state()
 	GameEvents.emit_ability_upgrade_added(upgrade, current_upgrades)
@@ -207,29 +144,6 @@ func apply_upgrade(upgrade:AbilityUpgrade):
 
 func on_upgrade_selected(upgrade: AbilityUpgrade):
 	apply_upgrade(upgrade)
-
-func tag_count(upgrade):
-	
-	for i in upgrade.tags.size():
-		if upgrade.tags[i] != null:
-			var has_tags = tags_group.has(upgrade.tags[i])
-			if !has_tags:
-				tags_group[upgrade.tags[i]] = {
-					"resource": upgrade.tags[i],
-					"quantity": 1
-				}
-			else:
-				tags_group[upgrade.tags[i]]["quantity"] += 1
-
-func tag_sort():
-	var tag_sort_group: Array = tags_group.values()
-	tag_sort_group.sort_custom(func(a, b): return a["quantity"] > b["quantity"])
-	
-	var tags: Array = [tag_1, tag_2, tag_3]
-	for i in tags.size():
-		if tag_sort_group[i]["quantity"] > 4:
-			tags[i] = tag_sort_group[i]["resource"]
-	
 
 # 构建道具池
 func build_pool(context: Dictionary = {}):

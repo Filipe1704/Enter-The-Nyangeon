@@ -1,6 +1,7 @@
 extends PanelContainer
 
 const BRANCH_BUTTON: PackedScene = preload("res://ui/branch_button.tscn")
+const TextureBinding := preload("res://script/lazy_texture_binding.gd")
 
 @export_file("*.tscn") var path: String
 @export_file("*.tscn") var player: String
@@ -13,6 +14,7 @@ const BRANCH_BUTTON: PackedScene = preload("res://ui/branch_button.tscn")
 @onready var weapon_label: Label = $ColorRect/Node2D/Node2D/ColorRect/Label2
 @onready var ps_label: Label = $ColorRect/Node2D/Node2D/Node2D/Label
 @onready var color_rect = $ColorRect/Node2D/Node2D/ColorRect
+@onready var _portrait_binding = TextureBinding.new(self, [player_p, player_pbg])
 
 var on_select: bool = false
 var on_touch: bool = false
@@ -20,7 +22,6 @@ var on_touch: bool = false
 var branch_list: Array[PlayerCard] = []
 var branch_index: int = 0
 var cur: PlayerCard
-var _revealed_path: String = ""
 
 var branch_button: Control = null
 var _hovered: bool = false
@@ -168,7 +169,7 @@ func _ps_text(card: PlayerCard, idx: int) -> String:
 	return t if t != key else str(card.description)
 
 
-# 立绘大图按需加载/释放（不缓存）。列表滚动可见性由外部调用 reveal/conceal。
+# 立绘大图按需加载/释放。列表滚动可见性由外部调用 reveal/conceal。
 func reveal() -> void:
 	var card: PlayerCard = cur if cur != null else player_card
 	if card == null:
@@ -177,29 +178,11 @@ func reveal() -> void:
 
 
 func conceal() -> void:
-	if _revealed_path != "":
-		LazyTexture.release(_revealed_path)
-		_revealed_path = ""
-	player_p.texture = null
-	player_pbg.texture = null
+	_portrait_binding.clear()
 
 
 func _apply_sprite(path: String) -> void:
-	if _revealed_path == path and player_p.texture != null:
-		return
-	if _revealed_path != "":
-		LazyTexture.release(_revealed_path)
-		_revealed_path = ""
-	var tex := LazyTexture.acquire(path)
-	player_p.texture = tex
-	player_pbg.texture = tex
-	_revealed_path = path
-
-
-func _exit_tree() -> void:
-	if _revealed_path != "":
-		LazyTexture.release(_revealed_path)
-		_revealed_path = ""
+	_portrait_binding.show_path(path)
 
 func mouse_open():
 	_input_open = true

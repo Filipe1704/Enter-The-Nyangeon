@@ -75,11 +75,11 @@ func attach_hat_icon(icon_scene: PackedScene) -> bool:
 			return true
 	return false
 
-# 挂载图标到跟随点（占用第一个空闲 Follow）
-func attach_follow_icon(icon_scene: PackedScene) -> bool:
+# 挂载图标到跟随点（占用道具拥有者的第一个空闲 Follow），返回图标节点，失败返回 null
+func attach_follow_icon(icon_scene: PackedScene) -> Node:
 	var local_player := player
 	if local_player == null:
-		return false
+		return null
 	for follow in get_tree().get_nodes_in_group("Follow"):
 		# 联机镜像同样可能保留 Follow 组；只占用道具拥有者的挂点。
 		if not local_player.is_ancestor_of(follow):
@@ -89,5 +89,5 @@ func attach_follow_icon(icon_scene: PackedScene) -> bool:
 			get_tree().get_first_node_in_group("PlayerRoot").add_child(icon)
 			icon.call("get_follow", follow)
 			follow.set("follow_use", true)
-			return true
-	return false
+			return icon
+	return null

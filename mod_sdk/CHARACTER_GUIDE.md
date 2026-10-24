@@ -270,7 +270,7 @@ func _on_first_round() -> void:
 ### 3.12 语音（可选）
 
 - `PlayerCard.voice_name` → `SoundManager.play_voice(voice_name, type)`（读 `sounds/voice/<voice_name>/`）。
-- 缺失时 `play_voice` **静默返回、不崩**（`scenes/manager/SoundManager.gd:81-85`）。
+- 缺失时 `play_voice` **静默返回、不崩**（`scenes/manager/SoundManager.gd:84-88`）。
 
 ### 3.13 解锁方式（`auto` / `shop`）
 

@@ -351,15 +351,15 @@ func _recompute_player_ability():
 	var _prev_pick_up_range: int = player.stats.pick_up_range
 	coin_return = base_coin_return + coin_return_add
 	player.stats.luck = max(0, base_luck + luck_add ) * luck_mult * ability_mult
-	player.stats.critical_luck = clamp(0, max(0, base_critical_luck + critical_luck_add ) * critical_luck_mult * ability_mult, 101)
+	player.stats.critical_luck = clamp(max(0, base_critical_luck + critical_luck_add ) * critical_luck_mult * ability_mult, 0, 101)
 	#base_initial_coin = player.stats.initial_coin
 	player.stats.coin_mult = max(0, base_coin_mult + coin_mult_add)
 	var raw_knockback_resis: float = (base_knockback_resis + knockback_resis_add) * knockback_resis_mult
 	player.stats.knockback_resis = DamageRouter.apply_knockback_resist(raw_knockback_resis)
-	player.stats.MAX_SPEED = clamp(50, base_MAX_SPEED * MAX_SPEED_mult , MAX_SPEED_value)
+	player.stats.MAX_SPEED = clamp(base_MAX_SPEED * MAX_SPEED_mult , 50, MAX_SPEED_value)
 	player.stats.SPEED_TIME = max(0.2, (base_SPEED_TIME + SPEED_TIME_add) * SPEED_TIME_mult)
 	
-	var v = clamp(1, max(1, base_max_hp + max_hp_add) * max_hp_mult * ability_mult , 99999)
+	var v = clamp(max(1, base_max_hp + max_hp_add) * max_hp_mult * ability_mult , 1, 99999)
 	if player.stats.max_hp != v:
 		var value = max(0, v - player.stats.max_hp)
 		player.stats.max_hp = v
@@ -367,23 +367,23 @@ func _recompute_player_ability():
 		max_hp_changed.emit(value)
 	player.stats.reclamp_corruption()
 	player.stats.max_t_hp = max(0, round(( v/2 + max_t_hp_add) * max_t_hp_mult))
-	player.stats.max_ammo = clamp(1, base_max_ammo + max_ammo_add * max_ammo_mult , max_ammo_value)
+	player.stats.max_ammo = clamp(base_max_ammo + max_ammo_add * max_ammo_mult , 1, max_ammo_value)
 	# = player.stats.max_cost = base_max_cost
 	player.stats.bullet_scale = max(0.1, base_bullet_scale * bullet_scale_mult )
 	player.stats.bullet_kill_time = max(0.1, base_bullet_kill_time * bullet_kill_time_mult)
-	player.stats.bullet_shoot_time = clamp(1, base_bullet_shoot_time * bullet_shoot_time_mult, max_bullet_shoot_time)
-	player.stats.bullet_speed = clamp(50, (base_bullet_speed * bullet_speed_mult), max_bullet_speed)
-	player.stats.bullet_damage = clamp(1, ((max(1, base_bullet_damage + bullet_damage_add) * bullet_damage_mult * ability_mult)), 999999)
-	player.stats.bullet_recoil = clamp(10, base_bullet_recoil * bullet_recoil_mult, 9999)
-	player.stats.bullet_knockback = clamp(0, base_bullet_knockback * bullet_knockback_mult, 9999)
-	player.stats.bullet_penetrate = clamp(1, base_bullet_penetrate + bullet_penetrate_add, 9999)
+	player.stats.bullet_shoot_time = clamp(base_bullet_shoot_time * bullet_shoot_time_mult, 1, max_bullet_shoot_time)
+	player.stats.bullet_speed = clamp((base_bullet_speed * bullet_speed_mult), 50, max_bullet_speed)
+	player.stats.bullet_damage = clamp(((max(1, base_bullet_damage + bullet_damage_add) * bullet_damage_mult * ability_mult)), 1, 999999)
+	player.stats.bullet_recoil = clamp(base_bullet_recoil * bullet_recoil_mult, 10, 9999)
+	player.stats.bullet_knockback = clamp(base_bullet_knockback * bullet_knockback_mult, 0, 9999)
+	player.stats.bullet_penetrate = clamp(base_bullet_penetrate + bullet_penetrate_add, 1, 9999)
 	player.stats.bullet_cost = base_bullet_cost * bullet_cost_mult
 	player.stats.bullet_count = max(1, base_bullet_count + bullet_count_add)
 	
 	if base_bullet_arc + bullet_arc_add >= 360:
-		player.stats.bullet_arc = 360 * (1 - 1/player.stats.bullet_count)
+		player.stats.bullet_arc = 360 * (1 - 1.0/player.stats.bullet_count)
 	else:
-		player.stats.bullet_arc = clamp(1, base_bullet_arc + bullet_arc_add, 360)
+		player.stats.bullet_arc = clamp(base_bullet_arc + bullet_arc_add, 1, 360)
 	
 	player.stats.reload_timer = max(0.1, base_reload_timer * reload_timer_mult )
 	player.stats.collision_num = max(0, base_collision_num + collision_num_add)
@@ -399,7 +399,7 @@ func _recompute_player_ability():
 	player.stats.pick_up_range = max(0.01, base_pick_up_range * pick_up_range_mult)
 	player.stats.pick_up_speed = max(0.01, base_pick_up_speed * pick_up_speed_mult)
 	player.stats.equip_damage = max(0.01, base_equip_damage * equip_damage_mult * ability_mult)
-	player.stats.shake_mult = clamp(0.5, (float(player.stats.bullet_recoil) / float(base_bullet_recoil)) * base_shake_mult, 5)
+	player.stats.shake_mult = clamp((float(player.stats.bullet_recoil) / float(base_bullet_recoil)) * base_shake_mult, 0.5, 5)
 	player.stats.shake_length = base_shake_length + shake_length_add
 	player.stats.hurt_resis = (base_hurt_resis + hurt_resis_add) * hurt_resis_mult * ability_mult
 	player.stats.hurt_mult = max(0.1, base_hurt_mult * hurt_mult_mult)

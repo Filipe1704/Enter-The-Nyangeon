@@ -394,13 +394,7 @@ func get_score_multiplier() -> float:
 func _load_selected_chip_modes() -> Array[GameMode]:
 	if not PlayerData.game_mode.has(HAVOC_ID):
 		return []
-	var by_id: Dictionary = {}
-	for mode in ModManager.get_base_game_modes():
-		if mode is GameMode:
-			by_id[mode.game_mode_id] = mode
-	for mode in ModManager.get_content("game_modes"):
-		if mode is GameMode:
-			by_id[mode.game_mode_id] = mode
+	var by_id := _chip_mode_lookup()
 	var result: Array[GameMode] = []
 	var seen: Dictionary = {}
 	for id in PlayerData.game_mode:
