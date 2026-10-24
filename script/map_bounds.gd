@@ -6,6 +6,12 @@ extends Node
 ## 边界取自物理墙 FloorWall（碰撞层 WALL_MASK）内壁：从地图中心向四个轴方向射射线，
 ## 取命中点构成菱形可行走边界。这样不会误伤贴墙的正常单位；射线失败时回退到
 ## 组 "Map"（SpawnMap）used cells 的凸包。
+##
+## 兜底边界（SpawnMap 凸包）比真实墙内壁小一圈，**不可当稳定结果永久缓存**：
+## 场景刚装载、物理还未就绪时首帧调用（如 R1 场地词条 start()）会让射线全部 miss，
+## 之后每次调用都要重试，直到 boundary_source == "walls"。
+## 触发判定：正常（walls）沿用 _outer_hull；只有兜底边界才改用"中心→实体"墙射线，
+## 避免兜底期间贴墙被误拉（详见 _resolve）。
 
 const TICK_INTERVAL := 10 # 0.1s * 10 = 1s
 const OUT_MARGIN := 24.0 # 圆心越过墙该距离才算真出界（贴墙/轻微挤压不触发）
@@ -14,15 +20,32 @@ const WALL_MASK := 256 # FloorWall 碰撞层（玩家唯一会碰撞的地图墙
 const RAY_LEN := 4000.0 # 从地图中心向外的射线长度，需覆盖整张竞技场
 
 var _tilemap: Node = null
+var _map_instance_id: int = 0
 var _hull := PackedVector2Array()
 var _outer_hull := PackedVector2Array() # _hull 外扩 OUT_MARGIN，用于触发判定
 var _boundary_source: StringName = &""
 var _center := Vector2.ZERO
 var _tick: int = 0
+var _check_count: int = 0
 var _erode_cache: Dictionary = {} # ceil(半径/4) -> 内缩后的多边形（落点用）
+var _retry_physics_frame: int = -1 # 兜底边界重试射线：同一物理帧只试一次
+var _fallback_warned := false
+var _pull_lock: Dictionary = {} # instance_id -> 拉回后跳过的 check 序号
 
 func _ready() -> void:
 	GameEvents.global_time_count.connect(_on_tick)
+	GameEvents.first_round_add.connect(invalidate)
+
+func invalidate() -> void:
+	_tilemap = null
+	_map_instance_id = 0
+	_hull = PackedVector2Array()
+	_outer_hull = PackedVector2Array()
+	_boundary_source = &""
+	_center = Vector2.ZERO
+	_erode_cache.clear()
+	_fallback_warned = false
+	_pull_lock.clear()
 
 func _on_tick() -> void:
 	_tick += 1
@@ -38,6 +61,8 @@ func _check_out_of_map() -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
+	_check_count += 1
+	_prune_pull_lock()
 	var player := tree.get_first_node_in_group("Player")
 	if player != null and is_instance_valid(player):
 		_resolve(player)
@@ -52,14 +77,69 @@ func _check_out_of_map() -> void:
 		_resolve(summoned)
 
 func _resolve(entity: Node2D) -> void:
+	if entity == null or not is_instance_valid(entity):
+		return
 	var pos: Vector2 = entity.global_position
-	if not _is_out(pos):
+	# 正常边界：沿用已调好的外扩多边形判定与落点，行为不变。
+	if _boundary_source == &"walls":
+		if not _is_out(pos):
+			return
+		_apply_pull(entity, nearest_inside(pos, _body_radius(entity)), pos)
+		return
+	# 兜底边界不可信：用"中心→实体"墙射线判断。贴墙时实体在墙内，不会误拉。
+	var crossing := _wall_crossing(pos)
+	if crossing.is_empty():
+		return
+	if not is_beyond_wall(float(crossing["entity_dist"]), float(crossing["wall_dist"]), OUT_MARGIN):
 		return
 	var radius := _body_radius(entity)
-	entity.global_position = nearest_inside(pos, radius)
+	var dir: Vector2 = crossing["dir"]
+	var hit_pos: Vector2 = crossing["position"]
+	var landing := hit_pos - dir * (radius + INSET)
+	if not landing.is_finite():
+		return
+	_apply_pull(entity, landing, pos)
+
+func _apply_pull(entity: Node2D, landing: Vector2, from: Vector2) -> void:
+	var id := entity.get_instance_id()
+	# 拉回后跳过下一次 1s 检查，防止落点被物理再挤出形成 1s 循环。
+	if int(_pull_lock.get(id, -1)) >= _check_count:
+		return
+	entity.global_position = landing
 	entity.reset_physics_interpolation()
 	if entity is CharacterBody2D:
 		entity.velocity = Vector2.ZERO
+	_pull_lock[id] = _check_count + 1
+	if OS.is_debug_build():
+		print("[MapBounds] pull %s from=%s to=%s (boundary=%s)" % [entity.name, from, landing, _boundary_source])
+
+# 纯判定（便于单测）：实体沿射线方向越过墙内壁 margin 像素才算真出界。
+func is_beyond_wall(entity_dist: float, wall_dist: float, margin: float) -> bool:
+	return entity_dist > wall_dist + margin
+
+# 从地图中心向实体方向射线，返回墙面命中点、距离与方向；未命中返回空字典。
+func _wall_crossing(pos: Vector2) -> Dictionary:
+	var delta := pos - _center
+	if delta.length_squared() < 0.25:
+		return {}
+	var dir := delta.normalized()
+	var hit := _ray_hit(_center, _center + dir * RAY_LEN)
+	if hit.is_empty():
+		return {}
+	var hit_pos: Vector2 = hit.get("position", Vector2.ZERO)
+	return {
+		"position": hit_pos,
+		"dir": dir,
+		"wall_dist": _center.distance_to(hit_pos),
+		"entity_dist": delta.length(),
+	}
+
+func _prune_pull_lock() -> void:
+	if _pull_lock.is_empty():
+		return
+	for id in _pull_lock.keys():
+		if int(_pull_lock[id]) < _check_count or not is_instance_id_valid(id):
+			_pull_lock.erase(id)
 
 # 触发判定：与体型无关，只与真实边界外扩 OUT_MARGIN 对比（贴墙不触发）
 func _is_out(pos: Vector2) -> bool:
@@ -69,7 +149,7 @@ func _is_out(pos: Vector2) -> bool:
 	return not _point_in_polygon(pos, poly)
 
 func ensure_ready() -> void:
-	if _hull.size() < 3:
+	if _hull.size() < 3 or _boundary_source != &"walls":
 		_ensure_hull()
 
 func get_walkable_polygon() -> PackedVector2Array:
@@ -170,27 +250,48 @@ func _point_in_polygon(p: Vector2, poly: PackedVector2Array) -> bool:
 	return inside
 
 func _ensure_hull() -> void:
-	if _tilemap != null and is_instance_valid(_tilemap) and _hull.size() >= 3:
-		return
 	var tree := get_tree()
 	if tree == null:
 		return
-	_tilemap = tree.get_first_node_in_group("Map")
+	var map := tree.get_first_node_in_group("Map")
+	if map == null or not is_instance_valid(map):
+		_tilemap = null
+		_map_instance_id = 0
+		_hull = PackedVector2Array()
+		_outer_hull = PackedVector2Array()
+		_boundary_source = &""
+		_erode_cache.clear()
+		return
+	var map_id: int = map.get_instance_id()
+	# 只有 walls 才是稳定结果；兜底边界每次调用都要允许重试射线。
+	var needs_rebuild := _tilemap != map or _map_instance_id != map_id \
+		or not is_instance_valid(_tilemap) or _hull.size() < 3 \
+		or _boundary_source != &"walls"
+	if not needs_rebuild:
+		return
+	var frame := Engine.get_physics_frames()
+	if _boundary_source != &"walls" and _hull.size() >= 3 and _retry_physics_frame == frame:
+		return
+	_retry_physics_frame = frame
+	_tilemap = map
+	_map_instance_id = map_id
 	_hull = PackedVector2Array()
 	_outer_hull = PackedVector2Array()
 	_boundary_source = &""
 	_erode_cache.clear()
-	if _tilemap == null or not is_instance_valid(_tilemap):
-		return
 	var fallback := _spawnmap_hull()
 	var center := _get_center(tree, fallback)
-	var hits := _raycast_walls(tree, center)
+	var hits := _raycast_walls(center)
 	if hits.size() == 4:
 		_hull = _diamond_from_hits(hits)
 		_boundary_source = &"walls"
+		_fallback_warned = false
 	else:
 		_hull = fallback
 		_boundary_source = &"spawnmap" if _hull.size() >= 3 else &""
+		if _boundary_source == &"spawnmap" and not _fallback_warned:
+			_fallback_warned = true
+			push_warning("MapBounds: wall raycast failed; using SpawnMap fallback (smaller than the walkable area). center=%s" % center)
 	if _hull.size() < 3:
 		return
 	_center = Vector2.ZERO
@@ -221,17 +322,26 @@ func _get_center(tree: SceneTree, fallback: PackedVector2Array) -> Vector2:
 	return Vector2.ZERO
 
 # 从中心向 ±x / ±y 射射线，命中 FloorWall 内壁；全部命中才返回 4 个点
-func _raycast_walls(tree: SceneTree, center: Vector2) -> Array:
-	var space := tree.root.world_2d.direct_space_state
+func _raycast_walls(center: Vector2) -> Array:
 	var dirs := [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]
 	var hits: Array = []
 	for d in dirs:
-		var query := PhysicsRayQueryParameters2D.create(center, center + d * RAY_LEN, WALL_MASK)
-		var hit := space.intersect_ray(query)
+		var hit := _ray_hit(center, center + d * RAY_LEN)
 		if hit.is_empty():
 			return []
-		hits.append(hit.position)
+		hits.append(hit["position"])
 	return hits
+
+# 单条墙射线（测试可覆写 _ray_hit）。
+func _ray_hit(from: Vector2, to: Vector2) -> Dictionary:
+	var tree := get_tree()
+	if tree == null:
+		return {}
+	var space := tree.root.world_2d.direct_space_state
+	if space == null:
+		return {}
+	var query := PhysicsRayQueryParameters2D.create(from, to, WALL_MASK)
+	return space.intersect_ray(query)
 
 # 命中点顺序为 [上, 右, 下, 左]，直接构成菱形边界
 func _diamond_from_hits(hits: Array) -> PackedVector2Array:

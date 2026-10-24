@@ -81,8 +81,8 @@ Declared in `project.godot:25-43`. **Order = `_ready()` order** (relevant: `Game
 
 ### 1.9 MapBounds
 - `_ready` 连接 `GameEvents.global_time_count`；每 10 tick（≈1s）扫描一次组 `"Player"` + `PoolManager.get_active_enemies()` + 组 `"Summoned"`（跳过 `is_idle==1`），把出界者拉回最近且略内推的点并清速度。
-- 边界（`_hull`）惰性构建：从组 `"CenterPosition"`（`BattleRoom`）向 ±x/±y 射线命中物理墙 `FloorWall`（mask 256）得到菱形可行走边界；射线失败回退组 `"Map"`（`SpawnMap`）used cells 凸包。场景切换后靠 `is_instance_valid` 失效重取。
-- 触发判定与体型解耦：`_is_out` 用真实边界外扩 `OUT_MARGIN=24px`（要越墙 ≥24px 才算真出界，贴墙不触发）。落点按实体本体碰撞半径内缩（`_body_radius` + `Geometry2D.offset_polygon` 负 delta，4px 分桶缓存）+ `INSET=8px`，避免大体型（Boss）被墙挤穿。详见 `SYSTEMS.md` §6.3。
+- 边界（`_hull`）惰性构建：从组 `"CenterPosition"`（`BattleRoom`）向 ±x/±y 射线命中物理墙 `FloorWall`（mask 256）得到菱形可行走边界；射线失败回退组 `"Map"`（`SpawnMap`）used cells 凸包。**兜底结果不永久缓存**：每次 `ensure_ready()` / 1s tick 重试射线直到 `walls`（同物理帧最多一次）；场景切换、`first_round_add`、`Map` 实例 id 变化时重建。详见 `SYSTEMS.md` §6.3。
+- 触发判定与体型解耦：`_is_out` 用真实边界外扩 `OUT_MARGIN=24px`（要越墙 ≥24px 才算真出界，贴墙不触发）；兜底边界下改用“中心→实体”墙射线（同样 `+24px` 容差），正常 `walls` 路径不变。落点按实体本体碰撞半径内缩（`_body_radius` + `Geometry2D.offset_polygon` 负 delta，4px 分桶缓存）+ `INSET=8px`，避免大体型（Boss）被墙挤穿；拉回后跳过下一次检查（1 tick 滞回）。详见 `SYSTEMS.md` §6.3。
 - 依赖顺序：仅要求声明在 `GameEvents` 之后（`_ready` 连接信号）；当前声明在 `_mcp_game_helper` 之后。
 - 机制细节与坑见 `SYSTEMS.md` §6.3、`LEARNINGS.md`。
 
