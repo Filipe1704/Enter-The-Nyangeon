@@ -129,3 +129,4 @@ test_room.tscn     (Node2D, test_room.gd)  ← 沙盒/测试房（从 menu 进�
 | Mod 导出/真机验证 | `docs/MOD_TESTING.md` |
 | 官方联机通用拓展接口 | `docs/COOP_EXTENSION_API.md` → 官方 `net/coop_extensions.gd`；`tests/run_coop_extension_contract_checks.py` |
 | 已知坑与未解问题 | `docs/LEARNINGS.md`, `docs/WORKLOG.md` |
+| 全仓工程审计与当前问题状态 | `docs/CODEBASE_AUDIT_20261018.md`（2026-10-18 发行版兼容审计，原根目录 `CODEBASE_AUDIT.md` 归档）；本轮重构审计见 `docs/AUDIT_REFACTOR_20261024.md`；当前提交需以独立回归结果为准。 |

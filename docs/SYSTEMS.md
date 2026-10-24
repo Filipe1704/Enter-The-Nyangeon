@@ -538,7 +538,7 @@
 
 - `scenes/enemies/base_enemy.gd`（空 `BaseEnemy` stub；真正基类是 `entity_ENEMY.gd`）。
 - `scenes/enemies/enemies_spawn/enemy_path_spawn.gd`（空 stub；路径生成在 `path_spawn.gd` + `enemy_path.gd`）。
-- `script/transition_manager.gd`、`scenes/game_camera/transition.gd`（未使用）。
+- `scenes/game_camera/transition.gd`（未使用；`script/transition_manager.gd` 已于 2026-10-24 删除）。
 - `DamageData.check()`、`GameTags.CONVERT`、`crit_chance_bonus`、`enemy_critical_hurt/fire_hurt/explosion_hurt/poison_hurt/normal_hurt` 信号、`entity_ENEMY.is_*_hit`、`ExplosionDamage.damage_mult`、`on_hit_effects`（无填充者）。
 
 ## 10. UI 大图按需加载（商店 / 支援 / 玩家卡，2026-09-29）

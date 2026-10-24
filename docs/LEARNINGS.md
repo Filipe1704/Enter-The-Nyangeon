@@ -109,7 +109,7 @@
 - Date / 日期: 2026-10-08
 
 ### [Dead code] 多处遗留物，勿依赖
-- Evidence / 证据: `script/transition_manager.gd`（未注册）, `scenes/game_camera/transition.gd`, `DamageData.check()`, `GameTags.CONVERT`（`FloatingPool.gd`/`scenes/manager/floating_pool.tscn` 已于 2026-10-08 删除）
+- Evidence / 证据: `script/transition_manager.gd`（未注册，已于 2026-10-24 删除）, `scenes/game_camera/transition.gd`, `DamageData.check()`, `GameTags.CONVERT`（`FloatingPool.gd`/`scenes/manager/floating_pool.tscn` 已于 2026-10-08 删除）
 - Notes / 说明: `GameEvents.enemy_critical_hurt/fire_hurt/explosion_hurt/poison_hurt/normal_hurt` 无发射者；`on_hit_effects` 无填充者。
 - Source / 来源: code
 - Date / 日期: 2026-09-25
@@ -415,7 +415,7 @@
 - Notes / 说明: Resource 反序列化只填充脚本仍声明的属性，未声明者被丢弃（无警告）——所以**改名/删除存档字段是破坏性变更**：改名前须在迁移期按旧名读取再写新名，删除前确认确为冗余。`SceneData.save_version` 默认值必须是 **0** 而非当前版本：旧档无该字段会解析为默认值，若默认=当前版本则旧档被误判为最新、永久跳过迁移。`save_playerdata` 采用「临时文件 → 备份旧档 `.bak` → 替换」的原子写，避免写坏唯一存档。
 - Source / 来源: code + test
 - Date / 日期: 2026-10-04
-- SUPERSEDED: 2026-10-13 仅修正末句“原子写”的可靠性结论：当前是两次 rename，无失败回滚或备份加载；损坏主档还会在首次货币变化时覆盖有效 `.bak`。字段迁移结论仍有效。隔离复现见根 `CODEBASE_AUDIT.md` 的 AUD-SAVE-001，准确流程已更新 `ARCHITECTURE.md` §2（来源：test）。
+- SUPERSEDED: 2026-10-13 仅修正末句“原子写”的可靠性结论：当前是两次 rename，无失败回滚或备份加载；损坏主档还会在首次货币变化时覆盖有效 `.bak`。字段迁移结论仍有效。隔离复现见 `docs/CODEBASE_AUDIT_20261018.md`（归档） 的 AUD-SAVE-001，准确流程已更新 `ARCHITECTURE.md` §2（来源：test）。
 - SUPERSEDED: 2026-10-13 本轮已修复恢复/写入路径：`scene_data_store.gd:15,41` 验证主档后读取备份，只轮换有效主档，不先移走主路径；双坏档/未来版本禁止自动覆盖。7 类回归通过。原字段迁移结论保留（来源：test）。
 
 ### [UI] 升级卡/道具卡文本只来自 `id` 派生的翻译 key，不读 `AbilityUpgrade` 文本字段
@@ -2153,14 +2153,14 @@
 
 
 ### [Mod] ZIP 中存在 PCK 条目不等于安装成功；重装失败不会自动保留旧包
-- Evidence / 证据: `script/mod_manager.gd:1241,1255,1259`、`script/mod_option.gd:457`；根 `CODEBASE_AUDIT.md` AUD-MOD-001。
+- Evidence / 证据: `script/mod_manager.gd:1241,1255,1259`、`script/mod_option.gd:457`；`docs/CODEBASE_AUDIT_20261018.md`（归档） AUD-MOD-001。
 - Notes / 说明: 当前导入先清旧目录，文件打开失败时跳过但仍返回 `ok=true`。隔离探针先安装真实 PCK，再用 PCK 同路径目录/文件冲突包重装，结果提示成功却无 PCK。需要先暂存并完整校验，再交换目录；修复前调用者不能把成功返回当作所有文件写入成功，也不能依赖失败回滚。
 - Source / 来源: test
 - Date / 日期: 2026-10-13
 - SUPERSEDED: 2026-10-13 本轮已改为 `mod_installer.gd:4` 的暂存/验证/交换事务，文件/目录冲突、写入/交换失败及超限明确失败并保留旧安装。真实已挂载 PCK 更新亦通过。旧“失败不保留旧包”仅描述修复前行为（来源：test）。
 
 ### [Testing] Godot 退出 0 与断言完成标记不能排除原生错误
-- Evidence / 证据: `tests/run_ui_ux_checks.py:98`、`tests/test_ui_ux_regressions.gd:127`；根 `CODEBASE_AUDIT.md` AUD-TEST-001。
+- Evidence / 证据: `tests/run_ui_ux_checks.py:98`、`tests/test_ui_ux_regressions.gd:127`；`docs/CODEBASE_AUDIT_20261018.md`（归档） AUD-TEST-001。
 - Notes / 说明: 两次隔离 UI 回归均 133 项断言通过、runner 退出 0，仍打印信号发射期间同步 `free()` 导致的原生 `ERROR:`。当前 runner 只检查 stderr 的 `SCRIPT ERROR:` 和 stdout 完成标记。错误检查应合并两条流，精确区分退出资源计数例外和真正错误；在动画信号恢复栈中拆除场景要延迟/队列释放并等待完成。此现象定位于测试拆除，不能直接当作正式 UI 故障。
 - Source / 来源: test
 - Date / 日期: 2026-10-13
@@ -2302,7 +2302,7 @@
 - Date / 日期: 2026-10-14
 
 ### [Relay] 可靠 WebSocket 连接不能在背压时跳整帧后继续工作
-- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py:175-202`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_relay_peer.gd:268`；`CODEBASE_AUDIT.md` AUD-NET-001。
+- Evidence / 证据: `mod_sdk/coop_mod/server/relay_server.py:175-202`；`mod_sdk/coop_mod/mods/etn_coop/net/coop_relay_peer.gd:268`；`docs/CODEBASE_AUDIT_20261018.md` AUD-NET-001。
 - Notes / 说明: 中继首两次超水位直接跳帧，水位恢复即清计数，不关闭连接。控制帧与可靠 RPC 共用此路径，客户端没有额外重传。真实发送函数配合可控 transport 水位，已复现控制帧丢失、下一游戏包仍发送；不能把“慢端不阻塞广播”视为可靠性已保证。修法需有界排队或明确断连；当前尚未实施。
 - Source / 来源: test
 - Date / 日期: 2026-10-14
@@ -2752,7 +2752,7 @@
 - Source / 来源: user | code | test
 - Date / 日期: 2026-10-18
 
-- Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `CODEBASE_AUDIT.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。
+- Follow-up / 后续（2026-10-18，来源：code | test）：按用户要求扩查同类发行版差异：484 个本体脚本、37 个官方联机脚本夹具及 844 个本体场景/资源，在源码、真实 Windows Debug EXE、真实 Windows Release EXE 中均全部加载成功。其余 7 处 `对象.free()` 的脚本未出现同类解析失败；另用最小 Release EXE 执行显式 Node、推导 Node2D、动态变量三种接收者的 `.free()`，均正常释放，因此不要机械替换全部对象上的 free 调用。这里只验证调用形式和加载兼容性，不代表所有业务分支、所有平台均完成回归。报告见 `docs/CODEBASE_AUDIT_20261018.md`，证据见 `.godot/release_compat_20261018/`（本地，不提交）。
 
 ### [Boss] 新 Boss 必须走 BossSchedule；`enemy_group` 不会自动生成 BossCard
 - Evidence / 证据: `script/boss_round_controller.gd:35-56`（`plan_for_round` 只读 `BossSchedule.entries/endless_entries`）、`scenes/manager/enemy_manager.gd:159-177`（有 plan 才走控制器）、`script/mod_manager.gd:545-552`（`get_mod_boss_schedules`）；`get_mod_boss_waves` 已移除，避免半支持的旧式波次路径。
@@ -3354,6 +3354,7 @@
 - Source / 来源: code
 - Date / 日期: 2026-10-24
 - Follow-up / 后续（2026-10-24，来源：code）：当日已按上述结论修复——`_recompute_player_ability` 内 11 处 clamp 改回 `clamp(计算值, 下界, 上界)`、满弧公式改 `1.0/count`；另全局排查并修复 7 处同型误用（`EnemyStats.gd:168`、`mashiro_sniper_bullet.gd:193`、`tester_automaton_shield.gd:130`、`GunOverheating.gd:47-48`、`spiked_shell.gd:51`、`ability_upgrade_card.gd:56`）。上限参数首次真正生效，属性数值行为会变化（超上限不再穿透）。
+- Follow-up / 后续（2026-10-24，来源：code）：修复同时让**外部注入的上限变量第一次真正生效**，合并前需实机确认：`PlayerData.max_ammo_value`（`scenes/player/tsurugi/tsurugi_ps.gd` 弹匣 2、`scenes/player/hibiki/HibikiPS.gd` 1、`scenes/update_item/concentrated_ammo.gd` 1）、`PlayerData.max_bullet_speed`（`scenes/update_item/crystal_haniwa.gd` 150）、`PlayerData.MAX_SPEED_value`（`scenes/update_item/encyclopedia.gd` 锁当前速度）。另有数值调整：子弹伤害上限 `999999` → `9999999`（`PlayerData.gd`），Aris 过热路径的独立上限 `99999` → `9999999`（`GunOverheating.gd`），否则该路径仍会卡在旧上限。
 
 ### [GDScript] 基类调用子类方法必须声明桩，否则整个 class_name 注册链编译失败
 - Evidence / 证据: `ui/ability_shop_card_base.gd:_attempt_purchase` 调 `item_upgrade()` 时基类未声明，报 `Function "item_upgrade()" not found in base self`，连带两个子类 `Could not resolve class "AbilityShopCardBase"`；同仓库既有模式 `ui/shop_purchase_card.gd`（基类声明 `_get_purchase_cost`/`_grant_purchase`）、`script/fire_field_base.gd`（钩子 `_field_lifetime` 等均带默认实现）。

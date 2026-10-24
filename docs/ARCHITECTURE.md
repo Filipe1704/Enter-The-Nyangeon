@@ -243,7 +243,7 @@ PoolManager.detach(node)
 4. `change_scene`（`GameEvents.gd:194`）：`change_scene_to_file` → `await tree_changed` → 若 `is_left_end_start` 则 `Transition.play_left_end()` → 若 `player != ""` 实例化到组 `"PlayerRoot"`（deferred）→ `emit_first_round_add.call_deferred()` → `first_round_switch = false`。
 5. `first_round_add` 被 `main.gd:31,46-67` 消费 → `first_round()`：重置 `PlayerData`、播 BGM、快照+emit 属性、`round_manager.first_round_start()`、`SupportData.game_add_support()`。
 
-> `GameEvents.emit_transition_start` 与 `script/transition_manager.gd` 是**死代码**（未注册、无引用）。
+> `GameEvents.emit_transition_start` 与 `script/transition_manager.gd` 已于 2026-10-24 删除（前者无发射者、后者未注册且无引用）；转场只走 `Transition` autoload（`ui/transition.tscn`）。
 
 ## 6. Non-obvious coupling & gotchas / 非显然耦合与坑
 
@@ -256,8 +256,8 @@ PoolManager.detach(node)
 - **即时持久化**：赋值 `PlayerData.player_pyroxenes` 即触发 `Game.save_playerdata()`；商店直接改它。
 - **池载荷（2026-10-08）**：`get_pool` 空闲优先；无空闲且未达 `limit` 返回 `null`、满额静默回收，调用方仍应检查 `is_idle`。`clear_pool`/`erase_pool` 不释放节点。
 - **ExtraDamage 递归**：请求者过滤 `EXTRA_DAMAGE`。
-- **重复遗留物**：`transition_manager.gd`（未注册）、`scenes/game_camera/transition.gd` 均未使用。
-- **窗口尺寸**：`Game._physics_process` 已不再轮询（注释掉）；实时路径为 `get_window_size()`（`script/Game.gd:127`）。
+- **重复遗留物**：`scenes/game_camera/transition.gd` 仍未使用（`transition_manager.gd` 已于 2026-10-24 删除）。
+- **窗口尺寸**：`Game` 侧不再轮询（`get_window_size()` 与空壳 `_physics_process` 已于 2026-10-24 删除）；实时实现见 `script/Window.gd`（`NOTIFICATION_WM_SIZE_CHANGED` → `emit_screen_changed`）。
 - **相机震动单写者（2026-10-03）**：游戏相机 `scenes/game_camera/gamecamera.tscn`（玩家子节点）由 `_process` 每帧写 `position`（瞄准前导）；屏幕震动必须只写独立 `shake_offset`，在 `_process` 里合成 `position = base + shake_offset`，**禁止** tween `position`（会与 `_process` 互覆盖 → 整屏随机抖动/回弹，疑似"网络丢包"体感）。见 `LEARNINGS.md` [Camera]。
 - **移动端渲染设置（2026-10-03）**：`project.godot` 开 `shader_compiler/shader_cache/enabled`、Android 导出开 `shader_baker/enabled`，减少战斗中新特效首现时的运行期 shader 编译顿挫；帧率上限由 `Game.apply_max_fps` 全平台配置、默认 60（见 §1.5；2026-10-14 核对）。
 - **统一悬浮提示宿主不是 autoload（2026-10-18）**：`ui/hover_tooltip.gd` 按最近的 `CanvasLayer` 复用宿主（meta `_hover_tooltip_host` 存弱引用），跨层唯一性靠 `static var _viewports`（视口 id → 模式/指针/宿主）与宿主弱引用协调，最后 `_display` 的宿主清掉其它层；因此不新增单例，也不受切场景影响。`_ready` 预建 16 个 Label，显示与换内容都不增删节点，避免唤醒 `change_scene` 的 `tree_changed` 等待。绑定侧 `HoverTooltipBinding` 是 `RefCounted`，随目标 `tree_exiting` 自动解绑，卡片释放后不会留下悬空目标。宿主的延迟 `mount()` 遇到失效或待删除父节点时使用 `queue_free()`；本机 Godot 4.7 Windows Release 模板无法解析该处 `free()` / `self.free()`，会使整个提示脚本加载失败（验证见 `LEARNINGS.md` 的 Release 条目）。

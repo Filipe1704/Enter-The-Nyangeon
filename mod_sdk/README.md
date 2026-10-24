@@ -334,10 +334,10 @@ members = Array[String](["my_mod_hero", "my_mod_leader"])
 - **边界**：`pack_mod` 原样打包，**打不进 PNG 贴图**（运行时无导入器，需 `.ctex`）；自带贴图请走「工程副本 + `setup_mod_project.ps1` + `build_mod.ps1`（ModPack 预设）」。
 - 注意：`build_coop_mod.ps1` 假设源与镜像目录不同（源在 `mod_sdk/coop_mod/mods/`）；源直接放项目根 `mods/` 时它会镜像自拷贝报错，这类 mod 用 `build_local_mod.ps1`。
 
-## 17. 命中前伤害修饰（协议 v5）
+## 17. 命中前伤害修饰（协议 v5 起）
 
 2026-10-14 用户改定发布版本为本体 `v0.5.1.4` / 官方联机 `0.1.10`，尚未提交上游的协议变更统一为 v4；本节接口保留。SUPERSEDED: 期间曾回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），不能仅按发布版本字符串判断接口是否存在。
-SUPERSEDED: 2026-10-24 官方联机协议现为 v5（`coop_net.gd` 的 `PROTOCOL_VERSION = 5`），`ModAPI.VERSION` 现为 `3`；本节其余 v4 字样仅作历史记录。
+SUPERSEDED: 2026-10-24 官方联机协议现为 v6（`coop_net.gd` 的 `PROTOCOL_VERSION = 6`，`MOD_VERSION = "0.1.13"`），`ModAPI.VERSION` 现为 `3`；本节其余 v4/v5 字样仅作历史记录。
 
 自定义角色或藏品若要修改**本次伤害**，订阅 `GameEvents.enemy_damage_calculating(final_damage, damage_data, body_path)`，在其中调整目标 HealthComponent 的 `damage_multiplier` 或临时追加 `damage_data.damage_modifier`。前置阶段只负责数值计算，勿在此扣血、生成副作用或触发结算 proc。该阶段在客机预测/发送之前执行一次，临时修饰在结算后恢复，不跨穿透命中累积。
 
