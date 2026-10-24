@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://b2kxylwnlg3h"]
 
-[ext_resource type="Script" path="res://resources/buff/components/armored_component.gd" id="1_armored"]
+[ext_resource type="Script" uid="uid://b1tofb0061vgj" path="res://resources/buff/components/armored_component.gd" id="1_armored"]
 
-[node name="ArmoredComponent" type="Node"]
+[node name="ArmoredComponent" type="Node" unique_id=1497003421]
 script = ExtResource("1_armored")
