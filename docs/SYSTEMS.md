@@ -46,6 +46,8 @@
 3. `bullet_hit_damage`（`player.gd:473`）：`DamageData.fill(bullet_body.damage_data, {... source=PLAYER, node=bullet_body})` → `apply_penetrate_dealt()` → `randf_range(0,100) < stats.critical_luck` roll 暴击 → `base_damage = max(1, round(bullet_damage * global_damage [* critical_damage]))` → emit `player_shot_critical`/`player_shot_not_critical` → 追加玩家的 `damage_types`/`damage_modifier`/`damage_dealt`/`flags` → 缩放子弹。
 4. 敌方/召唤物/近战各自构造：`bullet_launcher.gd:62`、`entity_ENEMY.create_damage_data`（`:171`）、`enemy_bullet.gd`、`turret_summoned.gd:139`、`kick.gd:29`。
 
+> 暴击率判定读 `stats.critical_luck`（`PlayerData._recompute_player_ability` 已 clamp 到 0–101；≥100 即必暴）。需要**未封顶暴击率**的溢出消费（Hasumi PS1 射速 / PS3 暴伤、藏宝图）必须读 `PlayerData.get_critical_luck_total()`，不要直接读 `stats.critical_luck`（后者已被上限截断）。
+
 ### 2.1b 子弹移动与追踪（数值安全）
 
 - `PlayerBullet`（`script/player_bullet.gd`）的 `direction` **恒为单位朝向**：`r_move()` 只写单位方向，期望速度用 `direction * speed`。`slow_down` 的 `velocity = direction * v_value` 依赖此约定；若 `direction` 被写成速度量级，会指数放大到 inf/NaN，把子弹 `CollisionShape2D` 丢到非有限坐标而触发 Rapier broad-phase panic。

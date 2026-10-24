@@ -51,7 +51,7 @@ func add_player_luck_buff(_now_ammo: float, _max_ammo: int, _reload_time: float)
 	player.player_buff_manager.apply_buff(player_buff, value)
 
 func fire_rate_count():
-	var n = player.stats.critical_luck * 0.01
+	var n = PlayerData.get_critical_luck_total() * 0.01
 	if critical_damage_count != n:
 		PlayerData.bullet_shoot_time_mult -= critical_damage_count
 		critical_damage_count = n
@@ -64,8 +64,7 @@ func critical_kill_enemy(_final_damage: int, damage_data: DamageData, _body_path
 		PlayerData.update_player_ability()
 
 func critical_luck_to_damage():
-	var n:int = max(0, PlayerData.base_critical_luck + PlayerData.critical_luck_add ) * PlayerData.critical_luck_mult * PlayerData.ability_mult
-	n -= 100
+	var n: int = int(PlayerData.get_critical_luck_total()) - 100
 	if n > 0 and critical_luck_count != n:
 		var x = critical_luck_count * 0.02
 		PlayerData.critical_damage_add -= x

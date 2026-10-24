@@ -344,6 +344,11 @@ func update_player_ability():
 			break
 	_ability_depth -= 1
 
+# 未封顶的暴击率总量：供溢出消费方（Hasumi PS1/PS3 等）使用；
+# stats.critical_luck 只保存封顶后的判定值。
+func get_critical_luck_total() -> float:
+	return max(0, base_critical_luck + critical_luck_add) * critical_luck_mult * ability_mult
+
 func _recompute_player_ability():
 	var _prev_hp: int = player.stats.hp
 	var _prev_max_hp: int = player.stats.max_hp
@@ -351,7 +356,7 @@ func _recompute_player_ability():
 	var _prev_pick_up_range: int = player.stats.pick_up_range
 	coin_return = base_coin_return + coin_return_add
 	player.stats.luck = max(0, base_luck + luck_add ) * luck_mult * ability_mult
-	player.stats.critical_luck = clamp(max(0, base_critical_luck + critical_luck_add ) * critical_luck_mult * ability_mult, 0, 101)
+	player.stats.critical_luck = clamp(get_critical_luck_total(), 0, 101)
 	#base_initial_coin = player.stats.initial_coin
 	player.stats.coin_mult = max(0, base_coin_mult + coin_mult_add)
 	var raw_knockback_resis: float = (base_knockback_resis + knockback_resis_add) * knockback_resis_mult
