@@ -717,6 +717,7 @@
 
 ### [Enemy/Boss] 血量归零不结算：`EnemyStats.hp` setter 提前 return 漏发死亡事件；聚合型 Boss 结算又依赖子单位 `hp_changed`
 - Evidence / 证据: `script/EnemyStats.gd:77-97`（死亡分支原在 `if hp == v: return` / `if hp > max_hp: return` **之后**）；三塔 Boss：`resources/enemy/erosion_tower.tres`→`erosion_tower_group.tscn`（`BossHP`/聚合 `EnemyStats`）、`erosion_tower_group.gd:34-38 count_hp`/`:127-128 count_now_hp`/`:89-91 boss_dead`（`if stats.hp <= 0` 才 `emit_boss_round_end()`）；`goliath.gd:182-187`（`hp==0` 返回 `IDLE`，**无状态机 DEAD 兜底**）。
+- UPDATE 2026-10-25: 塔组改为出招序列驱动后 `count_hp` 已移除（阶段判断改由 `_phase_for_hp` 计算），聚合血量逻辑仍在 `count_now_hp`/`boss_dead`；上文 `erosion_tower_group.gd:34-38` 锚点作废，现见 `erosion_tower_group.gd:201-204,270-282,381-389`。
 - Notes / 说明: **现象**：kitchen_knife 斩杀后有时 Boss 血条归零但不出结算、继续攻击。**机制**：① `EnemyStats.hp` setter 把死亡判定放在两个提前 `return` 之后；当 `hp==0` 再受击（`hp == v`）或 `max_hp` 被下调导致旧 `hp > max_hp` 时，`hp` 被写成 0 却**跳过死亡分支** → 无 `hp_changed`、无 `is_dead`、无 `on_dead`。② 三塔 Boss 的结算门 `boss_dead` 只读聚合 `stats.hp`，而聚合值由 `count_now_hp` 挂在**每座塔的 `hp_changed`** 上维护；塔的死亡一旦被 ① 吞掉，聚合值停留 >0 → `boss_dead` 不结算，其余塔继续打。Goliath 单 Boss 共用同一 setter，且没有状态机 `DEAD` 兜底，一旦命中同样「0 血继续打」。**修法**：① `EnemyStats.hp` 把 `v <= 0 and dead_lock == false` 的死亡分支提到所有提前 `return` **之前**（先 `hp = v` 再 emit）。② `erosion_tower_group.boss_dead()` 开头强制 `count_now_hp()` 重算聚合值，并加 `_dead_started` 幂等门（`active_state()` 复位）。③ `erosion_tower.on_dead()` / `goliath.on_dead()` 加 `if is_idle == 1: return` 幂等门（`erosion_tower` 有 `is_dead`+状态机 DEAD 双路）。**通用教训**：事件型 setter 的副作用（信号/结算）不要放在「值未变就提前 return」之后；聚合型实体的结算不要只信任「子单位信号已同步」，入口处显式重算更稳。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-02
@@ -851,6 +852,7 @@
 
 ### [Enemy] `@export` 变量直接当运行期倒计时自减 → 配置值一次性消耗、第二次失效
 - Evidence / 证据: `scenes/bullet/launcher/laser_launcher.gd` 原 `time_count()` 里 `life_time -= 1`（`@export var life_time`），`active_state()` 未重置；`scenes/enemies/boss/erosion_tower.tscn:1571-1579` 两 launcher 设 `life_time=500`；塔组窗口 `erosion_tower_group.gd:19 shoot_time_max=60`。
+- UPDATE 2026-10-25: 塔组已改为序列驱动，`shoot_time_max` 字段移除；窗口计算现见 `erosion_tower_group.gd:188-199` 与 `resources/boss/tower_attack/*.tres`。
 - Notes / 说明: **现象**：erosion_tower 激光的 `life_time` 改了没效果。**机制**：`@export` 值被当运行期计数器自减，第一次激活后就到 0，之后 `if life_time > 0` 永不成立 → 不再 `stop_rotating`（配置只生效一次）；且倒计时从 `active_state()` 起算、把固定 `warning_time=15` 预警也算进去，`life_time ≤ 15` 时预警阶段就“到期”，而 `stop_rotating()` 有 `is_rotating` 门被静默丢弃，随后预警结束 `start_rotating()` 照启动 → 反转不停。**修法**：配置与运行期分离（`life_time` 保持不动的 `@export`，新增 `life_time_left`，`active_state()` 重装并同时重置 `warning_time`/`end_time`/`is_stop`），life 计时移到预警之后。**通用教训**：任何 `@export`/`const`/场景覆盖值都不可在运行期被原地自减当计数器；要倒计时应另存私有计数器并在每次激活重装。`game_eval` 验证：`life_time=20` 35 tick 后 `is_stop=true`；第二次激活仍按 20 停止（重置生效）；`life_time=0` → 预警后直接 idle 不出光；`total_active_ticks(100)==130`。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-02
@@ -3409,4 +3411,10 @@
 - Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（`_gate_player_buff_apply` / `_support_buffed_peers` / `_on_local_support_ex_end` / `_remote_player_buff`）；`scenes/field_mods/orbital_barrage.gd`（`_apply_player_slow` / `get_player_slow_config`）；`scenes/manager/buff_manager_base.gd`（`apply_buff` / `_create_entry` / `source_refcount`）。
 - Notes / 说明: `BuffRouter.apply_buff(远端玩家代理, ...)` 虽会被 `player_buff_apply_interceptor` 转交到客机，但该通道同时把 `peer -> buff.resource_path` 写进只按 peer 记**单路径**的 `_support_buffed_peers`（供支援 EX 结束兜底移除）；场地词条复用它会把光环路径覆盖掉，导致支援 buff 的兜底移除指向错误路径。轨道炮击改为 host 在 `_on_host_orbital_blast` 用既有 `_remote_player_buff` RPC 直接下发 buff（不新增 RPC/协议），客机 `_remote_player_buff` 对本地真实玩家 `BuffRouter.apply_buff`。减速 buff 用 `source_refcount=true`：多次命中只刷新 1.5 秒、不叠层；`is_debuff=true` 才不吃“有益 Buff 持续时间”加成。数值由本体 `get_player_slow_config()` 提供（含 `buff_path`/`value`/`source_id`），mod 不另写一份。
 - Source / 来源: user + code
+- Date / 日期: 2026-10-25
+
+### [Boss][Tower] 塔组攻击窗口会被激光 `total_active_ticks` 拉长：招式时长必须以它为下限
+- Evidence / 证据: `scenes/bullet/launcher/laser_launcher.gd:204-205`（`total_active_ticks = WARNING_TICKS + life_time + END_TICKS`）、`scenes/enemies/boss/erosion_tower.tscn:1571-1579`（两台 launcher `life_time=120/150` → 150/180 tick）、`scenes/enemies/boss/erosion_tower_group.gd:188-199`（`_effective_window`）、`:165-179`（`_begin_step`）；旧实现见 git 历史 `_active_attack_ticks()`。
+- Notes / 说明: 旧 `_active_attack_ticks()` 对**所有 `can_shoot` 塔**的 `launcher_pool_1` 取 max，而三座塔（含弹幕/召唤）都实例化同一个 `erosion_tower.tscn`、各自带两台 launcher，所以只要任一塔参战窗口就会变成 180 tick（18s）——「弹幕招只有 6 秒」是错觉，旧阶段 1 实际每轮恒为 180+25 tick。2026-10-25 改序列驱动后，窗口下限只统计 `tower_type==1` 的激光塔，`window_ticks` 才真正可控；要让非激光招维持旧时长，需在 `.tres` 里显式写 180。**通用教训**：用「节点是否存在某组件」推断「本次是否真的会用到它」不可靠（这里是 launcher 继承），能力判断应按角色/开关字段来做。
+- Source / 来源: code
 - Date / 日期: 2026-10-25

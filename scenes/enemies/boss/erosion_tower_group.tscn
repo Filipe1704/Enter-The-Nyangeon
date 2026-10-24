@@ -1,9 +1,13 @@
-[gd_scene load_steps=8 format=3 uid="uid://ch4rexhqn3q7q"]
+[gd_scene load_steps=12 format=3 uid="uid://ch4rexhqn3q7q"]
 
 [ext_resource type="PackedScene" uid="uid://dehu7mvw1ir6b" path="res://scenes/enemies/boss/erosion_tower.tscn" id="1_8cror"]
 [ext_resource type="Script" path="res://scenes/enemies/boss/erosion_tower_group.gd" id="1_bok2w"]
 [ext_resource type="PackedScene" uid="uid://27vgyy58ukpo" path="res://scenes/enemies/boss/boss_hp.tscn" id="3_x8mmi"]
 [ext_resource type="Script" path="res://script/EnemyStats.gd" id="4_vug33"]
+[ext_resource type="Script" path="res://resources/boss/tower_attack_step.gd" id="5_step"]
+[ext_resource type="Resource" path="res://resources/boss/tower_attack/phase1_laser_summon.tres" id="6_laser_summon"]
+[ext_resource type="Resource" path="res://resources/boss/tower_attack/phase1_bullet_summon.tres" id="7_bullet_summon"]
+[ext_resource type="Resource" path="res://resources/boss/tower_attack/phase2_all.tres" id="8_all"]
 
 [sub_resource type="Animation" id="Animation_pttj3"]
 resource_name = "death_anim"
@@ -64,6 +68,8 @@ stats = NodePath("EnemyStats")
 tower_1 = NodePath("ErosionTower_1")
 tower_2 = NodePath("ErosionTower_2")
 tower_3 = NodePath("ErosionTower_3")
+attack_sequence = Array[ExtResource("5_step")]([ExtResource("6_laser_summon"), ExtResource("7_bullet_summon"), ExtResource("8_all")])
+phase_hp_thresholds = PackedFloat32Array(0.5)
 
 [node name="ErosionTower_1" parent="." instance=ExtResource("1_8cror")]
 position = Vector2(0, -128)

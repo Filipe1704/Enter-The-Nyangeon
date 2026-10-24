@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TowerAttackStep" format=3]
+
+[ext_resource type="Script" path="res://resources/boss/tower_attack_step.gd" id="1_step"]
+
+[resource]
+script = ExtResource("1_step")
+label = "激光 + 召唤"
+tower_types = Array[int]([1, 3])
+window_ticks = 180
+gap_ticks = 20
+phases = 1

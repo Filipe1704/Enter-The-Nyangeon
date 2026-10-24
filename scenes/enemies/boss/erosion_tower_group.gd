@@ -4,6 +4,12 @@ extends Node2D
 @export var tower_1: Node
 @export var tower_2: Node
 @export var tower_3: Node
+# 出招序列（按数组顺序循环；每招用 phases 位掩码限定生效阶段）
+@export var attack_sequence: Array[TowerAttackStep] = []
+# 阶段血量阈值（降序，`_ready` 会自动排序）：ratio < 阈值[0] → 阶段 1；ratio < 阈值[1] → 阶段 2 …
+@export var phase_hp_thresholds: PackedFloat32Array = PackedFloat32Array([0.5])
+# HP 跨阶段时是否立即收招（false = 等本招窗口结束后再生效）
+@export var interrupt_on_phase_change: bool = true
 
 @onready var camera_marker: Marker2D = $boss_enter/CameraMarker
 @onready var coins: PackedScene = preload("res://scenes/item/coin_box.tscn")
@@ -13,13 +19,12 @@ extends Node2D
 var tower_group: Array[Node]
 var body_part: Array[Node]
 
-var shoot_cd: int = 0
-var shoot_time: int = 0
-
-var shoot_time_max = 60
-var shoot_cd_max = 25
-
-var attack_type: int = 1
+# 出招调度状态（单位：GameEvents.global_time_count 的 0.1s tick）
+var _started: bool = false
+var _step_index: int = -1
+var _ticks_left: int = 0
+var _in_window: bool = false
+var _current_phase: int = -1
 
 # 防止 is_dead 与状态机 DEAD 双路触发导致重复结算
 var _dead_started: bool = false
@@ -28,8 +33,30 @@ var _intruder_escaping: bool = false
 # 联机：塔组可视动画态广播（host 发、镜像回放）
 var _net_visual_replaying: bool = false
 
+const LASER_TOWER_TYPE: int = 1
+const PHASE_FLAG_MAX: int = 4
+# 场景未配置 attack_sequence 时的内置默认序列（与 resources/boss/tower_attack/*.tres 同源）
+const DEFAULT_STEPS: Array = [
+	preload("res://resources/boss/tower_attack/phase1_laser_summon.tres"),
+	preload("res://resources/boss/tower_attack/phase1_bullet_summon.tres"),
+	preload("res://resources/boss/tower_attack/phase2_all.tres"),
+]
+
 func _ready() -> void:
 	GameEvents.boss_event.connect(_on_network_boss_event)
+	_sort_phase_thresholds()
+
+# 阈值必须降序参与阶段换算；编辑器里填反了也能工作。
+func _sort_phase_thresholds() -> void:
+	var sorted_values: Array = []
+	for t in phase_hp_thresholds:
+		sorted_values.append(float(t))
+	sorted_values.sort()
+	sorted_values.reverse()
+	var rebuilt := PackedFloat32Array()
+	for t in sorted_values:
+		rebuilt.append(float(t))
+	phase_hp_thresholds = rebuilt
 
 func _net_boss_visual(fn_name: String) -> void:
 	if _net_visual_replaying:
@@ -48,79 +75,186 @@ func _on_network_boss_event(event_name: String, data: Dictionary) -> void:
 	call(fn)
 	_net_visual_replaying = false
 
+# ---------------- 出招序列（固定周期 + 阶段筛选，结构对齐 Goliath） ----------------
+# 说明：阶段切换只决定「下一招从哪开始」，不打断窗口（除非 interrupt_on_phase_change）。
+# 窗口下限只统计真正会开火的激光塔（tower_type==1）——三座塔都继承 laser_launcher，
+# 若按 launcher_pool_1 非空判断会把弹幕/召唤招也拖成 18 秒（旧实现的隐式行为）。
+
+func phase_for_ratio(ratio: float, thresholds: PackedFloat32Array) -> int:
+	var phase: int = 0
+	for t in thresholds:
+		if ratio < float(t):
+			phase += 1
+	return clampi(phase, 0, PHASE_FLAG_MAX - 1)
+
+func step_matches(step: TowerAttackStep, phase: int, alive_types: Dictionary) -> bool:
+	if step == null or step.tower_types.is_empty():
+		return false
+	var bit: int = 1 << clampi(phase, 0, PHASE_FLAG_MAX - 1)
+	if (step.phases & bit) == 0:
+		return false
+	for type_id in step.tower_types:
+		if bool(alive_types.get(int(type_id), false)):
+			return true
+	return false
+
+func next_eligible_index(steps: Array, start: int, phase: int, alive_types: Dictionary) -> int:
+	var count: int = steps.size()
+	if count <= 0:
+		return -1
+	var index: int = start % count
+	if index < 0:
+		index += count
+	for _scan in count:
+		var step: TowerAttackStep = steps[index]
+		if step_matches(step, phase, alive_types):
+			return index
+		index = (index + 1) % count
+	return -1
+
+func attack_state():
+	_reset_schedule()
+	if attack_sequence.is_empty():
+		push_warning("erosion_tower_group: attack_sequence 为空，使用内置默认序列")
+		for step in DEFAULT_STEPS:
+			attack_sequence.append(step)
+	_started = true
+	_current_phase = _phase_for_hp()
+	_step_index = -1
+	_advance_step()
+
+func _reset_schedule() -> void:
+	_started = false
+	_step_index = -1
+	_ticks_left = 0
+	_in_window = false
+	_current_phase = -1
+	stop_shoot()
+
+func time_count():
+	if _intruder_escaping or _dead_started or not _started:
+		return
+	if _in_window:
+		_ticks_left -= 1
+		if _ticks_left <= 0:
+			_end_window()
+		return
+	if _ticks_left > 0:
+		_ticks_left -= 1
+		if _ticks_left <= 0:
+			_advance_step()
+		return
+	_advance_step()
+
+func _advance_step() -> void:
+	var phase: int = _phase_for_hp()
+	var start: int = _step_index + 1
+	if phase != _current_phase:
+		_current_phase = phase
+		start = 0
+	var index: int = next_eligible_index(attack_sequence, start, phase, _alive_type_map())
+	if index < 0:
+		# 没有可用招式（目标塔全灭/序列与阶段不匹配）：保持静止直到结束
+		stop_shoot()
+		_in_window = false
+		_ticks_left = 0
+		return
+	_step_index = index
+	_begin_step(attack_sequence[index])
+
+func _begin_step(step: TowerAttackStep) -> void:
+	stop_shoot()
+	var towers: Array[Node] = []
+	for tower in tower_group:
+		if tower == null or not is_instance_valid(tower):
+			continue
+		if not step.tower_types.has(int(tower.tower_type)):
+			continue
+		if not _is_tower_alive(tower):
+			continue
+		tower.can_shoot = true
+		towers.append(tower)
+	_ticks_left = _effective_window(step, towers)
+	_in_window = true
+
+func _end_window() -> void:
+	stop_shoot()
+	_in_window = false
+	_ticks_left = 0
+	if _step_index >= 0 and _step_index < attack_sequence.size():
+		_ticks_left = maxi(0, attack_sequence[_step_index].gap_ticks)
+
+# 基准窗口与激光完整时长取大：避免 stop_shoot 在出光中途截断。
+func _effective_window(step: TowerAttackStep, towers: Array[Node]) -> int:
+	var total: int = maxi(1, step.window_ticks)
+	for tower in towers:
+		if int(tower.tower_type) != LASER_TOWER_TYPE:
+			continue
+		var launchers = tower.launcher_pool_1
+		if launchers == null:
+			continue
+		for launcher in launchers:
+			if launcher != null and is_instance_valid(launcher):
+				total = maxi(total, int(launcher.total_active_ticks()))
+	return total
+
+func _phase_for_hp() -> int:
+	if stats == null or stats.max_hp <= 0:
+		return 0
+	return phase_for_ratio(float(stats.hp) / float(stats.max_hp), phase_hp_thresholds)
+
+func _alive_type_map() -> Dictionary:
+	var map: Dictionary = {}
+	for tower in tower_group:
+		if tower == null or not is_instance_valid(tower):
+			continue
+		var type_id: int = int(tower.tower_type)
+		map[type_id] = bool(map.get(type_id, false)) or _is_tower_alive(tower)
+	return map
+
+func _is_tower_alive(tower: Node) -> bool:
+	if tower == null or not is_instance_valid(tower):
+		return false
+	if int(tower.is_idle) == 1:
+		return false
+	var tower_stats = tower.stats
+	if tower_stats == null:
+		return false
+	return int(tower_stats.hp) > 0
+
+func _on_hp_changed() -> void:
+	if _dead_started or _intruder_escaping or not _started:
+		return
+	var phase: int = _phase_for_hp()
+	if phase == _current_phase:
+		return
+	if not interrupt_on_phase_change:
+		return
+	# 立即收招，下一次 tick 从新阶段第一招开始
+	_current_phase = phase
+	stop_shoot()
+	_in_window = false
+	_step_index = -1
+	_ticks_left = 0
+
 func active_state():
 	reset_physics_interpolation()
 	_dead_started = false
 	_intruder_escaping = false
+	_reset_schedule()
 	await get_tree().create_timer(0.1).timeout
 	update_tower()
 	count_max_hp()
 	boss_enter_anim()
-	if not stats.hp_changed.is_connected(count_hp):
-		stats.hp_changed.connect(count_hp)
+	if not stats.hp_changed.is_connected(_on_hp_changed):
+		stats.hp_changed.connect(_on_hp_changed)
 	if not GameEvents.global_time_count.is_connected(time_count):
 		GameEvents.global_time_count.connect(time_count)
 
-func count_hp():
-	if stats.hp <= stats.max_hp * 0.5:
-		attack_type = 2
-	else:
-		attack_type = 1
-
-func time_count():
-	if _intruder_escaping:
-		return
-	if shoot_time > 0:
-		shoot_time -= 1
-		if shoot_time <= 0:
-			shoot_cd = shoot_cd_max
-			stop_shoot()
-	
-	if shoot_cd > 0:
-		shoot_cd -= 1
-		if shoot_cd <= 0:
-			attack_state(attack_type)
-
 func stop_shoot():
 	for i in tower_group:
-		i.can_shoot = false
-
-func attack_state(_type: int):
-	if _intruder_escaping:
-		return
-	shoot_time = shoot_time_max
-	match attack_type:
-		1:
-			attack_type_1()
-		2:
-			attack_type_2()
-	# 激光塔开火时，窗口自动抬升以覆盖其完整生命周期（预警+出光+淡出），
-	# 让激光只受自身 life_time 约束；非激光攻击仍维持 shoot_time_max。
-	shoot_time = max(shoot_time, _active_attack_ticks())
-
-func _active_attack_ticks() -> int:
-	var t: int = shoot_time_max
-	for tower in tower_group:
-		if tower == null or not is_instance_valid(tower) or not tower.can_shoot:
-			continue
-		for launcher in tower.launcher_pool_1:
-			if launcher != null and is_instance_valid(launcher):
-				t = max(t, launcher.total_active_ticks())
-	return t
-
-func attack_type_1():
-	var rand_group: Array
-	for i in tower_group.size() - 1:
-		if tower_group[i].is_idle != 1:
-			rand_group.append(tower_group[i])
-	if !rand_group.is_empty():
-		var n = randi_range(0, rand_group.size() - 1)
-		rand_group[n].can_shoot = true
-	tower_3.can_shoot = true
-
-func attack_type_2():
-	for i in tower_group:
-		i.can_shoot = true
+		if i != null and is_instance_valid(i):
+			i.can_shoot = false
 
 func update_tower():
 	tower_group = [tower_1, tower_2, tower_3]
@@ -242,7 +376,7 @@ func boss_enter_anim():
 		GameEvents.emit_ui_visible(true)
 		get_tree().paused = false
 		GameEvents.emit_pause_lock(false)
-	attack_state(attack_type)
+	attack_state()
 
 func count_now_hp():
 	stats.hp = tower_1.stats.hp + tower_2.stats.hp + tower_3.stats.hp
@@ -274,7 +408,3 @@ func _coin_drops():
 	coin_box.add_coin()
 	PoolManager.erase_pool("erosion_tower")
 	queue_free()
-
-func enemy_fever_time():
-	shoot_time_max = 55
-	shoot_cd_max = 15
