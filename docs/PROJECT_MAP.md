@@ -14,7 +14,7 @@
 - **Scale**: 本体 `script/` / `scenes/` / `ui/` / `resources/` 共 481 个 GDScript；整体场景/SDK/测试规模以审计地图统计为准。
 - **Physics**: Rapier2D (`project.godot:234`).
 - **Resolution**: design 640×360, window override 1280×720, stretch `canvas_items` (`project.godot:46-50`).
-- **Version**: 以 `script/Game.gd:13` 的 `Game.version_number` 为准，当前 **`v0.5.1.4`**；官方联机发布版本 `0.1.12`（最低本体 `v0.5.1.4`），联机协议为 v5。SUPERSEDED: 2026-10-14 先回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），随后用户改定发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4）；2026-10-20 腐化同步使协议升到 v5、联机 Mod 升到 `0.1.12`。联机与具备前置伤害接口的本体仍需配套更新。
+- **Version**: 以 `script/Game.gd:13` 的 `Game.version_number` 为准，当前 **`v0.5.2.0-test`**；官方联机发布版本 `0.1.13`（最低本体 `v0.5.2.0`），联机协议为 v6。SUPERSEDED: 2026-10-14 先回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），随后用户改定发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4）；2026-10-20 腐化同步使协议升到 v5、联机 Mod 升到 `0.1.12`；2026-10-24 镰刀残留修复使协议升到 v6、联机 Mod 升到 `0.1.13`，同日最低本体声明提升为 `v0.5.2.0`（Mod 版本不变）。联机与具备前置伤害接口的本体仍需配套更新。
 - **README**: 根目录 `README.md` 面向玩家、Mod 开发者与项目维护者，提供下载、源码启动、SDK 和知识库入口；顶部横幅复用 `ui/ark_of_Shittim/ETN_key_visual.png`。
 
 ## 2. Directory layout / 目录职责

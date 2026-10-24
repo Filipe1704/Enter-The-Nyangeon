@@ -101,6 +101,7 @@
 - **目标承伤镜像契约（2026-10-14）**：房主 resolved 路径不再自行乘目标承伤（`global_hurt_damage`）或本机被动，客机 `resolved_damage` 依赖其对**目标受击者**的本地快照；因此任何修改目标 `global_hurt_damage`/`damage_multiplier` 的来源（debuff、道具、`BuffAura` 等）**必须经 buff 镜像同步到客机**，否则客机求值与房主实际扣血不一致。新增此类来源时须确认已走镜像通道。
 - Hina 距离闭包保持子弹内求值；Kotori、Tsurugi、Utaha、Momoi 的数值增伤及近战藏品迁到前置阶段。Momoi 的施加燃烧仍留在原 proc，避免预计算产生双重副作用；Mint 在命中瞬间写入倍率，由同一数值路径消费。
 - 版本：2026-10-20 用户改定官方 Mod 发布版本为 0.1.11、最低本体版本提升为 v0.5.1.4（2026-10-14 曾定本体 v0.5.1.4 / 官方 Mod 0.1.10），尚未提交上游的协议变更统一为 v4；期间曾回滚至 v0.5.1.3（原标 v0.5.1.4 / 0.1.12 / 协议 v5）的修复保留。SUPERSEDED: 2026-10-20 腐化同步（玩家状态包新增 `corruption`）使协议升为 v5、官方 Mod 发布版本升为 0.1.12。本体与 Mod 需配套更新，无前置接口的旧本体停止注入。证据：`health_component.gd:31,213,225`、`GameEvents.gd:97,333`、`coop_net.gd:_prepare_enemy_hit/_server_enemy_hit/_server_enemy_part_hit`。守卫：`run_damage_contract_checks.py` 与联机 `damage` 实际双端场景。
+- SUPERSEDED: 2026-10-24 官方 Mod 保持 `0.1.13`、最低本体版本声明提升为 `v0.5.2.0`（协议仍为 v6）；本条所述最低版本与发布版本不再适用。（来源：user）
 
 - **客机菜刀伤害数字一致性（mod，2026-10-15）**：沿用主线 `_prepare_enemy_hit → resolve_damage → resolved_damage` 数值契约；`_server_enemy_hit` 额外在权威 `on_damage_dealt` 回调采集本次结算伤害，用于飘字和归属 proc，记分继续使用有效 HP 差。菜刀对剩余 `50` 生命的目标造成 `99999` 斩杀伤害时，两端均显示 `99999`，实际扣血和记分仍为 `50`。沙袋的 `on_dead()` 延迟回血，回归须记录命中瞬间的 HP，不能跨帧比较。`tests/coop_knife_damage_checks.gd`（`python tests/run_coop_item_visual_checks.py --damage`）覆盖 LAN/Relay 的正常命中、减伤/易伤、斩杀、普通过量伤害、沙袋回血及记分。
 
