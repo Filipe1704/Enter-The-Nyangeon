@@ -19,6 +19,9 @@ const DEFAULT_PLAYER_SCENE := "res://scenes/player/momoi/momoi.tscn"
 @onready var _mode_panel = $Control/GamemodeButton
 
 var player: String = ""
+# 与本体 ui/level_select.gd 对齐：ui/level_button.gd:_on_timer_timeout 会写这个属性。
+# 缺声明时该赋值是运行时错误并中断回调 → 点难度后不转场、不进关卡（联机卡在难度界面）。
+var transition_started: bool = false
 var _open_level_button: Node
 
 

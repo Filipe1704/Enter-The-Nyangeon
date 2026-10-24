@@ -9,6 +9,7 @@
 - **修法（mod）**：`CoopVisualSync.spawn_visual_effect` 同 eid 优先复用 `_by_effect_id` 中的同一克隆（失效/待删先剔除）；新增 `idle_effect(eid)`：隐藏但**保留** eid→节点映射，不写 `_ended_effect`；`_acquire_effect` 跳过被其它 eid 占用的节点。`coop_net._flush_follow_states` 对实现 `network_get_visual_state` 且 idle 的节点按 `FOLLOW_IDLE_RESYNC_MSEC=500` 节流广播 `{eid, h}`（首帧立即发、丢包重发自愈；光束仍走 reliable despawn），`_sanitize_follow_entry` 在坐标校验前分流 `h`，`_apply_remote_follow` 收到 `h` 调 `idle_effect`。
 - **修法（本体）**：`murky_hand_scythe_icon.network_apply_visual_state` 收到活跃状态时若处于 idle 则恢复 `is_idle=0`/`visible=true` 并吸附到目标位置，避免迟到的 idle 包把远端克隆永久隐藏。
 - **验证**：单元探针 `tests/coop_visual_follow_checks.gd`（复用/隐藏/恢复/消毒）；双进程 LAN `tests/run_coop_scythe_visual_checks.py`（隔离 user://）3 轮 idle/shoot 后远端克隆数恒为 1、同一实例复用、idle 隐藏/激活恢复；同一用例对旧 PCK 复现 `count=2→3→4`（确认回归能捕获原 bug）。
+- **难度面板开战修复（2026-10-24）**：`coop_difficulty.gd` 以自身作为 `level_select`，但未声明 `ui/level_button.gd:_on_timer_timeout` 会写的 `transition_started` → 该赋值是运行时错误并中断回调，房主点难度后不转场、不进关卡（联机选完人卡在难度界面，客机停在「等待房主选择」）。修法：补 `var transition_started: bool = false`（与 `ui/level_select.gd` 对齐）；协议与 `MOD_VERSION` 不变，只需重建 PCK。回归：`tests/run_coop_difficulty_start_checks.py`（从源码打包 PCK、隔离 user://、headless 走 `level_button → Timer → change_scene`；修复前 `checks=5 failures=2`，修复后 `failures=0`）。
 - **最低支持本体提升为 `v0.5.2.0`**（2026-10-24）：manifest `game_version` 由 `v0.5.1.4` 改为 `v0.5.2.0`；`-test` 后缀按数字段忽略，当前 `v0.5.2.0-test` 视为满足。仅清单声明变化，`MOD_VERSION` 仍 `0.1.13`、协议仍 `v6`，Mod 尚未正式发布。
 
 ## 0.1.12 腐化同步（2026-10-20）
@@ -535,7 +536,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mod_sdk\build_coop_mod.ps1
 - **选人阶段守卫**：`_server_player_selected` 在 `_select_flow_active` 时**只记录** `selected_player_scene_by_peer`，不再自动 `_broadcast_roster`（否则选完人立刻开战、跳过难度）。
 - **就绪**：`report_select_ready(bool)` → host `_set_select_ready`；全员就绪 → `_maybe_finish_select()` 广播 `_remote_select_all_ready`（非 host 转「等待房主选择」）。
 - **ESC 分层语义**：① 选人层（房主尚未选角色）按 `ESC` → `abort_select_to_lobby()`：取消整轮选人、全员回准备房并**解除暂停**；客机在选人层按 `ESC` 仅被吞掉（不弹本体暂停菜单）。② 已就绪遮罩按 `ESC` → 仅取消**本人**就绪、回选人层（世界保持暂停）；全员就绪后客机锁定。③ 难度面板按 `ESC` → `cancel_select()` 广播 `_remote_select_cancelled`，全员清 ready、回选人层（世界保持暂停）。
-- **进关卡**：难度按钮走本体 `level_button` → `GameEvents.change_scene(main, player)` → `_gate_change_scene` 的 `ALL_READY` 分支（先解除暂停）`_broadcast_roster()` 放行；`level_state` 现含 `game_mode` 数组（`_build/_apply_level_state`）。
+- **进关卡**：难度按钮走本体 `level_button` → `GameEvents.change_scene(main, player)` → `_gate_change_scene` 的 `ALL_READY` 分支（先解除暂停）`_broadcast_roster()` 放行；`level_state` 现含 `game_mode` 数组（`_build/_apply_level_state`）。⚠️ `coop_difficulty.gd` 以自身作为 `level_select`，**必须声明 `transition_started`**（`ui/level_button.gd:_on_timer_timeout` 会直接写它；缺失时是运行时错误并中断回调，表现为点难度后卡在难度界面）。2026-10-24 已修，回归见 `tests/run_coop_difficulty_start_checks.py`。
 - **`_on_character_confirmed` 顺序**：`report_local_selection` → 隐藏并延迟释放选人层 → `_open_ready` → **最后** `report_select_ready`。否则房主作为最后就绪者时，同步触发的 `select_all_ready` 会先开难度面板、随后才叠上「已就绪」把它盖住（已就绪 layer 101 < 难度 102，且 `_close_ready` 立即 `visible=false`）。
 
 ### 界面（新增）
