@@ -32,8 +32,8 @@ const LOBBY_SCENE: String = "res://scenes/main/test_room.tscn"
 const DEFAULT_BATTLE_SCENE: String = "res://scenes/main/main.tscn"
 const MENU_SCENE: String = "res://scenes/main/menu_screen.tscn"
 # 协议/版本握手：不一致直接拒绝。RPC 契约变更时必须递增 PROTOCOL_VERSION。
-const PROTOCOL_VERSION: int = 5
-const MOD_VERSION: String = "0.1.12"
+const PROTOCOL_VERSION: int = 6
+const MOD_VERSION: String = "0.1.13"
 const HELLO_TIMEOUT_MSEC: int = 30000
 # 客机：发出 _client_hello 后等待 _hello_accept 的上限；超时视为握手失败（旧房主/版本不匹配）
 const HELLO_ACCEPT_TIMEOUT_MSEC: int = 30000
@@ -646,6 +646,9 @@ var _next_visual_id: int = 1
 # 特效/视觉通道只播一次 spawn，外部驱动的持续视觉（光束跟随/追踪、镰刀回程等）
 # 需按 effect_id 周期同步，远端表现才与拥有者一致。
 const FOLLOW_SYNC_INTERVAL: float = 0.05
+# 空闲态重发间隔：持续视觉转入 idle 后仍按此周期重发「隐藏」条目（unreliable，丢了/晚了要能自愈）。
+# 正常情况下节点刚转入 idle 时立即发一次，之后才按此间隔节流。
+const FOLLOW_IDLE_RESYNC_MSEC: int = 500
 const MAX_BEAM_SEGMENTS: int = 16
 var _follow_timer: float = 0.0
 var _follow_nodes: Dictionary = {}   # effect_id -> Node（本机拥有的持续视觉）
@@ -6787,8 +6790,16 @@ func _flush_follow_states(delta: float) -> void:
 		if node == null or not is_instance_valid(node):
 			_follow_nodes.erase(eid)
 			continue
-		# 视觉通道节点 idle 时 net_effect_id 不回收，跳过隐藏态以免持续发送无效状态。
+		# 通用持续视觉（network_get_visual_state，如镰刀）idle 时必须显式通知远端隐藏：
+		# 远端克隆的 _physics_process 被 _net_remote_driven 跳过本地归位，收不到 idle 会停在
+		# 最后位置永久残留。节点级节流：转入 idle 立即发一次，之后每 FOLLOW_IDLE_RESYNC_MSEC 重发。
+		# 光束（network_get_beam_state）走 on_projectile_despawned 的可靠 despawn，不在此发空闲态。
 		if node.get("is_idle") != null and int(node.is_idle) == 1:
+			if not node.has_method("network_get_beam_state") and node.has_method("network_get_visual_state"):
+				var now: int = Time.get_ticks_msec()
+				if now - int(node.get_meta("_coop_idle_sent_ms", 0)) >= FOLLOW_IDLE_RESYNC_MSEC:
+					node.set_meta("_coop_idle_sent_ms", now)
+					batch.append({"eid": str(eid), "h": true})
 			continue
 		if node.has_method("network_get_beam_state"):
 			var st = node.call("network_get_beam_state")
@@ -6833,6 +6844,9 @@ func _sanitize_follow_entry(e) -> Dictionary:
 	var eid: String = str(e.get("eid", "")).substr(0, MAX_NET_ID_LEN)
 	if eid == "":
 		return {}
+	# 空闲/隐藏条目只要 eid：必须在坐标校验之前分流，否则缺 p 会被当成 (0,0) 使远端瞬移到原点。
+	if bool(e.get("h", false)):
+		return {"eid": eid, "h": true}
 	var p = e.get("p", Vector2.ZERO)
 	if not (p is Vector2) or not (p as Vector2).is_finite():
 		return {}
@@ -6898,6 +6912,10 @@ func _apply_remote_follow(e: Dictionary) -> void:
 	var eid: String = str(e.get("eid", ""))
 	var node = _visual.get_effect(eid)
 	if node == null:
+		return
+	# 拥有者已回收（idle）：远端克隆隐藏，但保留 effect_id → 节点映射，下次 spawn 复用同一节点。
+	if bool(e.get("h", false)):
+		_visual.idle_effect(eid)
 		return
 	var p = e.get("p", Vector2.ZERO)
 	if node.has_method("network_apply_beam_state") and e.has("a") and p is Vector2:

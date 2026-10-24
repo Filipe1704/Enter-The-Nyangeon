@@ -151,7 +151,14 @@ func network_apply_visual_state(p: Vector2, rot: float, sc: Vector2) -> void:
 	_net_target_pos = p
 	_net_target_rot = rot if is_finite(rot) else global_rotation
 	_net_target_scale = sc if sc.is_finite() else scale
-	if not _net_remote_driven:
+	# 远端可能因迟到的 idle 通知被隐藏：收到活跃状态即恢复可见并吸附到目标。
+	# 不重跑 active_state()：那会重启飞/环绕计时、清 _net_remote_driven，导致远端轨迹二次起跳。
+	var was_idle: bool = is_idle == 1
+	if was_idle:
+		reset_physics_interpolation()
+		is_idle = 0
+		visible = true
+	if not _net_remote_driven or was_idle:
 		_net_remote_driven = true
 		global_position = _net_target_pos
 		global_rotation = _net_target_rot

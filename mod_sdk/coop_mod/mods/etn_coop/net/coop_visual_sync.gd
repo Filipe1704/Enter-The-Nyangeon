@@ -142,6 +142,19 @@ func despawn_visual_effect(effect_id: String) -> void:
 		_visual_idle(e)
 
 
+# 持续视觉转入空闲（拥有者回收，但之后还可能复用同一 effect_id）：
+# 只隐藏克隆、保留 effect_id → 节点映射，等下次 spawn 直接复用同一节点。
+# 与 despawn_visual_effect 的区别：不写 _ended_effect，否则该 id 之后永远无法再显示。
+func idle_effect(effect_id: String) -> void:
+	if effect_id == "":
+		return
+	var e = _by_effect_id.get(effect_id)
+	if e == null or not is_instance_valid(e) or e.is_queued_for_deletion():
+		_by_effect_id.erase(effect_id)
+		return
+	_visual_idle(e)
+
+
 # 远端纯视觉克隆销毁：优先专用 visual_idle_state（跳过爆炸等副作用），否则回退 idle_state
 func _visual_idle(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
@@ -182,7 +195,18 @@ func spawn_visual_effect(tree: SceneTree, scene_path: String, position: Vector2,
 	var root := tree.get_first_node_in_group(group)
 	if root == null:
 		return
-	var effect: Node = _acquire_effect(scene_path)
+	# 同一 effect_id 一律复用同一克隆：池化道具特效（镰刀/火场等）每次激活都会以相同 eid
+	# 重新 spawn，若改从共享池另取空闲节点，会留下一个「上一轮」的可见克隆，反复激活即累积成
+	# 多个残留（远端镰刀越打越多）。失效映射先剔除，再走共享池/新建。
+	var effect: Node = null
+	if effect_id != "":
+		var mapped = _by_effect_id.get(effect_id)
+		if mapped != null and is_instance_valid(mapped) and not (mapped as Node).is_queued_for_deletion():
+			effect = mapped
+		else:
+			_by_effect_id.erase(effect_id)
+	if effect == null:
+		effect = _acquire_effect(scene_path)
 	if effect == null:
 		effect = scene.instantiate()
 	# 先打 remote_visual 标记再入树：场景根脚本的 _ready（如 pyroxenes 的 on_pickup_spawned）
@@ -226,7 +250,8 @@ func spawn_visual_effect(tree: SceneTree, scene_path: String, position: Vector2,
 		_queue_free_after(tree, effect, 6.0)
 
 
-# 取可复用空闲特效；无则返回 null（由调用方实例化）
+# 取可复用空闲特效；无则返回 null（由调用方实例化）。
+# 已被其它 effect_id 占用的节点（映射仍在）不参与复用/淘汰，避免两个 effect 驱动同一个克隆。
 func _acquire_effect(scene_path: String) -> Node:
 	var arr: Array = _effect_pool.get(scene_path, [])
 	if arr.is_empty():
@@ -237,13 +262,22 @@ func _acquire_effect(scene_path: String) -> Node:
 			valid.append(b)
 	_effect_pool[scene_path] = valid
 	for b in valid:
-		if b.get("is_idle") != null and int(b.is_idle) == 1:
+		if b.get("is_idle") != null and int(b.is_idle) == 1 and not _is_effect_claimed(b):
 			return b
 	if valid.size() >= EFFECT_POOL_MAX:
 		for b in valid:
-			_visual_idle(b)
-			return b
+			if not _is_effect_claimed(b):
+				_visual_idle(b)
+				return b
 	return null
+
+
+# 节点当前是否被某个 effect_id 占用（映射仍在且指向自己）。
+func _is_effect_claimed(node: Node) -> bool:
+	var eid: String = str(node.get_meta("_coop_effect_id", ""))
+	if eid == "":
+		return false
+	return _by_effect_id.get(eid) == node
 
 
 func _track_effect(scene_path: String, effect: Node) -> void:
