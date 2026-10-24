@@ -47,6 +47,12 @@ func _lock_selection() -> void:
 	_close_level_preview()
 	_set_auxiliary_enabled(false)
 
+
+# 难度按钮能否展开预览：入场动画完成（_keyboard_ready）后，且尚未提交选择。
+# level_button 以 has_method 探测；co-op 难度面板没有此方法，行为保持不变。
+func is_preview_ready() -> bool:
+	return _keyboard_ready and not _selection_pending
+
 func _groups() -> Array:
 	var enemy_mods: Array = enemy_mod_box.get_children() if _enemy_mod_visible else []
 	return [[support_select.main_card], level_box.get_children(), mode_box.get_children(), enemy_mods, [return_button]]
@@ -214,10 +220,17 @@ func _bind_level_previews() -> void:
 			button.connect("previewed", _on_level_previewed)
 
 func _on_level_previewed(button: Node) -> void:
-	if not _keyboard_ready or _selection_pending or button == null:
+	if button == null:
 		return
 	var level: Level = button.get("level")
 	if level == null:
+		return
+	# 入场窗口内（select_in 的 method track 已启用按钮、_keyboard_ready 还差一帧）不展开：
+	# 按钮若先展开，previewed 被忽略且不会被记入 _open_level_button，_preview_open 会永久
+	# 停在 true、动画卡在展开态。这里兜底收起，配合 level_button 的 is_preview_ready 门控。
+	if not is_preview_ready():
+		if button.has_method("close_preview"):
+			button.close_preview()
 		return
 	if _open_level_button != null and _open_level_button != button:
 		if is_instance_valid(_open_level_button) and _open_level_button.has_method("close_preview"):

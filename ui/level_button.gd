@@ -54,8 +54,22 @@ func cancel_selection() -> void:
 	animation_player.play("RESET")
 	animation_player.advance(0)
 
+# 预览是否允许展开：由难度页统一决定（入场动画完成前、已提交选择后为 false）。
+# 入场窗口内按钮已可接鼠标，但父级的 previewed 会被忽略；若此时展开，_preview_open 会
+# 永久停在 true 且不被记录为 _open_level_button，动画就卡在展开态。
+# 没有该方法的父级（如联机难度面板）保持原有行为。
+func _preview_allowed() -> bool:
+	if level_select == null or not is_instance_valid(level_select):
+		return true
+	if not level_select.has_method("is_preview_ready"):
+		return true
+	return bool(level_select.call("is_preview_ready"))
+
+
 func mouse_in():
 	if on_selected:
+		return
+	if not _preview_allowed():
 		return
 	if mouse_filter != Control.MOUSE_FILTER_IGNORE and not has_focus():
 		grab_focus()
@@ -64,6 +78,8 @@ func mouse_in():
 
 func open_preview() -> void:
 	if on_selected or _preview_open:
+		return
+	if not _preview_allowed():
 		return
 	_preview_open = true
 	SoundManager.play_sfx("ButtonSounds2")
