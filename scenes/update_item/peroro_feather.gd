@@ -1,9 +1,4 @@
 extends EquipItem
 
-func _on_equip():
-	PlayerData.luck_add += 12
-
-func _apply_effect(quantity: int):
-	if quantity == 1:
-		return
+func _apply_effect(_quantity: int):
 	PlayerData.luck_add += 12

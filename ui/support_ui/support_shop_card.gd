@@ -1,13 +1,15 @@
 extends PanelContainer
 
+const TextureBinding := preload("res://script/lazy_texture_binding.gd")
+
 @export var shop_card: SupportCard
 
 @onready var support_sprite: Sprite2D = %support_sprite
 @onready var main_name: Label = %MainName
 @onready var card_anim: AnimationPlayer = $AnimationPlayer
+@onready var _portrait_binding = TextureBinding.new(self, [support_sprite])
 
 var on_select: bool = false
-var _revealed_path: String = ""
 
 func _ready() -> void:
 	mouse_entered.connect(mouse_in)
@@ -29,27 +31,12 @@ func get_card():
 func reveal() -> void:
 	if support_sprite == null or shop_card == null:
 		return
-	var p := shop_card.character_sprite_path
-	if _revealed_path == p and support_sprite.texture != null:
-		return
-	if _revealed_path != "":
-		LazyTexture.release(_revealed_path)
-	support_sprite.texture = LazyTexture.acquire(p)
-	_revealed_path = p
+	_portrait_binding.show_path(shop_card.character_sprite_path)
 
 
 func conceal() -> void:
-	if _revealed_path != "":
-		LazyTexture.release(_revealed_path)
-		_revealed_path = ""
-	if support_sprite != null:
-		support_sprite.texture = null
-
-
-func _exit_tree() -> void:
-	if _revealed_path != "":
-		LazyTexture.release(_revealed_path)
-		_revealed_path = ""
+	if _portrait_binding != null:
+		_portrait_binding.clear()
 
 func check_card(s_card: SupportCard):
 	if s_card != shop_card and on_select == true:

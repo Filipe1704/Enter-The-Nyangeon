@@ -1,9 +1,4 @@
 extends EquipItem
 
-func _on_equip():
-	PlayerData.bullet_penetrate_add += 2
-
-func _apply_effect(quantity: int):
-	if quantity == 1:
-		return
+func _apply_effect(_quantity: int):
 	PlayerData.bullet_penetrate_add += 2
