@@ -59,6 +59,12 @@ func _prune_active() -> void:
 	if dirty:
 		active_count = _active.size()
 
+## 只读：当前活跃金币（先剔除失效/回池项）。供场地词条选点等只读用途，
+## 不要直接读 `_active`。
+func get_active_coins() -> Array:
+	_prune_active()
+	return _active.values()
+
 ## 统一掉落入口：优先复用空闲金币；未满额则新建；满额并入最近的活跃金币。
 func drop_coin(pos: Vector2, value: int, pick_up: bool) -> void:
 	if value <= 0:

@@ -2479,6 +2479,7 @@ func _on_host_orbital_blast(point: Vector2, radius: float, damage_ratio: float) 
 	if not is_lan_game or not multiplayer.is_server():
 		return
 	rpc("_remote_orbital_blast", point, radius)
+	var slow_cfg := _orbital_slow_config()
 	for peer_id in player_by_peer_id.keys():
 		if int(peer_id) == multiplayer.get_unique_id():
 			continue
@@ -2493,6 +2494,28 @@ func _on_host_orbital_blast(point: Vector2, radius: float, damage_ratio: float) 
 			continue
 		var amount := maxi(1, roundi(float(stats.max_hp) * damage_ratio))
 		rpc_id(int(peer_id), "_remote_orbital_damage", amount, point)
+		_send_orbital_player_slow(int(peer_id), slow_cfg)
+
+func _orbital_slow_config() -> Dictionary:
+	if _orbital_effect == null or not is_instance_valid(_orbital_effect):
+		return {}
+	if not _orbital_effect.has_method("get_player_slow_config"):
+		return {}
+	return _orbital_effect.call("get_player_slow_config")
+
+# 轨道炮击命中减速：复用既有 _remote_player_buff RPC，在客机本机给真实玩家挂 buff。
+# 数值从本体 effect 读取，避免与 orbital_barrage.gd 的 SLOW_VALUE 各写一份。
+func _send_orbital_player_slow(peer_id: int, cfg: Dictionary) -> void:
+	if cfg.is_empty():
+		return
+	var buff_path := str(cfg.get("buff_path", ""))
+	if buff_path == "" or not (cfg.get("value") is Array):
+		return
+	var value: Array = cfg["value"]
+	if value.is_empty():
+		return
+	var source_id := str(cfg.get("source_id", "orbital_barrage"))
+	rpc_id(peer_id, "_remote_player_buff", true, buff_path, value, source_id)
 
 func _on_host_orbital_wave_ended() -> void:
 	if not is_lan_game or not multiplayer.is_server():

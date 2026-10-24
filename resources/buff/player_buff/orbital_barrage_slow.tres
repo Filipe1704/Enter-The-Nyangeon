@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="Buff" load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://sprites/buff_icon/orbital_barrage.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/buff/buff.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+id = "orbital_barrage_slow"
+icon = ExtResource("1_icon")
+name = "炮击震荡"
+ability = ""
+remove_by_layer = false
+description = "移动速度降低50%"
+audience = 0
+is_debuff = true
+source_refcount = true
+modifiers = Array[Dictionary]([{"key": "speed_mult", "mode": "mult", "source": "value"}])

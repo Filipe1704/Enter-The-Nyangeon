@@ -3398,3 +3398,15 @@
 - Notes / 说明: **现象**（user）：联机侵蚀之塔 Boss 被 Ako 链拖动；塔移动后客机端激光留在原地（伤害洞也在原地），房主/客机两种角色都能复现。**根因**：链命中子塔后 `_resolve_enemy_net_id` 沿父链回溯到塔组根；host `_apply_ako_lock` 对根写 `frozen` → GDScript 运行时错误并中断函数，但错误前 `_ako_lock_by_enemy` 已登记；`_tick_ako_locks` 只对 `BOSS` 组跳过夹取，塔组根不在组里 → 整组塔被夹到 Ako 120px 内。客机激光是 `on_projectile_spawned` 的一次性特效克隆，只在生成时定位，不随镜像塔移动。**「房主和客机都会」不是本体 bug**：两条锁定路径最终都汇到 host 的同两个 mod 函数；本体没有写塔组根位置的代码，战斗动画也不移动发射器（只有 `enter_anim` 移动 `Graphics`，且开火在入场结束后）。**修法（纯 mod）**：① `_apply_ako_lock` 对 `enemy.get("frozen") == null` 的聚合实体返回 false、不再登记；host 本机入口与 `_server_ako_event` 按返回值收回链（`_ako_release_owner_chain`），`_tick_ako_locks` 加不可冻结防御分支；② `laser_launcher` 特效 entry 附 `an`(宿主 net_id)+`ap`(相对 net entity 根的路径)，客机解析镜像发射器并逐帧把克隆 `global_position` 贴过去（只锚位置、旋转仍自驱）。**通用教训**：① 聚合实体根（Node2D + 聚合 stats）没有 `Enemy.frozen`，按 net entity 写敌人字段前必须做能力检查，拒绝时不能只吞错误、必须撤销登记；② 一次性视觉克隆若宿主会移动，必须按 net_id + 相对路径绑定镜像节点，不能只信生成时世界坐标；③ 「房主和客机都复现」先确认权威路径是否都汇到 host，再判断本体；④ 塔组根故意不在 `BOSS`/`Enemy` 组（`main.gd:enemy_clear_unit` 只清直接子节点），不要为了这条链把根加组。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-25
+
+### [Chip/Field] 轨道炮击金币优先取点只认落地金币，且选点必须 host 权威
+- Evidence / 证据: `scenes/manager/coin_manager.gd`（`get_active_coins()`）；`scenes/field_mods/orbital_barrage.gd`（`_collect_gold_samples` / `_score_gold_candidates` / `_choose_gold_target` / `_choose_target_point`）；`mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（`_on_host_orbital_marker`）。
+- Notes / 说明: **金币密集**只能读 `CoinManager` 的活跃集，不能扫 `CoinRoot` 直接子节点（会漏掉挂在 `PathFollow2D` 下的金币、也拿不到回池真源）；取样必须过滤 `pick_up`（已被玩家 PickBox 触发归位，马上消失）、`can_pick == false`（抛物线/Boss 演出飞行期）、`is_idle == 1`（回池）与无效/出树节点。按面值加权并对单枚设上限（默认 10），否则一枚合并大币会压过真实密度；候选用世界空间分桶质心 + 半径内权重线性衰减，避免逐点聚类。无合格金币/最高分 < `gold_min_weight` 时回退玩家；全部候选都离已有落点太近时仍取最密集点，不转去打玩家。客机只收 marker 坐标、不评估金币，**不要**在客机重复选点。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-25
+
+### [Coop/Field] 场地词条给远端玩家的 debuff 必须走玩家 buff RPC，不能对代理直接 apply_buff
+- Evidence / 证据: `mod_sdk/coop_mod/mods/etn_coop/net/coop_net.gd`（`_gate_player_buff_apply` / `_support_buffed_peers` / `_on_local_support_ex_end` / `_remote_player_buff`）；`scenes/field_mods/orbital_barrage.gd`（`_apply_player_slow` / `get_player_slow_config`）；`scenes/manager/buff_manager_base.gd`（`apply_buff` / `_create_entry` / `source_refcount`）。
+- Notes / 说明: `BuffRouter.apply_buff(远端玩家代理, ...)` 虽会被 `player_buff_apply_interceptor` 转交到客机，但该通道同时把 `peer -> buff.resource_path` 写进只按 peer 记**单路径**的 `_support_buffed_peers`（供支援 EX 结束兜底移除）；场地词条复用它会把光环路径覆盖掉，导致支援 buff 的兜底移除指向错误路径。轨道炮击改为 host 在 `_on_host_orbital_blast` 用既有 `_remote_player_buff` RPC 直接下发 buff（不新增 RPC/协议），客机 `_remote_player_buff` 对本地真实玩家 `BuffRouter.apply_buff`。减速 buff 用 `source_refcount=true`：多次命中只刷新 1.5 秒、不叠层；`is_debuff=true` 才不吃“有益 Buff 持续时间”加成。数值由本体 `get_player_slow_config()` 提供（含 `buff_path`/`value`/`source_id`），mod 不另写一份。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-25

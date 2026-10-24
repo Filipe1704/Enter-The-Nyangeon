@@ -14,7 +14,7 @@
 - **Scale**: 本体 `script/` / `scenes/` / `ui/` / `resources/` 共 481 个 GDScript；整体场景/SDK/测试规模以审计地图统计为准。
 - **Physics**: Rapier2D (`project.godot:245`).
 - **Resolution**: design 640×360, window override 1280×720, stretch `canvas_items` (`project.godot:53-57`).
-- **Version**: 以 `script/Game.gd:13` 的 `Game.version_number` 为准，当前 **`v0.5.2.0-test`**；官方联机发布版本 `0.1.14`（最低本体 `v0.5.2.0`），联机协议为 v6。SUPERSEDED: 2026-10-14 先回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），随后用户改定发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4）；2026-10-20 腐化同步使协议升到 v5、联机 Mod 升到 `0.1.12`；2026-10-24 镰刀残留修复使协议升到 v6、联机 Mod 升到 `0.1.13`，同日最低本体声明提升为 `v0.5.2.0`（Mod 版本不变）；2026-10-24 联机难度面板开战修复后 Mod 升到 `0.1.14`（协议仍 v6、最低本体仍 `v0.5.2.0`）；2026-10-25 乱入 Boss 非死亡移除同步 + 轨道炮击客机音效（**Mod 版本仍 `0.1.14`**、协议仍 v6、最低本体仍 `v0.5.2.0`）。联机与具备前置伤害接口的本体仍需配套更新。
+- **Version**: 以 `script/Game.gd:13` 的 `Game.version_number` 为准，当前 **`v0.5.2.0-test`**；官方联机发布版本 `0.1.14`（最低本体 `v0.5.2.0`），联机协议为 v6。SUPERSEDED: 2026-10-14 先回滚本体至 `v0.5.1.3`（原标 `v0.5.1.4`/`0.1.12`/协议 v5），随后用户改定发布版本为 `v0.5.1.4`（导出文件名同步 0.5.1.4）；2026-10-20 腐化同步使协议升到 v5、联机 Mod 升到 `0.1.12`；2026-10-24 镰刀残留修复使协议升到 v6、联机 Mod 升到 `0.1.13`，同日最低本体声明提升为 `v0.5.2.0`（Mod 版本不变）；2026-10-24 联机难度面板开战修复后 Mod 升到 `0.1.14`（协议仍 v6、最低本体仍 `v0.5.2.0`）；2026-10-25 乱入 Boss 非死亡移除同步 + 轨道炮击客机音效（**Mod 版本仍 `0.1.14`**、协议仍 v6、最低本体仍 `v0.5.2.0`）；同日轨道炮击命中减速（Mod 版本、协议、最低本体均不变）。联机与具备前置伤害接口的本体仍需配套更新。
 - **README**: 根目录 `README.md` 面向玩家、Mod 开发者与项目维护者，提供下载、源码启动、SDK 和知识库入口；顶部横幅复用 `ui/ark_of_Shittim/ETN_key_visual.png`。
 
 ## 2. Directory layout / 目录职责
@@ -68,7 +68,7 @@
 - `scenes/update_item/`：**最大子目录（约 396 文件）**，一件道具一个脚本，多为 `EquipItem` 子类。
 - `scenes/item/`：地图拾取物（`coin`, `pyroxenes`, `medical_kit`, `coin_box`, `game_tv`, `vending_machine`…）；**长按拾取物通用基类 `hold_pickup_item.gd`**（`class_name HoldPickupItem`，helper 脚本，无同名场景）。
 - `scenes/manager/`：单例式管理器场景（`round_manager`, `enemy_manager`, `chip_manager`, `field_mod_manager`, `upgrade_manager`, `pick_item_manager`, `sound_manager`, `*_buff_manager`, `interaction_manager`, `summoned_manager`…）。
-- `scenes/field_mods/`：场地词条效果场景、`FieldModEffect` / `TerrainFieldEffect` 基类，以及 `chip_corruption_spread` 的 `corruption_spread.gd/.tscn`（5 秒间隔 + 2 秒 tile_map 预警 + 10 秒腐化雾循环）和 `chip_orbital_barrage` 的 `orbital_barrage.gd/.tscn`（380mm 落点预警 + 真伤）；场景根通过 `start(chip)/stop()` 接入 `FieldModManager`。
+- `scenes/field_mods/`：场地词条效果场景、`FieldModEffect` / `TerrainFieldEffect` 基类，以及 `chip_corruption_spread` 的 `corruption_spread.gd/.tscn`（5 秒间隔 + 2 秒 tile_map 预警 + 10 秒腐化雾循环）和 `chip_orbital_barrage` 的 `orbital_barrage.gd/.tscn`（380mm 落点预警 + 真伤；落点优先金币密集区，命中减速）；场景根通过 `start(chip)/stop()` 接入 `FieldModManager`。
 - `scenes/effects/`：通用视觉模块；`orbital_strike_marker.gd/.tscn` 为轨道炮击落点/光束/图标/毫秒倒计时，`orbital_barrage_remote.gd/.tscn` 为联机客机纯表现，`goliath_cannon_particles.gd/.tscn` 为复用的 Goliath 爆炸粒子。
 - `scenes/effects/fog/` + `resources/fog/`：可复用雾气模块，`FogSettings` 配置资源、`FogField` 范围/密度/颜色控制、`FogCloud` 单朵粒子烟雾；像素风 shader 在 `shaders/particle_fog_pixel.gdshader`，噪声纹理 `resources/noise/fog_noise.tres`，共享材质 `resources/fog/fog_pixel_material.tres`。`FogField` 可把云直接挂到 `YSort`，不依赖具体词条。
 - `resources/<type>/`：`<type>.gd` 定义 `class_name`，每个 `.tres` 一条记录，`id` 通常等于文件名（见 `ARCHITECTURE.md` §Resource data model）。
