@@ -2,7 +2,6 @@ extends EquipItem
 
 var poison_damage: int
 var damage_mult: float = 0.4
-var group: Array = []
 var doll: Node
 
 var ring: Node
@@ -22,7 +21,9 @@ func time_count():
 
 func add_poison_ring():
 	update_poison_damage()
-	if ring != null:
+	if doll == null or not is_instance_valid(doll):
+		return
+	if ring != null and is_instance_valid(ring):
 		if doll != null:
 			ring.hit_box.damage_data = DamageData.fill(ring.hit_box.damage_data, {
 				"damage": poison_damage,
@@ -59,14 +60,7 @@ func _on_equip():
 	damage_mult = 0.4
 	player = get_tree().get_first_node_in_group("Player")
 	update_poison_damage()
-	var sprite_2d = kikyou_doll_icon.instantiate()
-	group = get_tree().get_nodes_in_group("Follow")
-	for i in group:
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(sprite_2d)
-			sprite_2d.get_follow(i)
-			i.follow_use = true
-			doll = sprite_2d
+	doll = attach_follow_icon(kikyou_doll_icon)
 
 func _setup():
 	PlayerData.player_ability_changed_end.connect(update_poison_damage)

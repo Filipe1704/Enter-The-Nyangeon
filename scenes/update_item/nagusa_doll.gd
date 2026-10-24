@@ -23,14 +23,7 @@ func _apply_effect(quantity: int):
 func spawn_doll():
 	if player == null:
 		return
-	var ins = nagusa_doll_icon.instantiate()
-	for i in get_tree().get_nodes_in_group("Follow"):
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(ins)
-			ins.get_follow(i)
-			i.follow_use = true
-			doll = ins
-			break
+	doll = attach_follow_icon(nagusa_doll_icon)
 
 func _time_count():
 	tick += 1

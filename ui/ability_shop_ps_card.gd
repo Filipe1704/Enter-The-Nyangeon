@@ -1,4 +1,4 @@
-extends PanelContainer
+extends "res://ui/ability_shop_card_base.gd"
 
 @export var is_test: bool = false
 
@@ -6,33 +6,9 @@ extends PanelContainer
 @onready var weapon_icon = $Node2D/RareColor/Weapon_icon
 @onready var t_num_l = $Node2D/RareColor/TNumL
 @onready var rare_color_c = $Node2D/RareColor
-@onready var marker_2d = $Marker2D
-@onready var upgrade = $Node2D/upgrade
-@onready var smoke = preload("res://scenes/bullet/spread_smoke.tscn")
 
-var t_num: int = 0
-var icon_num: int = 0
-var coin_cost:int = 0
-
-var on_touch: bool = false
-var _tooltip: HoverTooltipBinding
-
-var player: Node
-
-var rare_color: Array[Color] =[ Color(0.779, 0.795, 0.81), Color(0.464, 0.673, 0.832), Color(0.884, 0.764, 0.435), Color(0.985, 0.643, 0.909) ]
-
-func _ready():
-	_tooltip = HoverTooltipBinding.bind(upgrade, _tooltip_content, func(): return player != null, func(): on_touch = false)
-	upgrade.mouse_entered.connect(mouse_in)
-	upgrade.mouse_exited.connect(mouse_out)
-	upgrade.gui_input.connect(mouse_selected.bind(upgrade))
-	GameEvents.get_player.connect(get_player)
-	GameEvents.player_card_touch.connect(touch_out)
+func _on_ready_extra() -> void:
 	cost_count()
-
-func get_player():
-	player = get_tree().get_first_node_in_group("Player")
-	reset_data()
 
 func reset_data():
 	_tooltip.dismiss()
@@ -42,61 +18,6 @@ func reset_data():
 	cost_count()
 	item_text_get()
 	t_num_l.text = "T" + str(t_num)
-
-func mouse_in():
-	SoundManager.play_sfx("ButtonSounds2")
-	$Node2D/upgrade/AnimationPlayer.play("mouse_in")
-	$Node2D/upgrade/Node2D/ColorRect/AnimationPlayer.play("hammer_anim")
-
-func mouse_out():
-	$Node2D/upgrade/AnimationPlayer.play("mouse_out")
-	$Node2D/upgrade/Node2D/ColorRect/AnimationPlayer.play("RESET")
-
-func touch_out() -> void:
-	_tooltip.dismiss()
-	$Node2D/upgrade/AnimationPlayer.play("mouse_out")
-	$Node2D/upgrade/Node2D/ColorRect/AnimationPlayer.play("RESET")
-
-func touch_button(mode: String = "touch", index: int = -1):
-	if not on_touch:
-		GameEvents.emit_player_card_touch()
-		on_touch = true
-		mouse_in()
-		_tooltip.preview(mode, index)
-	else:
-
-		if t_num >= 3:
-			$Node2D/upgrade/AnimationPlayer.play("coin_lack")
-			return
-
-		if player.stats.usable_coin < coin_cost:
-			$Node2D/upgrade/AnimationPlayer.play("coin_lack")
-		else:
-			SoundManager.play_sfx("ButtonSounds")
-			GameEvents.emit_player_coins_cost(coin_cost)
-			item_upgrade()
-			GameEvents.emit_player_ps_upgrade(t_num)
-
-func mouse_selected(event: InputEvent, source: Control = null):
-
-	if event is InputEventScreenTouch:
-		if _tooltip.tapped(event, source):
-			touch_button("touch", event.index)
-		return
-
-	if event.is_action_pressed("shoot"):
-
-		if t_num >= 3:
-			$Node2D/upgrade/AnimationPlayer.play("coin_lack")
-			return
-
-		if player.stats.usable_coin < coin_cost:
-			$Node2D/upgrade/AnimationPlayer.play("coin_lack")
-		else:
-			SoundManager.play_sfx("ButtonSounds")
-			GameEvents.emit_player_coins_cost(coin_cost)
-			item_upgrade()
-			GameEvents.emit_player_ps_upgrade(t_num)
 
 func cost_count():
 	if is_test == false:
@@ -134,11 +55,6 @@ func _ps_text(card, idx: int) -> String:
 	var t := tr(key)
 	return t if t != key else str(card.description)
 
-func smoke_anim():
-	var ins = smoke.instantiate()
-	ins.position = marker_2d.position
-	add_child(ins)
-
 func item_upgrade():
 
 	if t_num >= 3:
@@ -152,11 +68,11 @@ func item_upgrade():
 	if t_num >= 3:
 		cost.text = "MAX"
 
-func preview_from_navigation() -> void:
-	GameEvents.emit_player_card_touch()
-	on_touch = true
-	mouse_in()
-	_tooltip.preview("focus")
+func _upgrade_cap() -> int:
+	return 3
+
+func _on_purchased() -> void:
+	GameEvents.emit_player_ps_upgrade(t_num)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready() and player != null:
