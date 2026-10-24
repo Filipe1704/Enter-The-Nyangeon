@@ -3,6 +3,7 @@ extends Node2D
 signal enemy_mod_visibility_changed(visible: bool)
 
 const HAVOC_ID := "havoc"
+const CHIP_KIND_ORDER := [GameMode.ChipKind.ENEMY, GameMode.ChipKind.PLAYER, GameMode.ChipKind.FIELD]
 
 @export var gamemode_card: Array[GameMode]
 
@@ -38,6 +39,18 @@ func _collect_modes() -> void:
 			_append_mode(mode, seen)
 	for mode in ModManager.get_content("game_modes"):
 		_append_mode(mode, seen)
+	_sort_enemy_mods()
+
+func _sort_enemy_mods() -> void:
+	var sorted_mods: Array[GameMode] = []
+	for kind in CHIP_KIND_ORDER:
+		for mode in _enemy_mods:
+			if mode.chip_kind == kind:
+				sorted_mods.append(mode)
+	for mode in _enemy_mods:
+		if not sorted_mods.has(mode):
+			sorted_mods.append(mode)
+	_enemy_mods = sorted_mods
 
 func _append_mode(mode: GameMode, seen: Dictionary) -> void:
 	if mode == null or seen.has(mode.game_mode_id):
