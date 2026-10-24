@@ -403,7 +403,7 @@
 
 **难度专属非无尽成长曲线（2026-10-20）**
 - `Level.non_endless_hp_growth_curve` 可选覆盖 `enemy_manager.hp_growth_curve`；`EnemyScaling.hp_damage_multipliers()` 新增 `hp_growth_curve_override`，仅在 `on_endless == false` 时采用。无尽仍用全局曲线，因此 TORMENT 的无尽成长形状与 INS 一致，仅因 `level_hp` 更高而整体略高。
-- TORMENT（`resources/level/torment.tres`）使用近似直线 `(0,0) → (1,1.8)`：第 5 回合 HP 指数约 0.45（INS 全局曲线约 0.30），第 20 回合指数 1.8（INS 2.0）；配合 `level_hp=6.0`，第 20 回合约 `×25.16`，与 INS `×25.0` 基本持平略高。`level_damage=4.0`、`level_num=1.6`、`level_score_mult=2.6`、`level_reward=36.0`。
+- TORMENT（`resources/level/torment.tres`）使用近似直线 `(0,0) → (1,1.8)`：第 5 回合 HP 指数约 0.45（INS 全局曲线约 0.30），第 20 回合指数 1.8（INS 2.0）；配合 `level_hp=6.0`，第 20 回合约 `×25.16`，与 INS `×25.0` 基本持平略高。`level_damage=3.5`、`level_num=1.6`、`level_score_mult=2.6`、`level_reward=36.0`。
 
 ### 6.2.1 Boss intrusion / 本体 Boss 乱入（2026-10-20）
 
