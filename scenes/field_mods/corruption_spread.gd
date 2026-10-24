@@ -54,6 +54,7 @@ var _current_side := -1
 var is_remote := false
 var _remote_fog_points: PackedVector2Array = []
 var _source_id := ""
+var _bounds_source: StringName = &""
 
 func on_start() -> void:
 	_rng.randomize()
@@ -70,6 +71,7 @@ func on_start() -> void:
 		push_warning("CorruptionSpreadEffect: MapChunks is not ready")
 		finish()
 		return
+	_bounds_source = MapChunks.get_boundary_source()
 	if is_remote:
 		_start_interval()
 		return
@@ -113,6 +115,7 @@ func on_stop() -> void:
 	_current_side = -1
 	_remote_fog_points.clear()
 	_grid = null
+	_bounds_source = &""
 
 func on_tick() -> void:
 	_phase_ticks += 1
@@ -134,6 +137,7 @@ func _prepare_wave() -> void:
 	_band_cell_set.clear()
 	_chunks.clear()
 	_current_side = -1
+	_refresh_bounds_if_needed()
 	if _grid == null:
 		return
 	var target_cells := maxi(1, roundi(float(_all_cells.size()) * _ratio_for_round()))
@@ -153,6 +157,20 @@ func _prepare_wave() -> void:
 		_band_cell_set = cell_set
 		_current_side = side
 		return
+
+# 首帧若用 SpawnMap 兜底边界构建，后续波次在边界切到 walls 时自动重建 cells / 块 / 边数据。
+func _refresh_bounds_if_needed() -> void:
+	var source := MapChunks.get_boundary_source()
+	if source == _bounds_source:
+		return
+	_bounds_source = source
+	if not MapChunks.ensure_ready():
+		return
+	_all_cells = MapChunks.get_all_cells()
+	_grid = MapChunks.get_grid(CHUNK_SIZE)
+	if _grid == null or _all_cells.is_empty():
+		return
+	_build_edge_data()
 
 func _select_side_chunks_by_area(side: int, target_cells: int) -> Array[MapChunk]:
 	var selected: Array[MapChunk] = []

@@ -3,7 +3,7 @@ extends Node2D
 
 signal finished
 
-const BOUNDS_READY_MAX_FRAMES := 5
+const BOUNDS_READY_MAX_FRAMES := 60 # ≈1s @60Hz；等不到 walls 也照常启动（C1 墙射线兜底）
 
 var chip: GameMode
 var active: bool = false
@@ -20,15 +20,19 @@ func start(new_chip: GameMode) -> void:
 	var token := _start_token
 	# 首轮场地词条可能在场景刚装载、物理还未就绪时启动：先等 MapBounds
 	# 的墙射线可用，避免 MapChunks 用偏小的 SpawnMap 兜底边界构建（首帧抢跑）。
-	await _await_bounds_ready(BOUNDS_READY_MAX_FRAMES)
+	var bounds_ok: bool = await _await_bounds_ready(BOUNDS_READY_MAX_FRAMES)
 	if token != _start_token or not active or not is_inside_tree():
 		return
+	if not bounds_ok:
+		push_warning("FieldModEffect: MapBounds not walls after %d physics frames (source=%s); starting with current boundary" % [BOUNDS_READY_MAX_FRAMES, MapBounds.get_boundary_source()])
 	if not GameEvents.global_time_count.is_connected(_on_global_tick):
 		GameEvents.global_time_count.connect(_on_global_tick)
 	_on_start_done = true
 	on_start()
 
 func _await_bounds_ready(max_frames: int) -> bool:
+	if not is_inside_tree():
+		return false
 	var tree := get_tree()
 	if tree == null:
 		return false
