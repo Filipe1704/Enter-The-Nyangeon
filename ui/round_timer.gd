@@ -1,5 +1,11 @@
 extends CanvasLayer
 
+# 横幅复用：FEVER 与 Boss 乱入共用同一套 FeverTime 节点与动画，只切换 Label 文本。
+# 任何新增触发点都必须经 _play_banner(text) 显式写回自己的文本，FEVER 入口负责恢复默认文本。
+const FEVER_BANNER_TEXT := ">> FEVER TIME >>"
+const BOSS_RAID_BANNER_TEXT := "!! BOSS RAID !!"
+const BOSS_RAID_EVENT := "boss_intruder_start"
+
 @export var enemy_buff: Buff
 
 @onready var now_round = $Control/NowRound
@@ -14,6 +20,7 @@ extends CanvasLayer
 
 @onready var fever_anim_1: AnimationPlayer = $FeverTime/AnimationPlayer
 @onready var fever_anim_2: AnimationPlayer = $FeverTime/AnimationPlayer2
+@onready var banner_label: Label = $FeverTime/Label
 
 var is_boss_round: bool = false
 var rage_mode: bool = false
@@ -79,6 +86,7 @@ func _ready():
 	GameEvents.round_end.connect(_clear_encounter_state)
 	GameEvents.ui_visible.connect(game_ui_visible)
 	GameEvents.fever_time_start.connect(play_fever_anim)
+	GameEvents.boss_event.connect(_on_boss_event)
 	GameEvents.first_round_add.connect(_on_first_round_add)
 
 # 联机会话判定（未注入 mod 时始终 false → 单机原行为）
@@ -482,6 +490,18 @@ func set_font_red():
 	$Control/HBoxContainer/MillisecondShow.set("theme_override_colors/font_color", Color(0.923, 0, 0.261))
 
 func play_fever_anim():
+	_play_banner(FEVER_BANNER_TEXT)
+
+# Boss 乱入提示：复用 FEVER 横幅，只把文本换成 BOSS RAID。
+func play_boss_intruder_anim() -> void:
+	_play_banner(BOSS_RAID_BANNER_TEXT)
+
+func _on_boss_event(event_name: String, _data: Dictionary) -> void:
+	if event_name == BOSS_RAID_EVENT:
+		play_boss_intruder_anim()
+
+func _play_banner(text: String) -> void:
+	banner_label.text = text
 	fever_anim_1.play("fever_time")
 	fever_anim_2.play("fever_anim")
 	SoundManager.play_sfx("WarringSounds")

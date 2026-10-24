@@ -3310,3 +3310,9 @@
 - Notes / 说明: **现象**（user）：进入难度选择时，鼠标在难度框内来回移动，有概率某个按钮的动画一直保持展开。**根因**：动画 method track 先启用按钮的鼠标/焦点，`_keyboard_ready` 晚一帧；窗口内 hover 展开后 `previewed` 被父级忽略且不记录 `_open_level_button`，该按钮 `_preview_open` 永久为 true → 后续 `open_preview()` 全部早退、父级也只会关闭“被记录的那一个”。若入场时鼠标停在非第一个难度上，ready 后第一个难度又展开，便会同时出现两个展开且其中一个卡死。**修法**：`level_button.mouse_in/open_preview` 经可选 `is_preview_ready()` 门控（`level_select` 返回 `_keyboard_ready and not _selection_pending`；`coop_difficulty` 无该方法、行为不变），父级在忽略路径主动 `close_preview()` 兜底。**通用教训**：① 「按钮先播动画、再通知父级」的预览模式必须让父级能在通知时拒绝并回滚本地状态；② 动画 method track 启用输入与逻辑就绪标志分属两帧时，门控应画在按钮侧或延后启用，不能只靠父级忽略信号；③ 卡死类 UI 问题优先核对「按钮本地状态」与「父级记录」是否会失配。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-24
+
+### [UI/Boss] 乱入提示复用 FEVER 横幅时，FEVER 播放入口必须写回默认文本
+- Evidence / 证据: `ui/round_timer.gd`（`play_fever_anim()` / `play_boss_intruder_anim()` / `_play_banner(text)`）、`ui/round_timer.tscn:399-435`（`FeverTime` 节点与 `fever_time`/`fever_anim` 动画）
+- Notes / 说明: `!! BOSS RAID !!` 与 `>> FEVER TIME >>` 共用同一个 `$FeverTime/Label` 和两段动画；只在乱入时改文本会让下一次 FEVER 继续显示 RAID 文本。当前两条触发在时间上互斥（乱入为回合开始后 10–25s；FEVER 在普通计时归零或 Boss 超时），但新增任何复用该横幅的触发都必须走 `_play_banner(text)`，并在各自的播放入口显式给文本。
+- Source / 来源: code
+- Date / 日期: 2026-10-24

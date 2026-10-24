@@ -296,6 +296,8 @@ func _spawn_boss_intruder(level: Level, round_index: int) -> void:
 	add_child(spawn_ins)
 	spawn_ins.get_level()
 	spawn_ins.boss_spawn()
+	# 乱入提示：走既有 boss_event 通道，联机 host 会广播给客机；单机只本地触发。
+	GameEvents.emit_boss_event("boss_intruder_start", {})
 	spawn_ins.queue_free()
 	_last_intrusion_round = round_index
 
