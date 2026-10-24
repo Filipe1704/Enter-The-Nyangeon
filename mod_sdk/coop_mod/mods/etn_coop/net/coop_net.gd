@@ -5755,6 +5755,7 @@ func register_enemy_spawn(enemy: Node, scene_path: String) -> void:
 		if not comp.damage_taken.is_connected(dmg_cb):
 			comp.damage_taken.connect(dmg_cb)
 	_connect_enemy_parts(enemy, net_id)
+	_connect_enemy_despawn(enemy)
 	rpc("_spawn_enemy_remote", net_id, scene_path, enemy.global_position, max_hp, hp, hp_multiplier, damage_multiplier, _enemy_part_hps(enemy), str(enemy.get_meta("chip_id", "")))
 
 
@@ -5824,6 +5825,7 @@ func _register_existing_test_room_enemies() -> void:
 			if enemy.get("stats") != null and enemy.stats.has_signal("is_dead"):
 				_connect_enemy_dead(enemy)
 			_connect_enemy_parts(enemy, net_id)
+			_connect_enemy_despawn(enemy)
 			_attach_enemy_proxy(enemy, net_id, true)
 		else:
 			_attach_enemy_proxy(enemy, net_id, false)
@@ -6311,6 +6313,31 @@ func _connect_enemy_dead(enemy: Node) -> void:
 	var dead_cb := Callable(self, "_on_server_enemy_dead").bind(enemy)
 	if not enemy.stats.is_dead.is_connected(dead_cb):
 		enemy.stats.is_dead.connect(dead_cb, CONNECT_ONE_SHOT)
+
+
+# 非死亡移除同步：host 的「乱入 Boss 离场 / round_end 清场 / game_over」等路径直接 queue_free，
+# 不会 emit is_dead；若不广播，客机镜像（含自带 BossHP 血条）会永久残留
+# （main.enemy_clear_unit 明确跳过 "BOSS" 组，没有其它回收通道）。
+# 死亡路径先由 _on_server_enemy_dead 抹掉映射、节点之后才离树，故本回调对普通死亡必然早退，
+# 既不截断客机死亡动画，也不影响原来的 BOSS_DEATH_DESPAWN_SEC 兜底。
+func _connect_enemy_despawn(enemy: Node) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var cb := Callable(self, "_on_server_enemy_exiting").bind(enemy)
+	if not enemy.tree_exiting.is_connected(cb):
+		enemy.tree_exiting.connect(cb)
+
+
+func _on_server_enemy_exiting(enemy: Node) -> void:
+	if not is_lan_game or not multiplayer.is_server() or not _net_connected():
+		return
+	if enemy == null or not is_instance_valid(enemy) or not enemy.has_meta("net_id"):
+		return
+	var net_id: int = int(enemy.get_meta("net_id"))
+	if enemy_by_net_id.get(net_id) != enemy:
+		return
+	_forget_enemy_net_id(net_id)
+	rpc("_despawn_enemy_remote", net_id)
 
 
 func _on_server_enemy_dead(enemy: Node) -> void:

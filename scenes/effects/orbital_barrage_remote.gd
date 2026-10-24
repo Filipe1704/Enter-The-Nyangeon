@@ -7,7 +7,10 @@ const GOLIATH_PARTICLE_SCENE: PackedScene = preload("res://scenes/effects/goliat
 var _markers: Dictionary = {}
 var _particles: Array[Node2D] = []
 
-func add_marker(id: int, point: Vector2, remaining_seconds: float) -> void:
+# 客机纯表现：音效必须在这里回放，否则场地词条在客机侧完全无声。
+# 与 host 侧 scenes/field_mods/orbital_barrage.gd 对齐——_spawn_next_target() 播 BlipSounds1，
+# _fire_blast() 播 ExplosionSounds2（60ms 节流）；改一处务必同步另一处。
+func add_marker(id: int, point: Vector2, remaining_seconds: float, play_sound: bool = true) -> void:
 	if _markers.has(id):
 		_remove_marker(id)
 	var marker := MARKER_SCENE.instantiate() as OrbitalStrikeMarker
@@ -18,6 +21,8 @@ func add_marker(id: int, point: Vector2, remaining_seconds: float) -> void:
 	marker.setup(maxf(0.1, remaining_seconds))
 	marker.start_countdown()
 	_markers[id] = marker
+	if play_sound:
+		SoundManager.play_sfx_throttled("BlipSounds1")
 
 func marker_detonated(id: int) -> void:
 	_remove_marker(id)
@@ -34,6 +39,7 @@ func spawn_blast(point: Vector2, radius: float) -> void:
 	blast.scale = Vector2(scale, scale)
 	blast.play_at(radius)
 	_particles.append(blast)
+	SoundManager.play_sfx_throttled("ExplosionSounds2", 60)
 	var lifetime := get_tree().create_timer(1.2)
 	lifetime.timeout.connect(func() -> void:
 		if blast != null and is_instance_valid(blast):
@@ -44,7 +50,8 @@ func apply_state(markers: Array) -> void:
 	clear()
 	for marker_state in markers:
 		if marker_state is Dictionary:
-			add_marker(int(marker_state.get("id", -1)), marker_state.get("point", Vector2.ZERO), float(marker_state.get("remaining", 0.0)))
+			# 补发已存在的 marker 时不播音效（晚加入/重连不应补播一串提示音）
+			add_marker(int(marker_state.get("id", -1)), marker_state.get("point", Vector2.ZERO), float(marker_state.get("remaining", 0.0)), false)
 
 func clear() -> void:
 	for marker in _markers.values():
