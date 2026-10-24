@@ -46,7 +46,7 @@
 3. `bullet_hit_damage`（`player.gd:473`）：`DamageData.fill(bullet_body.damage_data, {... source=PLAYER, node=bullet_body})` → `apply_penetrate_dealt()` → `randf_range(0,100) < stats.critical_luck` roll 暴击 → `base_damage = max(1, round(bullet_damage * global_damage [* critical_damage]))` → emit `player_shot_critical`/`player_shot_not_critical` → 追加玩家的 `damage_types`/`damage_modifier`/`damage_dealt`/`flags` → 缩放子弹。
 4. 敌方/召唤物/近战各自构造：`bullet_launcher.gd:62`、`entity_ENEMY.create_damage_data`（`:171`）、`enemy_bullet.gd`、`turret_summoned.gd:139`、`kick.gd:29`。
 
-> 暴击率判定读 `stats.critical_luck`（`PlayerData._recompute_player_ability` 已 clamp 到 0–101；≥100 即必暴）。需要**未封顶暴击率**的溢出消费（Hasumi PS1 射速 / PS3 暴伤、藏宝图）必须读 `PlayerData.get_critical_luck_total()`，不要直接读 `stats.critical_luck`（后者已被上限截断）。
+> 暴击率判定读 `stats.critical_luck`（`PlayerData._recompute_player_ability` 用 `clamp(get_critical_luck_total(), 0, 101)` 写入；≥100 即必暴）。**溢出消费按用途区分**：PS3「溢出暴击→暴击伤害」等需要未封顶值的场合读 `PlayerData.get_critical_luck_total()`；**Hasumi PS1「暴击率→射速」刻意读封顶值**（加成上限 +101%，避免随溢出无限成长）。任何写入都必须经 `critical_luck_add` 进入管线，不得直接写 `stats.critical_luck`。
 
 ### 2.1b 子弹移动与追踪（数值安全）
 

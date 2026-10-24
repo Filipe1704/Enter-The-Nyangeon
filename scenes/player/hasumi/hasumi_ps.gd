@@ -51,7 +51,8 @@ func add_player_luck_buff(_now_ammo: float, _max_ammo: int, _reload_time: float)
 	player.player_buff_manager.apply_buff(player_buff, value)
 
 func fire_rate_count():
-	var n = PlayerData.get_critical_luck_total() * 0.01
+	# 刻意读封顶后的判定值：暴击率→射速的加成上限为 +101%，不随溢出无限成长（用户裁定）。
+	var n = player.stats.critical_luck * 0.01
 	if critical_damage_count != n:
 		PlayerData.bullet_shoot_time_mult -= critical_damage_count
 		critical_damage_count = n
