@@ -43,6 +43,9 @@ func idle_state():
 	self.global_position = Vector2.ZERO
 	pick_up = false
 	target = null
+	# can_pick 必须一并重置：parabola_path.drop() 会在飞行期把它置 false（落地才恢复），
+	# 残留 false 回池后，CoinManager 复用该币时若不显式重置，金币会 pick_up=true 但永不归位。
+	can_pick = false
 	ignore_coin_mult = false
 	ignore_auto_pick = false
 	personal_pickup = false
