@@ -20,7 +20,7 @@ func _setup():
 	GameEvents.player_hurt_t_hp.connect(add_invalid_buff)
 
 func add_invalid_buff(hurt_hp: int):
-	var max_hp_half = player.stats.max_hp * 0.5
+	var max_hp_half = player.stats.get_effective_max_hp() * 0.5
 	if hurt_hp >= max_hp_half:
 		player.player_buff_manager.apply_buff(player_buff, value)
 		animation_player.play("new_animation")

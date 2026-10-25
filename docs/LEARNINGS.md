@@ -3430,3 +3430,9 @@
 - Notes / 说明: `player_card_clear_done` 是**全局信号**，每次清卡会唤醒**所有**正在等它的 `society_card_filter` 协程；旧请求若不检查请求序号，就会和新请求各跑一遍 0.07s/张 的填充循环，同一个 `PlayerCardBox` 里混进上一社团的角色卡（表现为卡池混卡 / 重复 / 数量翻倍）。填充循环跑在卡片脚本里、mod 会覆写单参数 `populate_player_cards(box)`，所以不能给它加参数，改用卡片自己的 `on_select` 当代次信号：新社团被选中时父级先对旧卡 `out_select_card()`（同步置 false），旧循环下一轮即退。**契约**：`on_select_handle()` 必须先置 `on_select = true` 再 `emit_society_card_selected()`，否则首轮填充会被自己取消。另一个坑：`AnimationPlayer.play()` 对**正在播放的同一动画不会重置**、method track 不重放 → 清卡动画播放中（尤其过了 t=0.14 的 track 之后）再点社团会永远等不到 `player_card_clear_done`（`_society_switching` 卡死、新社团卡池不生成）；重播前需先 `stop()`，但只在重播同一条动画时 stop，避免打断 `select_player` / `out_player` 的滑入滑出。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-25
+
+### [Combat] 腐化下的「满血 / 最大生命值为 1」判定必须用 `get_effective_max_hp()`，不能直接比 `max_hp`
+- Evidence / 证据: `script/Stats.gd:145-158,211-233`（`corruption` 绝对扣减 + `get_effective_max_hp()`）；`scenes/update_item/energy_supplement.gd:24-44`（`player_hp_count()` 原 `hp == max_hp`、`fatal_damage_health()` 原 `max_hp <= 1`）；`resources/buff/components/last_stand_component.gd:80-130`（新增 `_effective_max_hp()` + `on_timeout`/`check_time_start`/`check_player_hp`）；`scenes/update_item/student_council_hard_hat.gd:22-25`（半血阈值）；反例 `scenes/item/medical_kit.gd:12` 已用有效上限。
+- Notes / 说明: 腐化不改 `max_hp`，只把有效上限压成 `max_hp - corruption`，所以任何 `hp == max_hp` / `hp >= max_hp` 的满血判定在腐化 > 0 时**永不成立**：`energy_supplement` 的免死因此完全不 arm；`last_stand` 的 buff 永远无法靠回血提前结束，且 `on_timeout` 的 `hp < max_hp` 恒真 → 超时必 game over。反过来，`fatal_damage_health` 的 `max_hp <= 1` 早退在腐化到有效上限 1 时也不再成立，会让「每次致命伤害保留 1 血」变成无限触发，必须按有效上限早退。`last_stand` 组件也可能挂 `EnemyStats`（独立类、不继承 `Stats`、无 `get_effective_max_hp`），helper 需 `has_method` 回退 `max_hp`。腐化保持**绝对数值扣减**（用户裁定），加 `max_hp` 的道具是纯收益；各比例腐化来源仍在各自计算处换算成整数后再 `add_corruption`。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-25

@@ -77,9 +77,19 @@ func _teardown() -> void:
 		if PlayerData.player != null and is_instance_valid(PlayerData.player):
 			PlayerData.update_player_ability()
 
+# 腐化后的有效生命上限：满血判定必须用它，否则腐化 > 0 时永远回不满、超时必死。
+# body 也可能挂 EnemyStats（独立类，无该方法），缺失时回退 max_hp。
+func _effective_max_hp() -> int:
+	var stats = body.get("stats") if body != null else null
+	if stats == null:
+		return 0
+	if stats.has_method("get_effective_max_hp"):
+		return int(stats.get_effective_max_hp())
+	return int(stats.max_hp)
+
 func on_timeout(_entry: Dictionary) -> void:
 	timed_out = true
-	if body != null and body.get("stats") != null and body.stats.hp < body.stats.max_hp:
+	if body != null and body.get("stats") != null and body.stats.hp < _effective_max_hp():
 		GameEvents.emit_game_over(true)
 
 func _physics_process(_delta: float) -> void:
@@ -109,13 +119,13 @@ func kill_to_heal(_hurt_damage: int) -> void:
 func check_time_start() -> void:
 	if check_timer == null:
 		return
-	if check_timer.time_left <= 0 and body.stats.hp >= body.stats.max_hp:
+	if check_timer.time_left <= 0 and body.stats.hp >= _effective_max_hp():
 		check_timer.start()
 
 func check_player_hp() -> void:
 	if not active:
 		return
-	if body.stats.hp >= body.stats.max_hp:
+	if body.stats.hp >= _effective_max_hp():
 		SoundManager.play_sfx("EquipSounds3")
 		_remove_self()
 
