@@ -35,6 +35,8 @@ var _default_society: Node = null
 var _society_gids: Array = []
 var _player_focus: Control
 var _society_switching := false
+# 切社团请求序号：只有最新一次请求能继续改卡片池 / 焦点 / 切换锁（快速连点时「最后点的那张赢」）。
+var _society_seq := 0
 
 func _ready():
 	SoundManager.cut_finish.connect(bgm_loop_play)
@@ -267,18 +269,36 @@ func menu_button_press(button_id: String):
 	button_close()
 
 func society_card_filter(society_card: Node):
+	# 同一张社团卡重复选中（连点、NewGame 重入）直接忽略：否则 society_card_group 会把它自己
+	# out_select_card 掉（on_select 变 false），本次填充循环随即自我取消，卡池被清空。
+	if not society_card_group.is_empty() and society_card_group.back() == society_card:
+		return
+	# 切社团是「最后点的那张赢」：序号在第一个 await 之前领。被覆盖的旧请求在 await 之后
+	# 直接返回，不能再碰 _society_switching / 焦点 / 卡片池——player_card_clear_done 是全局信号，
+	# 新旧请求会同时被唤醒，旧请求若不退出就会和新请求各填一遍卡，把上一社团的角色混进新卡池。
+	_society_seq += 1
+	var seq := _society_seq
 	_society_switching = true
 	society_card_group.push_back(society_card)
 	if society_card_group.size() > 1:
 		society_card_group[0].out_select_card()
 		society_card_group.remove_at(0)
+	# 同一个 change_player_card 正在播放时 play() 不会重置播放、method track 不会重放 → 本次请求会
+	# 一直等不到 player_card_clear_done（切换锁卡死、卡池不生成）。先 stop 再 play 保证重走 0→0.14s
+	# 的清卡 track；只在重播这条动画时 stop，避免打断 select_player / out_player 的滑入滑出。
+	if select_player.is_playing() and select_player.current_animation == &"change_player_card":
+		select_player.stop()
 	select_player.play("change_player_card")
 	await player_card_clear_done
+	if seq != _society_seq:
+		return
 	if not on_select_player or not on_select_anim:
 		_society_switching = false
 		return
 	if society_card.has_method("populate_player_cards"):
 		await society_card.populate_player_cards(player_card_box)
+	if seq != _society_seq:
+		return
 	_society_switching = false
 	if not on_select_player or not on_select_anim:
 		change_player_card()
@@ -305,9 +325,11 @@ func _link_player_card_focus() -> void:
 			branch.focus_neighbor_right = branch.get_path_to(right)
 
 func change_player_card():
-	var cards = player_card_box.get_children()
-	for i in cards.size():
-		cards[i].queue_free()
+	for child in player_card_box.get_children():
+		# 立即摘出树再排队释放：queue_free 要到帧末才真正移除，留着会让同帧填入的新角色卡
+		# 排在待释放旧卡之后，首卡 / 焦点 / 布局都按旧顺序算。
+		player_card_box.remove_child(child)
+		child.queue_free()
 	player_card_clear_done.emit()
 
 func _on_score_button_pressed() -> void:

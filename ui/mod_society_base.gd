@@ -41,7 +41,11 @@ func check_group() -> void:
 
 
 func populate_player_cards(box: Node) -> void:
+	# 同 society_card.populate_player_cards：被新社团覆盖后（on_select 已被置 false）立即退出，
+	# 不把旧社团的角色卡继续填进新社团的卡池。
 	for id in members:
+		if not on_select:
+			return
 		if ModManager.is_character_locked(id):
 			continue
 		var card = ModManager.get_resource("characters", id)

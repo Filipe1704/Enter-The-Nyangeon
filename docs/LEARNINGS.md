@@ -163,7 +163,7 @@
 - Date / 日期: 2026-09-25
 
 ### [UI] 社团卡固定 4 槽；显示取决于 `PlayerData.character` / `group`
-- Evidence / 证据: `ui/society_card.gd:3-14`, `scenes/main/menu_screen.gd:276-281`
+- Evidence / 证据: `ui/society_card.gd:3-14`, `scenes/main/menu_screen.gd:295-299`
 - Notes / 说明: `player_card_1..4`；`menu_screen` 按 `for i in 4` 且 `PlayerData.character.has(id)` 过滤实例化，社团卡可见性由 `PlayerData.group.has(group_id)` 决定。新增角色需同时进入 unlock 列表与对应 group（无商店资源则没有购买路径）。
 - Source / 来源: code
 - Date / 日期: 2026-09-25
@@ -3422,5 +3422,11 @@
 ### [UI][Input] 全屏模态遮罩只盖内容区时，KEEP 黑边里的点击会穿透到「伸出内容区」的控件
 - Evidence / 证据: `project.godot:57`（`canvas_items`，未设 aspect → KEEP）、`ui/level_select.tscn`（遮罩 `ColorRect` 原为 `(0,0,640,360)`）、`ui/level_select.gd`（`MODAL_BACKDROP_MARGIN` / `_extend_modal_backdrop`）、`scenes/main/menu_screen.tscn:2144-2156`（`SocietyCardBox` x=594，`ScrollContainer` 内容坐标 x≈586..699，比 640 内容区多出约 59px）
 - Notes / 说明: 视口只渲染 640×360（`get_visible_rect()`），比 16:9 宽的窗口两侧是未绘制的黑边；黑边里的点击会被拉伸变换映射到内容区**之外**的坐标，而 GUI 命中测试只按控件矩形判定、不看视口裁剪 → 伸出内容区的可交互控件（这里是最右侧社团卡列）会被黑边点击命中，难度页整屏遮罩因为只有 640×360 挡不住，表现为「点黑边，背后社团切了一组」。修法：全屏模态的遮罩/输入屏障必须把**命中矩形**外扩出内容区（本项目 `MODAL_BACKDROP_MARGIN=1024`，覆盖到约 7:1 比例）；只扩命中区不扩外观——视口外不会绘制，画面不变。注意这只修有遮罩的模态页：没有遮罩的页面（如裸选角页）同样会被黑边点击命中伸出内容区的控件。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-25
+
+### [UI] 切社团的异步填充必须可取消：`on_select` 是既有的代次信号
+- Evidence / 证据: `scenes/main/menu_screen.gd:271-308`（`society_card_filter` / `_society_seq`）、`scenes/main/menu_screen.gd:327-334`（`change_player_card` 先摘树再释放）、`ui/society_card.gd:33-52`（`populate_player_cards` 的 `on_select` 检查）、`ui/mod_society_base.gd:43-64`、`scenes/main/menu_screen.tscn`（`SelectPlayer/AnimationPlayer` 的 `change_player_card` 在 t=0.14s method track 调 `change_player_card()`）
+- Notes / 说明: `player_card_clear_done` 是**全局信号**，每次清卡会唤醒**所有**正在等它的 `society_card_filter` 协程；旧请求若不检查请求序号，就会和新请求各跑一遍 0.07s/张 的填充循环，同一个 `PlayerCardBox` 里混进上一社团的角色卡（表现为卡池混卡 / 重复 / 数量翻倍）。填充循环跑在卡片脚本里、mod 会覆写单参数 `populate_player_cards(box)`，所以不能给它加参数，改用卡片自己的 `on_select` 当代次信号：新社团被选中时父级先对旧卡 `out_select_card()`（同步置 false），旧循环下一轮即退。**契约**：`on_select_handle()` 必须先置 `on_select = true` 再 `emit_society_card_selected()`，否则首轮填充会被自己取消。另一个坑：`AnimationPlayer.play()` 对**正在播放的同一动画不会重置**、method track 不重放 → 清卡动画播放中（尤其过了 t=0.14 的 track 之后）再点社团会永远等不到 `player_card_clear_done`（`_society_switching` 卡死、新社团卡池不生成）；重播前需先 `stop()`，但只在重播同一条动画时 stop，避免打断 `select_player` / `out_player` 的滑入滑出。
 - Source / 来源: user + code
 - Date / 日期: 2026-10-25

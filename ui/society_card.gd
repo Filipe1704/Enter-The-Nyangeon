@@ -31,7 +31,13 @@ func check_group():
 # 只实例化「已解锁」角色；先不实例化地读出卡内 player_card.id 判断（兼容 uid:// 路径），
 # 读不到时回退“实例化后判断并释放”，避免遗漏。
 func populate_player_cards(box: Node) -> void:
+	# 填充期间可能被新的社团选择覆盖：父级（menu_screen / coop_select）选中新卡时会先对旧卡
+	# out_select_card()，把 on_select 同步置 false。旧卡的填充循环必须立刻退出，否则它会把
+	# 上一社团的角色卡继续塞进新社团的卡池（快速连点社团卡时的错乱）。
+	# 用 on_select 而不是给本方法加参数：mod 社团卡会覆写这个单参数签名，不能破坏契约。
 	for path in card_group:
+		if not on_select:
+			return
 		if path == "":
 			continue
 		var pc = _peek_player_card(path)
