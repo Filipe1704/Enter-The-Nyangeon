@@ -94,6 +94,12 @@ const STEP_CHARGE := 1
 const STEP_BIG_GUN := 2
 const PHASE_60_RATIO := 0.6
 const PHASE_30_RATIO := 0.3
+# 乱入退场：倒放入场动画的时长基准 + 兜底余量；退场完成不能依赖 animation_finished。
+const ESCAPE_ANIM: StringName = &"enter_anim"
+const ESCAPE_ANIM_FALLBACK_SEC: float = 2.5
+const ESCAPE_ANIM_MARGIN_SEC: float = 0.15
+# 乱入 FEVER 内击杀：等待死亡动画的上限，防止信号丢失把结算永久挂起。
+const DEATH_WAIT_TIMEOUT_SEC: float = 5.0
 
 var _cycle_stage: int = 0
 var _cycle_shoot_count: int = 0
@@ -187,6 +193,9 @@ func idle_state():
 	_intruder_escaping = false
 	boss_hp.game_ui_visible(false)
 	decision_timer.stop()
+	# 回池/清场时清掉演出免疫，避免免疫残留到下一次复用。
+	if health_component != null:
+		health_component.is_invincible = false
 
 func active_state():
 	reset_physics_interpolation()
@@ -195,6 +204,9 @@ func active_state():
 	_reset_attack_state()
 	_intruder_escaping = false
 	weapon_halted = false
+	# 本次入场由 boss_enter_anim 重新开启免疫，先保证干净状态。
+	if health_component != null:
+		health_component.is_invincible = false
 	boss_enter_anim()
 	# 镜像不本地跑决策（AI 由 host 快照驱动）
 	if not has_meta("network_remote_enemy"):
@@ -237,8 +249,15 @@ func _reset_attack_state():
 
 func boss_enter_anim():
 	enter_anim.play("enter_anim")
-	# 镜像 / 乱入只播动画，不做相机/暂停演出
-	if has_meta("network_remote_enemy") or has_meta("boss_intruder"):
+	# 镜像只播动画，不做相机/暂停演出，也不设免疫（客机 HP/伤害预测由快照与 host 驱动）
+	if has_meta("network_remote_enemy"):
+		return
+	# 入场演出期间免疫一切伤害；入场结束后按守卫条件恢复。
+	if health_component != null:
+		health_component.is_invincible = true
+	# 乱入：不运镜、不暂停，入场动画结束后再解除免疫。
+	if has_meta("boss_intruder"):
+		_clear_enter_invincible_when_anim_done()
 		return
 	GameEvents.emit_camera_move(camera_marker, true)
 	GameEvents.emit_ui_visible(false)
@@ -249,6 +268,19 @@ func boss_enter_anim():
 	GameEvents.emit_ui_visible(true)
 	get_tree().paused = false
 	GameEvents.emit_pause_lock(false)
+	_clear_enter_invincible_if_alive()
+
+# 入场免疫解除：撤退/死亡接管时保持免疫（退场结束即释放节点）。
+func _clear_enter_invincible_if_alive() -> void:
+	if _intruder_escaping or is_idle == 1 or (stats != null and int(stats.hp) <= 0):
+		return
+	if health_component != null:
+		health_component.is_invincible = false
+
+# 乱入入场没有暂停外壳：等入场动画播完再解除免疫（退场倒放打断时由守卫拦下）。
+func _clear_enter_invincible_when_anim_done() -> void:
+	await enter_anim.animation_finished
+	_clear_enter_invincible_if_alive()
 
 func boss_death_anim():
 	_net_boss_visual("boss_death_anim")
@@ -272,6 +304,7 @@ func boss_death_anim():
 	GameEvents.emit_enemy_dead_position(self.global_position)
 
 # 乱入超时：倒放入场动画后消失，不运镜、不暂停、不结算奖励。
+# 退场完成按入场动画长度做固定时长等待（不 await animation_finished），保证有界返回。
 func boss_intruder_escape() -> void:
 	if is_idle == 1 or _intruder_escaping:
 		return
@@ -299,15 +332,31 @@ func boss_intruder_escape() -> void:
 	hurt_box_shape_2d.set_deferred("disabled", true)
 	boss_hp.game_ui_visible(false)
 	set_physics_process(false)
-	enter_anim.play_backwards("enter_anim")
-	await enter_anim.animation_finished
+	# 退场期间免疫一切伤害：同帧命中/DOT 不能把 Boss 在退场中打死、与收尾流程竞争。
+	if not has_meta("network_remote_enemy") and health_component != null:
+		health_component.is_invincible = true
+	enter_anim.process_mode = Node.PROCESS_MODE_ALWAYS
+	enter_anim.play_backwards(ESCAPE_ANIM)
+	if is_inside_tree():
+		var wait_sec := ESCAPE_ANIM_FALLBACK_SEC
+		var wait_anim = enter_anim.get_animation(ESCAPE_ANIM)
+		if wait_anim != null:
+			wait_sec = wait_anim.length
+		await get_tree().create_timer(wait_sec + ESCAPE_ANIM_MARGIN_SEC, true, false, true).timeout
 	PoolManager.erase_pool(pool_id)
 	queue_free()
 
 # FEVER 内击杀：等死亡动画播完再让回合结算，避免截断掉落表现。
+# 等待必须有上限：动画被外部停掉/替换时裸 await 信号会让 FEVER 结算永久挂起。
 func boss_intruder_wait_death() -> void:
-	if death_anim != null and death_anim.is_playing():
-		await death_anim.animation_finished
+	if death_anim == null or not is_inside_tree():
+		return
+	var deadline := Time.get_ticks_msec() + int(DEATH_WAIT_TIMEOUT_SEC * 1000.0)
+	while is_instance_valid(death_anim) and death_anim.is_playing() \
+			and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05, true, false, true).timeout
+	if is_instance_valid(death_anim) and death_anim.is_playing():
+		push_warning("goliath: 死亡动画等待超时，继续结算")
 
 func time_count():
 	super.time_count()
@@ -850,6 +899,8 @@ func add_shoot_flash():
 
 func on_dead():
 	if is_idle == 1 or _intruder_escaping:
+		# 撤退优先：退场接管收尾（退场期间免疫伤害）。这里的早退是 load-bearing，
+		# 防止死亡路径的 boss_death_anim / _coin_drops 在退场 await 期间自释放。
 		return
 	weapon_halted = true
 	_shoot_cancel = true

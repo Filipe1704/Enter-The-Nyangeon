@@ -35,6 +35,12 @@ var _net_visual_replaying: bool = false
 
 const LASER_TOWER_TYPE: int = 1
 const PHASE_FLAG_MAX: int = 4
+# 乱入退场：倒放入场动画的时长基准 + 兜底余量；退场完成不能依赖 animation_finished。
+const ESCAPE_ANIM: StringName = &"enter_anim"
+const ESCAPE_ANIM_FALLBACK_SEC: float = 3.0
+const ESCAPE_ANIM_MARGIN_SEC: float = 0.15
+# 乱入 FEVER 内击杀：等待死亡动画的上限，防止信号丢失把结算永久挂起。
+const DEATH_WAIT_TIMEOUT_SEC: float = 6.0
 # 场景未配置 attack_sequence 时的内置默认序列（与 resources/boss/tower_attack/*.tres 同源）
 const DEFAULT_STEPS: Array = [
 	preload("res://resources/boss/tower_attack/phase1_laser_summon.tres"),
@@ -266,10 +272,27 @@ func update_tower():
 		i.stats.Enemy_bullet_damage_mult = stats.Enemy_bullet_damage_mult
 		i.stats.update_body_ability()
 		i.active_state()
+	# 重新入场前先清免疫，随后 boss_enter_anim 会按演出阶段重新开启。
+	_set_towers_invincible(false)
+
+# 入场/撤退演出期间免疫一切伤害：统一走 HealthComponent.is_invincible 闸门
+# （覆盖子弹/爆炸/近战/DOT/火场/pending extra/一击必杀）。
+# 联机镜像（network_remote_enemy）不设，避免影响客机由快照驱动的 HP 与伤害预测。
+func _set_towers_invincible(value: bool) -> void:
+	if has_meta("network_remote_enemy"):
+		return
+	for tower in tower_group:
+		if tower == null or not is_instance_valid(tower):
+			continue
+		var health = tower.get("health_component")
+		if health != null:
+			health.is_invincible = value
 
 func boss_dead(tower: ErosionTower):
 	# 聚合血量依赖子塔 hp_changed 时序；结算前强制重算，且只结算一次
 	if _intruder_escaping:
+		# 撤退优先：退场已接管收尾（退场期间免疫伤害）。这里的早退是 load-bearing，
+		# 防止死亡路径的 boss_death_anim / _coin_drops 在退场 await 期间自释放。
 		return
 	count_now_hp()
 	if _dead_started:
@@ -318,17 +341,29 @@ func boss_death_anim(tower: Node = null) -> void:
 		i.idle_state.call_deferred()
 
 # 乱入超时：三塔倒放入场动画后消失，不运镜、不暂停、不结算奖励。
+# ⚠️ 退场完成不能 await 塔的 animation_finished：塔状态机在下一物理帧从 SHOOTING 切到 IDLE 时
+# 会用循环的 "idle" 覆盖同一个 animation_player_3，信号永不发出 → FEVER 结算永久挂起、回合卡死。
+# 这里先冻结状态机，再按入场动画长度做固定时长等待，退场必定有界返回。
 func boss_intruder_escape() -> void:
 	if _intruder_escaping or _dead_started:
 		return
 	_intruder_escaping = true
 	stop_shoot()
+	# 退场期间免疫一切伤害：避免同帧命中/DOT 在退场中打死塔、与收尾流程竞争。
+	_set_towers_invincible(true)
 	var boss_hp_ui := get_node_or_null("BossHP")
 	if boss_hp_ui != null and boss_hp_ui.has_method("game_ui_visible"):
 		boss_hp_ui.game_ui_visible(false)
+	var wait_tower: Node = null
 	for tower in tower_group:
 		if tower == null or not is_instance_valid(tower):
 			continue
+		# 先冻结驱动源：否则 stop_shoot 之后状态机会走 idle_anim() 覆盖退场动画。
+		if tower.state_machine != null:
+			tower.state_machine.set_physics_process(false)
+		# 显式发出塔的 stop_shoot（原由状态机 SHOOTING→IDLE 时发出），停掉激光/弹幕。
+		tower.stop_shoot.emit()
+		tower.can_shoot = false
 		tower.can_defense = false
 		tower.collision_shape_2d.set_deferred("disabled", true)
 		tower.hurt_box_shape_2d.set_deferred("disabled", true)
@@ -336,9 +371,20 @@ func boss_intruder_escape() -> void:
 		tower.animation_player_1.process_mode = Node.PROCESS_MODE_ALWAYS
 		tower.animation_player_2.process_mode = Node.PROCESS_MODE_ALWAYS
 		tower.animation_player_3.process_mode = Node.PROCESS_MODE_ALWAYS
-		tower.animation_player_3.play_backwards("enter_anim")
-	if tower_1 != null and is_instance_valid(tower_1):
-		await tower_1.animation_player_3.animation_finished
+		# 已死柱子保留死亡视觉，不再倒放「复活」入场。
+		if not _is_tower_alive(tower):
+			continue
+		tower.animation_player_3.play_backwards(ESCAPE_ANIM)
+		if wait_tower == null:
+			wait_tower = tower
+	if wait_tower != null and is_inside_tree():
+		var wait_sec := ESCAPE_ANIM_FALLBACK_SEC
+		var wait_player = wait_tower.animation_player_3
+		if wait_player != null:
+			var wait_anim = wait_player.get_animation(ESCAPE_ANIM)
+			if wait_anim != null:
+				wait_sec = wait_anim.length
+		await get_tree().create_timer(wait_sec + ESCAPE_ANIM_MARGIN_SEC, true, false, true).timeout
 	self.visible = false
 	for i in tower_group:
 		if i != null and is_instance_valid(i):
@@ -347,11 +393,20 @@ func boss_intruder_escape() -> void:
 	queue_free()
 
 # FEVER 内击杀：等死亡动画播完再让回合结算，避免截断掉落表现。
+# 等待必须有上限：动画被外部停掉/替换时裸 await 信号会让 FEVER 结算永久挂起。
 func boss_intruder_wait_death() -> void:
-	if animation_player != null and animation_player.is_playing():
-		await animation_player.animation_finished
+	if animation_player == null or not is_inside_tree():
+		return
+	var deadline := Time.get_ticks_msec() + int(DEATH_WAIT_TIMEOUT_SEC * 1000.0)
+	while is_instance_valid(animation_player) and animation_player.is_playing() \
+			and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05, true, false, true).timeout
+	if is_instance_valid(animation_player) and animation_player.is_playing():
+		push_warning("erosion_tower_group: 死亡动画等待超时，继续结算")
 
 func boss_enter_anim():
+	# 入场演出期间免疫一切伤害（镜像不设）；入场结束后按守卫条件恢复。
+	_set_towers_invincible(true)
 	for i in tower_group:
 		if not i.tower_dead.is_connected(boss_dead):
 			i.tower_dead.connect(boss_dead)
@@ -376,6 +431,10 @@ func boss_enter_anim():
 		GameEvents.emit_ui_visible(true)
 		get_tree().paused = false
 		GameEvents.emit_pause_lock(false)
+	# 入场被退场/死亡打断时：免疫与出招都交给对应流程，别清掉退场免疫、也别死后开火。
+	if _dead_started or _intruder_escaping:
+		return
+	_set_towers_invincible(false)
 	attack_state()
 
 func count_now_hp():

@@ -80,6 +80,8 @@ func enemy_spawn_anim(enemy: EnemyCard):
 	if can_spawn == true:
 		spawn_enemy_body(enemy)
 	else:
+		# 中止生成：同步退出乱入索引，避免残留节点让 has_active_boss_intruder() 误报。
+		remove_from_group("BossIntruder")
 		_release_claim()
 
 func spawn_enemy_body(enemy: EnemyCard):

@@ -43,6 +43,9 @@ var _saved_global_time_left: float = 0.0
 var _force_rage_timeout: bool = false
 # 乱入 Boss 在普通计时归零后的 15 秒 FEVER 延长窗口。
 var intruder_fever_active: bool = false
+# FEVER 结算兜底：resolve/演出 await 永久不返回时，超过该时长也强制结束回合（测试可调）。
+var fever_resolve_timeout: float = 8.0
+var _fever_resolve_token: int = 0
 # 联机客机首轮本地倒计时（对齐联机版）：host 广播 round_end 驱动，客机只本地计时显示
 var client_round_countdown_started: bool = false
 
@@ -193,6 +196,7 @@ func resume_normal_round() -> void:
 	rage_time = 0
 	boss_round_pending_end = false
 	intruder_fever_active = false
+	_fever_resolve_token += 1
 	_force_rage_timeout = false
 	round_time = _saved_round_time
 	round_timer.wait_time = _saved_round_wait
@@ -258,9 +262,35 @@ func _finish_intruder_fever() -> void:
 	rage_time = 0
 	timer.stop()
 	round_timer.stop()
+	# 双路收敛：正常结算与 watchdog 谁先到谁发 round_end，token 保证只发一次。
+	_fever_resolve_token += 1
+	var token := _fever_resolve_token
+	_resolve_intruder_then_end(token)
+	_fever_resolve_watchdog(token)
+
+func _resolve_intruder_then_end(token: int) -> void:
+	if not is_inside_tree():
+		return
 	var manager := get_tree().get_first_node_in_group("EnemyManager")
 	if manager != null and manager.has_method("resolve_boss_intruder_timeout"):
 		await manager.resolve_boss_intruder_timeout()
+	_complete_intruder_fever(token)
+
+# 兜底：resolve 内部任何 await 永久不返回时也必须结束回合，
+# 否则普通刷怪计时器会一直跑、回合永不转场。
+func _fever_resolve_watchdog(token: int) -> void:
+	if not is_inside_tree():
+		return
+	await get_tree().create_timer(maxf(0.1, fever_resolve_timeout), true, false, true).timeout
+	if token != _fever_resolve_token:
+		return
+	push_warning("round_timer: 乱入撤退结算超时，强制结束回合")
+	_complete_intruder_fever(token)
+
+func _complete_intruder_fever(token: int) -> void:
+	if token != _fever_resolve_token:
+		return
+	_fever_resolve_token += 1
 	if not _round_end_emit_blocked():
 		GameEvents.emit_round_end()
 
@@ -302,6 +332,7 @@ func game_over_stop(_player_dead: bool):
 	boss_round_pending_end = false
 	boss_encounter_active = false
 	intruder_fever_active = false
+	_fever_resolve_token += 1
 	is_boss_round = false
 	rage_mode = false
 	rage_time = 0
@@ -458,6 +489,7 @@ func _clear_boss_round_pending_end():
 func _clear_encounter_state():
 	boss_encounter_active = false
 	intruder_fever_active = false
+	_fever_resolve_token += 1
 	is_boss_round = false
 	rage_mode = false
 	rage_time = 0
