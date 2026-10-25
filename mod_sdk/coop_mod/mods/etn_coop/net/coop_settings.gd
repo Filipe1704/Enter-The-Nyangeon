@@ -30,6 +30,8 @@ var manual_public_ip: String = ""
 var client_token: String = ""
 # 保存的中继服务器列表 [{name, addr}]。
 var relay_servers: Array = []
+# 面包屑日志（user://logs/coop_trail.log）：崩溃现场取证用，默认开；事件级 + 限速，开销可忽略。
+var network_trail: bool = true
 
 
 func load_settings() -> void:
@@ -47,6 +49,7 @@ func load_settings() -> void:
 	manual_public_ip = str(cfg.get_value(DEBUG_SECTION, "manual_public_ip", "")).strip_edges()
 	client_token = str(cfg.get_value(PROFILE_SECTION, "client_token", "")).strip_edges()
 	relay_servers = sanitize_relay_servers(cfg.get_value(DEBUG_SECTION, "relay_servers", DEFAULT_RELAY_SERVERS))
+	network_trail = bool(cfg.get_value(DEBUG_SECTION, "network_trail", true))
 	if client_token == "":
 		ensure_client_token()
 
@@ -64,6 +67,7 @@ func save_settings() -> void:
 	cfg.set_value(DEBUG_SECTION, "room_address_mode", room_address_mode)
 	cfg.set_value(DEBUG_SECTION, "manual_public_ip", manual_public_ip)
 	cfg.set_value(DEBUG_SECTION, "relay_servers", relay_servers)
+	cfg.set_value(DEBUG_SECTION, "network_trail", network_trail)
 	cfg.save(PATH)
 
 

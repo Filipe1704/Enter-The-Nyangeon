@@ -118,7 +118,9 @@ func _get_packet_mode() -> MultiplayerPeer.TransferMode:
 
 func _get_unique_id() -> int: return _unique_id
 func _get_connection_status() -> MultiplayerPeer.ConnectionStatus: return _enet.get_connection_status()
-func _get_max_packet_size() -> int: return 1 << 24
+# 上限收口 64KB：声明 16MB 会把超大 RPC 直接交给 ENet 分片，劣化链路上丢一个分片就整包重传，
+# 可靠通道队头阻塞 → 心跳被拖 → 假掉线/重连风暴。视觉批量已按 BULLET_BATCH_LIMIT 分块，无需大包。
+func _get_max_packet_size() -> int: return 1 << 16
 func _set_target_peer(id: int) -> void: _target = id
 func _get_transfer_channel() -> int: return _enet.get_transfer_channel()
 func _get_transfer_mode() -> MultiplayerPeer.TransferMode: return _enet.get_transfer_mode()
