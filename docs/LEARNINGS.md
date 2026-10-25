@@ -3418,3 +3418,9 @@
 - Notes / 说明: 旧 `_active_attack_ticks()` 对**所有 `can_shoot` 塔**的 `launcher_pool_1` 取 max，而三座塔（含弹幕/召唤）都实例化同一个 `erosion_tower.tscn`、各自带两台 launcher，所以只要任一塔参战窗口就会变成 180 tick（18s）——「弹幕招只有 6 秒」是错觉，旧阶段 1 实际每轮恒为 180+25 tick。2026-10-25 改序列驱动后，窗口下限只统计 `tower_type==1` 的激光塔，`window_ticks` 才真正可控；要让非激光招维持旧时长，需在 `.tres` 里显式写 180。**通用教训**：用「节点是否存在某组件」推断「本次是否真的会用到它」不可靠（这里是 launcher 继承），能力判断应按角色/开关字段来做。
 - Source / 来源: code
 - Date / 日期: 2026-10-25
+
+### [UI][Input] 全屏模态遮罩只盖内容区时，KEEP 黑边里的点击会穿透到「伸出内容区」的控件
+- Evidence / 证据: `project.godot:57`（`canvas_items`，未设 aspect → KEEP）、`ui/level_select.tscn`（遮罩 `ColorRect` 原为 `(0,0,640,360)`）、`ui/level_select.gd`（`MODAL_BACKDROP_MARGIN` / `_extend_modal_backdrop`）、`scenes/main/menu_screen.tscn:2144-2156`（`SocietyCardBox` x=594，`ScrollContainer` 内容坐标 x≈586..699，比 640 内容区多出约 59px）
+- Notes / 说明: 视口只渲染 640×360（`get_visible_rect()`），比 16:9 宽的窗口两侧是未绘制的黑边；黑边里的点击会被拉伸变换映射到内容区**之外**的坐标，而 GUI 命中测试只按控件矩形判定、不看视口裁剪 → 伸出内容区的可交互控件（这里是最右侧社团卡列）会被黑边点击命中，难度页整屏遮罩因为只有 640×360 挡不住，表现为「点黑边，背后社团切了一组」。修法：全屏模态的遮罩/输入屏障必须把**命中矩形**外扩出内容区（本项目 `MODAL_BACKDROP_MARGIN=1024`，覆盖到约 7:1 比例）；只扩命中区不扩外观——视口外不会绘制，画面不变。注意这只修有遮罩的模态页：没有遮罩的页面（如裸选角页）同样会被黑边点击命中伸出内容区的控件。
+- Source / 来源: user + code
+- Date / 日期: 2026-10-25

@@ -13,6 +13,9 @@ signal player_selected
 
 const LEVEL_BUTTON := preload("res://ui/level_button.tscn")
 
+# 模态遮罩命中区的额外外扩量（内容区坐标）。见 _extend_modal_backdrop。
+const MODAL_BACKDROP_MARGIN := 1024.0
+
 var player: String
 var transition_started: bool = false
 var _keyboard_ready := false
@@ -22,6 +25,7 @@ var _enemy_mod_visible := false
 var _open_level_button: Node
 
 func _ready():
+	_extend_modal_backdrop()
 	GameEvents.player_card_id.connect(get_player_id)
 	GameEvents.level_select_in.connect(level_menu_in)
 	_inject_mod_levels()
@@ -32,6 +36,23 @@ func _ready():
 	_enemy_mod_visible = mode_panel.is_enemy_mod_visible()
 	_set_auxiliary_enabled(false)
 	_bind_focus_controls()
+
+# 难度页是全屏模态。视口只渲染 640×360 内容区；窗口比 16:9 宽时两侧是黑边（KEEP 拉伸），
+# 黑边里的点击会被映射到内容区之外的坐标。GUI 命中测试只按控件矩形判定、不受视口裁剪限制，
+# 所以伸出内容区右侧的社团卡列（SelectPlayer/Node2D/SocietyCardBox，内容坐标 x≈586..699）
+# 会接住这些点击，表现为「在黑边里点一下，背后的社团切了一组、角色卡跟着重建」。
+# 把遮罩的命中矩形向外扩：黑边里任何位置（含极端宽高比）的点击都落在本页遮罩上。
+# 视口之外不会被绘制，外观不变；不影响布局、焦点与键盘导航。
+func _extend_modal_backdrop() -> void:
+	var backdrop := $ColorRect as ColorRect
+	if backdrop == null:
+		return
+	# 先按内容区重置锚点与偏移，避免依赖场景里当前的锚点值（也防编辑器里点一下预设就把外扩抹掉）。
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.offset_left = -MODAL_BACKDROP_MARGIN
+	backdrop.offset_top = -MODAL_BACKDROP_MARGIN
+	backdrop.offset_right = MODAL_BACKDROP_MARGIN
+	backdrop.offset_bottom = MODAL_BACKDROP_MARGIN
 
 func _set_auxiliary_enabled(enabled: bool) -> void:
 	support_select.set_interactive(enabled)
