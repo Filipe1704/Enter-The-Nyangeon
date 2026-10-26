@@ -3,7 +3,6 @@ extends EquipItem
 @onready var blunderbuss_muzzle: PackedScene = preload("res://scenes/update_item/blunderbuss_muzzle_icon.tscn")
 @onready var fire_damage: PackedScene = preload("res://script/fire_damage.tscn")
 @onready var shoot_fire_1 = $ShootFire1
-var group: Array
 var fire_num: int = 1
 var damage_group: Array[Node]
 var index: int = 0
@@ -16,12 +15,7 @@ func _on_equip():
 	PlayerData.bullet_speed_mult += 0.5
 
 	player.gun.fire_sounds.pitch_scale *= 1.2
-	group = get_tree().get_nodes_in_group("Muzzle")
-	for i in group:
-		if i.muzzle_use == false:
-			var sprite_2d = blunderbuss_muzzle.instantiate()
-			i.add_child(sprite_2d)
-			i.muzzle_use = true
+	attach_muzzle_icon(blunderbuss_muzzle)
 
 func _setup():
 	GameEvents.player_gun_shoot.connect(add_shoot_fire)

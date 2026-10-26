@@ -5,7 +5,6 @@ extends EquipItem
 @export var buff_value: float
 @export var buff_erase_timer: float
 @onready var fuel_tank_icon: PackedScene = preload("res://scenes/update_item/fuel_tank_icon.tscn")
-var group: Array
 var value: Array
 var add_layer: int = 1
 
@@ -13,12 +12,7 @@ func _on_equip():
 	player = get_tree().get_first_node_in_group("Player")
 	value = [buff_layer, buff_value, buff_erase_timer]
 	add_layer = 1
-	group = get_tree().get_nodes_in_group("Muzzle")
-	for i in group:
-		if i.muzzle_use == false:
-			var sprite_2d = fuel_tank_icon.instantiate()
-			i.add_child(sprite_2d)
-			i.muzzle_use = true
+	attach_muzzle_icon(fuel_tank_icon)
 
 func _setup():
 	GameEvents.enemy_damage_taken.connect(add_buff)
