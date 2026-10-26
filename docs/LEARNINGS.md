@@ -2374,6 +2374,7 @@
 - Notes / 说明: 联机镜像可能保留 Follow 组，旧 Mint 遍历所有空挂点会把同一节点重复 add_child，真实双端测试出现 already has a parent。Mint 改走通用 helper；helper 用所属玩家 is_ancestor_of 过滤，只占一个点后返回。数值回归必须保留严格原生错误检查，不能仅看 failures=0。
 - Source / 来源: test
 - Date / 日期: 2026-10-14
+- SUPERSEDED: 2026-10-26 「只占一个点」的 `is_ancestor_of` 过滤同时切断了图标内置 Follow 链——图标挂在 `PlayerRoot` 下、不是玩家后代，于是第二件起静默不生成（见下方 `[Equip] 跟随图标是链表` 条目）。归属判定改为「玩家自身子树 + 本玩家图标链（`follow_owner` meta）」，联机镜像仍被排除；本条保留为修复前观察。来源：user + code + test。
 
 ### [UI/Mod] 已挂载不代表脚本入口已运行，兼容信息需区分最低本体版本与 API 要求
 - Evidence / 证据: `script/mod_manager.gd:538,976`；`mod_sdk/README.md` §2。
@@ -3436,3 +3437,9 @@
 - Notes / 说明: 腐化不改 `max_hp`，只把有效上限压成 `max_hp - corruption`，所以任何 `hp == max_hp` / `hp >= max_hp` 的满血判定在腐化 > 0 时**永不成立**：`energy_supplement` 的免死因此完全不 arm；`last_stand` 的 buff 永远无法靠回血提前结束，且 `on_timeout` 的 `hp < max_hp` 恒真 → 超时必 game over。反过来，`fatal_damage_health` 的 `max_hp <= 1` 早退在腐化到有效上限 1 时也不再成立，会让「每次致命伤害保留 1 血」变成无限触发，必须按有效上限早退。`last_stand` 组件也可能挂 `EnemyStats`（独立类、不继承 `Stats`、无 `get_effective_max_hp`），helper 需 `has_method` 回退 `max_hp`。腐化保持**绝对数值扣减**（用户裁定），加 `max_hp` 的道具是纯收益；各比例腐化来源仍在各自计算处换算成整数后再 `add_corruption`。
 - Source / 来源: user + code + test
 - Date / 日期: 2026-10-25
+
+### [Equip] 跟随图标是链表：挂点归属过滤不能只看玩家子树（`is_ancestor_of`）
+- Evidence / 证据: 22 个角色场景各带 **1 个** `Follow`（`scenes/player/shiroko/shiroko.tscn:275` 等）、15 个 `scenes/update_item/*_icon.tscn` 各自内置 `Follow` 子节点（如 `black_ninpero_icon.tscn:52`）；`script/equip_item.gd:87-119`（`attach_follow_icon` + `_follow_owned_by` + `FOLLOW_OWNER_META`）；回归引入 `7cc6cc3`（2026-10-14 加 `is_ancestor_of` 守卫，当时仅 mint/tnt 走 helper）与 `35d28e9`（2026-10-24 把 kikyou/renge/nagusa/yukari_doll、black/red_ninpero、cherino_matryoshka 7 件改调 helper → 故障面 9/15 件），`docs/AUDIT_REFACTOR_20261024.md:22,40` 当时判断「与 mint/tnt 现行一致」；镜像侧 `mod_sdk/coop_mod/mods/etn_coop/net/coop_item_visuals.gd:89-112`（按「复刻本体的链表」实现镜像链）、`coop_net.gd:5625-5629`（镜像 Follow 移出全局组）；玩法连带 `scenes/update_item/kikyou_doll.gd:24-25`、`nagusa_doll.gd:36-37`、`renge_doll.gd:44-45`（`doll == null` 早退）。
+- Notes / 说明: **现象**（user）：跟随式道具只有第一件能生成并跟随玩家，后面再拿看不到生成。**根因**：挂点链是「玩家.Follow ← icon1.Follow ← icon2.Follow ← …」，图标挂在 `PlayerRoot` 下、其内置 Follow **不是玩家后代** → `local_player.is_ancestor_of(follow)` 恒假 → 除玩家自带的那个挂点外全部被跳过；该挂点 `follow_use=true` 后，9 件走 helper 的道具全部返回 null（无图标、无报错），依赖 `doll` 的毒环/冰环/火场同时失效。6 件仍手写循环的道具（voodoo_doll/ancient_battery/millennium_flag/flammable_explosives/puzzle_cube/peroro_kagami_mochi）不受影响，所以现场常表现为「第一件出图、之后 helper 系不出图」。**修法**：`attach_follow_icon` 只占用「玩家自身子树」或「本玩家图标链（图标带 `follow_owner` meta 且指向该玩家）」上的挂点，新建图标打 meta 续链；无 `PlayerRoot`/无可用挂点时 `push_warning`；6 件手写循环一并收敛到 helper（它们自建的图标没有 meta，不收敛就无法被后续道具续链）。**通用教训**：给「遍历全局组 + 对每个成员做副作用」加归属过滤时，别只判「是不是玩家后代」——挂点常被挂在玩家之外的容器下（图标链是典型反例）；归属判定要覆盖**所有合法宿主**（玩家子树 + 已归属的挂点链），并给失败路径留 warning，避免「静默什么都不生成」。验证：`tests/follow_chain_checks.gd`（headless）全部 15 件跟随道具依次链式挂载（玩家→icon1→…→icon15）、镜像/未消毒镜像挂点零占用、换玩家后挂到新玩家挂点、`kikyou/nagusa/renge_doll` 的 `doll` 非空；同一探针在旧守卫下 1 件即 `failures=1`（可作负向对照）。
+- Source / 来源: user + code + test
+- Date / 日期: 2026-10-26

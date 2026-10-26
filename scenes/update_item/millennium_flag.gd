@@ -4,7 +4,6 @@ extends EquipItem
 @onready var millennium_flag_icon = preload("res://scenes/update_item/millennium_flag_icon.tscn")
 
 var value: Array = []
-var group: Array = []
 
 @export var buff_layer: int
 @export var buff_value: float
@@ -18,13 +17,7 @@ func _on_equip():
 	value = [buff_layer, buff_value, buff_erase_timer]
 	equip_luck = 5
 	PlayerData.bullet_speed_mult += 0.1
-	var sprite_2d = millennium_flag_icon.instantiate()
-	group = get_tree().get_nodes_in_group("Follow")
-	for i in group:
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(sprite_2d)
-			sprite_2d.get_follow(i)
-			i.follow_use = true
+	attach_follow_icon(millennium_flag_icon)
 
 func _setup():
 	GameEvents.enemy_damage_taken.connect(add_buff)

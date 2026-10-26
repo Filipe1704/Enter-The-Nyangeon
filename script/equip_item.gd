@@ -8,6 +8,9 @@ extends Node2D
 var item_id: String
 var num: int = 0
 
+# 跟随图标节点的归属标记：值=拥有者玩家节点（用于续链与排除联机镜像，见 attach_follow_icon）。
+const FOLLOW_OWNER_META := "follow_owner"
+
 # 玩家引用：跨帧自动刷新，避免长期缓存换角色后已释放的实例（见 PlayerRef）。
 # 子类直接读写 `player` 即可，无需自己重新解析；子类不得再声明 `var player`（会与基类成员冲突）。
 var _player: Node
@@ -75,19 +78,42 @@ func attach_hat_icon(icon_scene: PackedScene) -> bool:
 			return true
 	return false
 
-# 挂载图标到跟随点（占用道具拥有者的第一个空闲 Follow），返回图标节点，失败返回 null
+# 挂载图标到跟随点（占用道具拥有者链条上的第一个空闲 Follow），返回图标节点，失败返回 null。
+#
+# 多件跟随道具是**链表**：玩家场景自带 1 个 Follow，每个 <id>_icon.tscn 内置 1 个 Follow，
+# 所以链条为「玩家.Follow ← icon1.Follow ← icon2.Follow ← …」。联机镜像的 Follow 也会留在
+# 全局组里，必须排除，但不能只用 is_ancestor_of —— 图标挂在 PlayerRoot 下，其内置 Follow
+# 不在玩家子树内，那样会把链切断（第二件起静默不生成，见 docs/LEARNINGS.md）。
 func attach_follow_icon(icon_scene: PackedScene) -> Node:
 	var local_player := player
 	if local_player == null:
 		return null
+	var player_root := get_tree().get_first_node_in_group("PlayerRoot")
+	if player_root == null:
+		push_warning("attach_follow_icon: 找不到 PlayerRoot（%s）" % item_id)
+		return null
 	for follow in get_tree().get_nodes_in_group("Follow"):
-		# 联机镜像同样可能保留 Follow 组；只占用道具拥有者的挂点。
-		if not local_player.is_ancestor_of(follow):
+		if not _follow_owned_by(follow, local_player):
 			continue
 		if follow.get("follow_use") == false:
 			var icon := icon_scene.instantiate()
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(icon)
+			# 图标内置 Follow 是同一玩家后续图标的挂点：记录归属以便续链。
+			icon.set_meta(FOLLOW_OWNER_META, local_player)
+			player_root.add_child(icon)
 			icon.call("get_follow", follow)
 			follow.set("follow_use", true)
 			return icon
+	push_warning("attach_follow_icon: 本玩家无可占用 Follow 挂点（%s）" % item_id)
 	return null
+
+# 挂点归属：玩家自身子树内的挂点，或已挂在本玩家图标链上的图标内置挂点。
+func _follow_owned_by(follow: Node, local_player: Node) -> bool:
+	if local_player.is_ancestor_of(follow):
+		return true
+	var node := follow.get_parent()
+	while node != null and not node.is_in_group("PlayerRoot"):
+		if node.has_meta(FOLLOW_OWNER_META):
+			var owner = node.get_meta(FOLLOW_OWNER_META)
+			return is_instance_valid(owner) and owner == local_player
+		node = node.get_parent()
+	return false

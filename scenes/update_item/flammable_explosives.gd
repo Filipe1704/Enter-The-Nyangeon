@@ -7,18 +7,11 @@ extends EquipItem
 @onready var flammable_explosives_icon = preload("res://scenes/update_item/flammable_explosives_icon.tscn")
 var value: Array = []
 var add_layer: int
-var group: Array = []
 
 func _on_equip():
 	value = [buff_layer, buff_value, buff_erase_timer]
 	add_layer = 1
-	var sprite_2d = flammable_explosives_icon.instantiate()
-	group = get_tree().get_nodes_in_group("Follow")
-	for i in group:
-		if i.follow_use == false:
-			get_tree().get_first_node_in_group("PlayerRoot").add_child(sprite_2d)
-			sprite_2d.get_follow(i)
-			i.follow_use = true
+	attach_follow_icon(flammable_explosives_icon)
 
 func _setup():
 	GameEvents.enemy_damage_taken.connect(fire_explosion)
